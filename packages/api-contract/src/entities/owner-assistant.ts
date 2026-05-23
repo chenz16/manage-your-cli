@@ -81,24 +81,16 @@ export const OptionalFeature = z.enum([
   'deliverables',
   'skills',
   'references',
-  'templates',
   'voice',
 ]);
 export type OptionalFeature = z.infer<typeof OptionalFeature>;
 
-/** Product default: this app is for *managing CLIs*. The lean default nav
- *  is Chat (always-on) + Team + Today + Bugs. Everything else is opt-in —
- *  the owner turns it on in /me. So a fresh owner starts with these hidden.
- *  Note: this is the DEFAULT for a NEW owner; the owner can show any of
- *  them. Chat has no OptionalFeature key — it can never be hidden. */
-export const DEFAULT_HIDDEN_FEATURES: OptionalFeature[] = [
-  'connectors',
-  'deliverables',
-  'skills',
-  'references',
-  'templates',
-  'voice',
-];
+/** Nav mirrors holon-engineering `main`: Today · Drops · Team in the work
+ *  group, then Skills · References · Connectors under Library — all visible
+ *  by default (plus this app's Chat home + Bug Report). Everything except
+ *  Chat is hideable from /me; the default hides nothing. (Templates is gone
+ *  — main dropped it from the nav.) */
+export const DEFAULT_HIDDEN_FEATURES: OptionalFeature[] = [];
 
 /** Narrow an `IntegrationLink` to the Gmail variant. Use at every read
  *  site that needs `config.email_address` / `config.access_token_ref`

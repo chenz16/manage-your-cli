@@ -42,7 +42,6 @@ const OPTIONAL_FEATURES: Array<{ key: OptionalFeature; label: string; desc: stri
   { key: 'deliverables', label: 'Drops', desc: 'Returned work and drops' },
   { key: 'skills', label: 'Skills', desc: 'Capability catalog' },
   { key: 'references', label: 'References', desc: 'Reference catalog' },
-  { key: 'templates', label: 'Templates', desc: 'Reusable content forms' },
   { key: 'voice', label: 'Voice', desc: 'Dictation and voice mode controls' },
 ];
 
