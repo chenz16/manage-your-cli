@@ -52,7 +52,9 @@ jobs:
       - name: Install Playwright chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Start dev server (background)
-        run: nohup pnpm dev > /tmp/holon-dev.log 2>&1 & disown
+        # `dev` lives in apps/web, not the root package.json — `pnpm dev` at root
+        # fails with "Command dev not found" (the reason every run used to hang).
+        run: nohup pnpm -F web dev > /tmp/holon-dev.log 2>&1 & disown
       - name: Wait for dev server (bounded — fail fast, not 6h hang)
         run: |
           for i in $(seq 1 60); do
