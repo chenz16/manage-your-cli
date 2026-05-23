@@ -41,6 +41,7 @@ export function CliTerminal({ staffId, staffName, onClose }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [localAttachCmd, setLocalAttachCmd] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [full, setFull] = useState(false);
 
   // Mount the terminal once.
   useEffect(() => {
@@ -218,7 +219,7 @@ export function CliTerminal({ staffId, staffName, onClose }: Props) {
   }
 
   return (
-    <div className="cli-terminal-wrap">
+    <div className={`cli-terminal-wrap${full ? ' cli-full' : ''}`}>
       <div className="cli-terminal-bar">
         <div style={{ fontSize: 13, fontWeight: 600 }}>{staffName}{t('staff.cli.title_suffix')}</div>
         <span className={`cli-terminal-status cli-terminal-status-${status}`}>
@@ -238,6 +239,13 @@ export function CliTerminal({ staffId, staffName, onClose }: Props) {
             {copied ? t('staff.cli.tmux_copied') : t('staff.cli.tmux_attach')}
           </button>
         )}
+        <button
+          type="button" className="btn" style={{ fontSize: 11, padding: '4px 8px' }}
+          onClick={() => { setFull((f) => !f); requestAnimationFrame(() => { try { fitRef.current?.fit(); } catch { /* noop */ } }); }}
+          title={full ? 'Collapse' : 'Expand to full screen'}
+        >
+          {full ? '⤡' : '⤢'}
+        </button>
         <button
           type="button" className="btn" style={{ fontSize: 11, padding: '4px 8px' }}
           onClick={killSession}
