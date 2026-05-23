@@ -76,7 +76,6 @@ export type IntegrationLink = z.infer<typeof IntegrationLink>;
 export const OptionalFeature = z.enum([
   'members',
   'todo',
-  'bugs',
   'connectors',
   'deliverables',
   'skills',

@@ -168,3 +168,10 @@ export {
   type SynthesizeSpeechInput,
   type SynthesizeSpeechResult,
 } from './voice-synthesis-service.js';
+
+// Feedback / bug-report (ported from holon-engineering main)
+export {
+  startBugWatcher, stopBugWatcher, bugWatcherStatus,
+  listBugsWithStatus, reprocessBug,
+  type BugStatus,
+} from './bug-watcher.js';

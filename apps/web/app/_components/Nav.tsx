@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import type { OptionalFeature } from '@holon/api-contract';
 import { useOwner } from '../../lib/hooks/useOwner';
 import { getEffectiveLanguage } from '../../lib/i18n/get-effective-language';
+import { BugReportButton } from './BugReportButton';
 
 // 2026-05-19 (iter-017 Pass #12 part 1): the previously-inlined
 // getEffectiveLanguage moved to apps/web/lib/i18n/get-effective-language.ts
@@ -123,23 +124,6 @@ const primaryItems: NavItem[] = [
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
         <path d="M14 2v6h6" />
         <path d="M9 15l2 2 4-5" />
-      </svg>
-    ),
-  },
-  {
-    key: 'bugs',
-    href: '/bugs',
-    label: 'Bug Report',
-    labelZh: 'Bug Report',
-    optionalFeature: 'bugs',
-    activeWhen: (p) => p.startsWith('/bugs'),
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="8" y="6" width="8" height="14" rx="4" />
-        <path d="M12 2v4" />
-        <path d="M5 9l3 2" /><path d="M19 9l-3 2" />
-        <path d="M3 14h5" /><path d="M16 14h5" />
-        <path d="M5 19l3-2" /><path d="M19 19l-3-2" />
       </svg>
     ),
   },
@@ -287,6 +271,9 @@ export function Nav({ collapsed = false }: NavProps) {
        * Rendered icon-only (bug-20260518-123933) with label "Me" only
        * (bug-20260518-124449): owner has repeatedly asked that the word
        * "Config" not appear anywhere visible — including tooltip text. */}
+      <div className="nav-bug-row">
+        <BugReportButton />
+      </div>
       <div className="nav-footer">
         <div className="nav-divider" role="separator" aria-hidden="true" />
         {footerItems.map((item) => renderItem(item, { iconOnly: true }))}

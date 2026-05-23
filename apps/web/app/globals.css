@@ -1856,3 +1856,128 @@ select:focus-visible,
 .conn-request-cta:hover { background: rgba(20,18,12,.03); border-color: #c4bfb4; color: #4a453d; }
 .conn-icon-light { background: transparent; box-shadow: none; }
 .conn-icon-light img { display: block; object-fit: contain; }
+
+/* ===== Feedback / bug-report (ported from holon-engineering main) ===== */
+/* ── Bug-report button — renders as a nav-item-style row inside
+ * .nav-bug-row so it carries the same visual weight as Members /
+ * Skills / References (bug-20260518-041538). Previously it was an
+ * icon-only square wedged next to the Me-gear in a horizontal footer
+ * cluster; per the owner it belongs in the vertical menu stack. */
+.bug-fab-inline {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.12s, color 0.12s;
+}
+.bug-fab-inline:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+/* Bug row sits in the menu stack between References and the
+ * Me-gear footer (bug-20260518-041538). No extra padding — the
+ * button itself owns the row height so it matches .nav-item. */
+.left-rail .nav-bug-row {
+  display: flex;
+}
+/* Collapsed rail (56px): hide the label and center the icon, same
+ * as the .nav-item collapsed treatment. */
+.app-shell-row.rail-collapsed .left-rail .nav-bug-row .bug-fab-inline {
+  justify-content: center;
+  padding: 8px 6px;
+}
+.app-shell-row.rail-collapsed .left-rail .nav-bug-row .nav-label {
+  display: none;
+}
+
+/* ── (legacy) Floating bug-report button — kept for reference ───── */
+.bug-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  z-index: 70;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.bug-fab:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24); }
+
+.bug-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 22, 0.42);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.bug-modal {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  padding: 18px 20px 16px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.22);
+}
+.bug-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.bug-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--ink-mute);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bug-modal-close:hover { background: var(--bg-alt); color: var(--ink); }
+.bug-modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.55;
+  resize: vertical;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+  margin-top: 4px;
+}
+.bug-modal-textarea:focus { border-color: var(--ink); }

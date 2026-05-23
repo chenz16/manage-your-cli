@@ -7,6 +7,7 @@ import { PersonaPicker } from './PersonaPicker';
 import { FolderPicker } from './FolderPicker';
 import { AuthorizationsSection } from './AuthorizationsSection';
 import { ConnectPhoneSection } from './ConnectPhoneSection';
+import { BugQueue } from './BugQueue';
 import { LanguageSwitcher } from '../../_components/LanguageSwitcher';
 import { primeOwner } from '../../../lib/hooks/useOwner';
 import { useT } from '../../../lib/i18n/useT';
@@ -37,7 +38,6 @@ interface Desk {
 const OPTIONAL_FEATURES: Array<{ key: OptionalFeature; label: string; desc: string }> = [
   { key: 'members', label: 'Team', desc: 'Your CLI agents roster' },
   { key: 'todo', label: 'Today', desc: 'Work-in-flight tracker' },
-  { key: 'bugs', label: 'Bug Report', desc: 'File and track issues' },
   { key: 'connectors', label: 'Connectors', desc: 'Voice / messaging integrations' },
   { key: 'deliverables', label: 'Drops', desc: 'Returned work and drops' },
   { key: 'skills', label: 'Skills', desc: 'Capability catalog' },
@@ -449,8 +449,12 @@ export function MeClient({
           </div>
         </section>
 
-
-
+        {/* Feedback / bug queue — reports filed via the Feedback button
+         * (ported from holon-engineering main). */}
+        <section className="card" style={{ padding: 20 }}>
+          <h2 className="section-title" style={{ marginTop: 0 }}>{t('me.section.bug_queue', zh ? '🐞 缺陷队列' : '🐞 Bug queue')}</h2>
+          <BugQueue />
+        </section>
 
       </div>
     </>
