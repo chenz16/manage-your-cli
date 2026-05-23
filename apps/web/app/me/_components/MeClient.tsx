@@ -31,9 +31,15 @@ interface Desk {
   span_of_control_cap?: number;
 }
 
+// Chat is always-on and never appears here. Everything else is toggleable.
+// Defaults: Team + Today + Bug Report are on; the rest start hidden — this
+// app is for managing CLIs, so the lean default nav stays focused.
 const OPTIONAL_FEATURES: Array<{ key: OptionalFeature; label: string; desc: string }> = [
+  { key: 'members', label: 'Team', desc: 'Your CLI agents roster' },
   { key: 'todo', label: 'Today', desc: 'Work-in-flight tracker' },
-  { key: 'deliverables', label: 'Deliverables', desc: 'Returned work and drops' },
+  { key: 'bugs', label: 'Bug Report', desc: 'File and track issues' },
+  { key: 'connectors', label: 'Connectors', desc: 'Voice / messaging integrations' },
+  { key: 'deliverables', label: 'Drops', desc: 'Returned work and drops' },
   { key: 'skills', label: 'Skills', desc: 'Capability catalog' },
   { key: 'references', label: 'References', desc: 'Reference catalog' },
   { key: 'templates', label: 'Templates', desc: 'Reusable content forms' },

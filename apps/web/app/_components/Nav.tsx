@@ -96,10 +96,26 @@ const primaryItems: NavItem[] = [
     ),
   },
   {
+    key: 'members',
+    href: '/members',
+    label: 'Team',
+    labelZh: 'Team',
+    optionalFeature: 'members',
+    activeWhen: (p) => p.startsWith('/members'),
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
     key: 'deliverables',
     href: '/deliverables',
-    label: 'Deliverables',
-    labelZh: 'Deliverables',
+    label: 'Drops',
+    labelZh: 'Drops',
     optionalFeature: 'deliverables',
     activeWhen: (p) => p.startsWith('/deliverables'),
     icon: (
@@ -111,17 +127,19 @@ const primaryItems: NavItem[] = [
     ),
   },
   {
-    key: 'members',
-    href: '/members',
-    label: 'Team',
-    labelZh: '??',
-    activeWhen: (p) => p.startsWith('/members'),
+    key: 'bugs',
+    href: '/bugs',
+    label: 'Bug Report',
+    labelZh: 'Bug Report',
+    optionalFeature: 'bugs',
+    activeWhen: (p) => p.startsWith('/bugs'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        <rect x="8" y="6" width="8" height="14" rx="4" />
+        <path d="M12 2v4" />
+        <path d="M5 9l3 2" /><path d="M19 9l-3 2" />
+        <path d="M3 14h5" /><path d="M16 14h5" />
+        <path d="M5 19l3-2" /><path d="M19 19l-3-2" />
       </svg>
     ),
   },
@@ -175,7 +193,8 @@ const secondaryItems: NavItem[] = [
     key: 'connectors',
     href: '/connectors',
     label: 'Connectors',
-    labelZh: '??',
+    labelZh: 'Connectors',
+    optionalFeature: 'connectors',
     activeWhen: (p) => p.startsWith('/connectors'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -270,10 +289,14 @@ export function Nav({ collapsed = false }: NavProps) {
        * curates occasionally — they should look distinct from the work
        * verbs above so eye-fixation stays on Today/Inbound/Deliverables/
        * Team. Caption is hidden in collapsed-rail mode (icons only). */}
-      <div className="nav-section-label" aria-hidden="true">{lang === 'zh-CN' ? '资料' : 'Library'}</div>
-      <div className="nav-secondary-group">
-        {visibleSecondaryItems.map((item) => renderItem(item))}
-      </div>
+      {visibleSecondaryItems.length > 0 && (
+        <>
+          <div className="nav-section-label" aria-hidden="true">{lang === 'zh-CN' ? '资料' : 'Library'}</div>
+          <div className="nav-secondary-group">
+            {visibleSecondaryItems.map((item) => renderItem(item))}
+          </div>
+        </>
+      )}
       {/* Me-gear pinned to the rail floor (bug-20260518-045748) — the
        * .nav-footer rule uses margin-top: auto to push this against the
        * bottom of the rail, mirroring VS Code / Discord / Linear.

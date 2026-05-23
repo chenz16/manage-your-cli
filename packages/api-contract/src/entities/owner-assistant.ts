@@ -74,7 +74,10 @@ export const IntegrationLink = z.discriminatedUnion('kind', [
 export type IntegrationLink = z.infer<typeof IntegrationLink>;
 
 export const OptionalFeature = z.enum([
+  'members',
   'todo',
+  'bugs',
+  'connectors',
   'deliverables',
   'skills',
   'references',
@@ -82,6 +85,20 @@ export const OptionalFeature = z.enum([
   'voice',
 ]);
 export type OptionalFeature = z.infer<typeof OptionalFeature>;
+
+/** Product default: this app is for *managing CLIs*. The lean default nav
+ *  is Chat (always-on) + Team + Today + Bugs. Everything else is opt-in —
+ *  the owner turns it on in /me. So a fresh owner starts with these hidden.
+ *  Note: this is the DEFAULT for a NEW owner; the owner can show any of
+ *  them. Chat has no OptionalFeature key — it can never be hidden. */
+export const DEFAULT_HIDDEN_FEATURES: OptionalFeature[] = [
+  'connectors',
+  'deliverables',
+  'skills',
+  'references',
+  'templates',
+  'voice',
+];
 
 /** Narrow an `IntegrationLink` to the Gmail variant. Use at every read
  *  site that needs `config.email_address` / `config.access_token_ref`
@@ -155,10 +172,12 @@ export const OwnerAssistant = z.object({
    *  i18n framework with t() + locale lazy-loading). */
   language_preference: z.enum(['en', 'zh-CN', 'auto']).optional(),
 
-  /** Optional feature modules hidden by the owner. Missing/empty means
-   *  every optional module is visible. Core modules are never toggleable:
-   *  chat, members, and connectors. */
-  hidden_features: z.array(OptionalFeature).default([]),
+  /** Optional feature modules hidden by the owner. Only Chat is never
+   *  toggleable. Unset = the product default (DEFAULT_HIDDEN_FEATURES):
+   *  this app is for managing CLIs, so the lean default nav is
+   *  Chat + Team + Today + Bugs and everything else starts hidden.
+   *  An explicit empty array means "show everything". */
+  hidden_features: z.array(OptionalFeature).default(DEFAULT_HIDDEN_FEATURES),
 
   stt_provider: z.enum(['openai', 'sensevoice', 'whisper_cpp', 'faster_whisper']).nullable().optional(),
   stt_server_url: z.string().nullable().optional(),

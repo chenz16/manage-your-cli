@@ -19,7 +19,7 @@
   "today.empty.jobs": "准备就绪。让你的桌面 AI 去派活 —— 作业运行后会出现在这里。",
   "inbound.page_title": "待办",
   "inbound.empty.list": "暂无收到的任务。当伙伴向你委派工作时，会出现在这里。",
-  "deliverables.page_title": "产出",
+  "deliverables.page_title": "Drops",
   "deliverables.origin.all": "全部",
   "deliverables.origin.local": "本地 AI",
   "deliverables.origin.remote": "远端交回",

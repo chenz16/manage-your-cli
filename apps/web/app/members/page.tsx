@@ -1,5 +1,6 @@
+import { redirect } from 'next/navigation';
 import type { OwnerAssistant } from '@holon/api-contract';
-import { listStaffMerged, loadFixtures } from '@holon/core';
+import { getOwner, listStaffMerged, loadFixtures } from '@holon/core';
 import { MembersClient } from './_components/MembersClient';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,7 @@ export const dynamic = 'force-dynamic';
  * (bug-20260517-201500-153lwnta).
  */
 export default async function MembersPage() {
+  if (getOwner().hidden_features.includes('members')) redirect('/');
   const data = { items: listStaffMerged() };
   const fx = loadFixtures();
   const owner: OwnerAssistant = fx.owner_assistant;

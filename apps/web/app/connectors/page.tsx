@@ -1,10 +1,9 @@
 'use client';
 
+import { redirect } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
 
-type Binary = 'claude' | 'codex';
-type Lifecycle = 'short' | 'long';
 type SttEngine = 'off' | 'whisper_cpp' | 'sensevoice' | 'faster_whisper' | 'openai';
 type TtsEngine = 'off' | 'cosyvoice' | 'openai';
 
@@ -43,11 +42,6 @@ function normalizeTts(value: unknown): TtsEngine {
 
 export default function ConnectorsPage() {
   const { owner } = useOwner();
-  const [role, setRole] = useState('Research employee');
-  const [binary, setBinary] = useState<Binary>('claude');
-  const [lifecycle, setLifecycle] = useState<Lifecycle>('short');
-  const [cliStatus, setCliStatus] = useState<string | null>(null);
-
   const [sttEngine, setSttEngine] = useState<SttEngine>('off');
   const [sttUrl, setSttUrl] = useState(STT_DEFAULT_URL.whisper_cpp);
   const [sttKey, setSttKey] = useState('');
@@ -69,37 +63,6 @@ export default function ConnectorsPage() {
     setTtsUrl(typeof owner.tts_server_url === 'string' ? owner.tts_server_url : TTS_DEFAULT_URL.cosyvoice);
     setTtsKey(typeof owner.tts_openai_api_key === 'string' ? owner.tts_openai_api_key : '');
   }, [owner]);
-
-  async function createCliAgent() {
-    setCliStatus('Creating...');
-    const res = await fetch('/api/v1/staff', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: role,
-        role_label: role,
-        role_name: role.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '') || 'cli_agent',
-        substrate: {
-          kind: 'cli_agent',
-          binary,
-          args_template:
-            binary === 'claude'
-              ? '--dangerously-skip-permissions'
-              : '--dangerously-bypass-approvals-and-sandbox',
-          approval_rules: [],
-          lifecycle,
-          auto_launch: true,
-        },
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      setCliStatus(`Create failed: ${text || res.status}`);
-      return;
-    }
-    const staff = (await res.json()) as { id: string; name: string };
-    setCliStatus(`Created ${staff.name}. Open Team to launch or attach the CLI session.`);
-  }
 
   async function saveVoiceConfig(kind: 'stt' | 'tts') {
     const isStt = kind === 'stt';
@@ -158,43 +121,21 @@ export default function ConnectorsPage() {
     setTtsStatus(body.ok ? `${ttsLabel(ttsEngine)} is reachable.` : (body.message ?? body.error ?? `HTTP ${res.status}`));
   }
 
+  // Guard after all hooks (rules-of-hooks safe): Connectors is opt-in and
+  // hidden by default. If the owner hasn't enabled it, bounce to chat.
+  if (owner?.hidden_features?.includes('connectors')) redirect('/');
+
   return (
     <main className="page">
       <header className="page-header">
         <div>
           <p className="eyebrow">Connectors</p>
-          <h1 className="page-title">CLI and Voice</h1>
-          <p className="page-subtitle">Create subscription-backed CLI employees and configure optional voice services.</p>
+          <h1 className="page-title">Voice &amp; Messaging</h1>
+          <p className="page-subtitle">Connect optional voice, messaging, and social services. CLI agents are created from chat or the Team page — not here.</p>
         </div>
       </header>
 
-      <section className="card" style={{ padding: 20, display: 'grid', gap: 14, maxWidth: 760 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>CLI Agents</h2>
-        <label style={{ display: 'grid', gap: 6 }}>
-          <span style={{ fontSize: 13, color: 'var(--ink-mute)' }}>Role</span>
-          <input className="input" value={role} onChange={(event) => setRole(event.target.value)} />
-        </label>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {(['claude', 'codex'] as const).map((value) => (
-            <button key={value} type="button" className={binary === value ? 'btn primary' : 'btn'} onClick={() => setBinary(value)}>
-              {value}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {(['short', 'long'] as const).map((value) => (
-            <button key={value} type="button" className={lifecycle === value ? 'btn primary' : 'btn'} onClick={() => setLifecycle(value)}>
-              {value === 'short' ? 'Short-term' : 'Long-term'}
-            </button>
-          ))}
-        </div>
-        <button type="button" className="btn primary" onClick={createCliAgent} disabled={!role.trim()}>
-          Create CLI Agent
-        </button>
-        {cliStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{cliStatus}</p>}
-      </section>
-
-      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760, marginTop: 18 }}>
+      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760 }}>
         <div>
           <p className="eyebrow">Voice</p>
           <h2 style={{ margin: 0, fontSize: 18 }}>Optional STT and TTS</h2>
@@ -249,6 +190,36 @@ export default function ConnectorsPage() {
             <button type="button" className="btn" onClick={checkTtsHealth}>Health Check</button>
           </div>
           {ttsStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{ttsStatus}</p>}
+        </div>
+      </section>
+
+      <section className="card" style={{ padding: 20, display: 'grid', gap: 12, maxWidth: 760, marginTop: 18 }}>
+        <div>
+          <p className="eyebrow">Messaging &amp; Social</p>
+          <h2 style={{ margin: 0, fontSize: 18 }}>Message &amp; social channels</h2>
+          <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
+            Reach your team from where you already are. Being restored from the previous build — not
+            yet wired, so nothing here saves.
+          </p>
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {(['Slack', 'Discord', 'Telegram', 'Feishu', 'Gmail', 'Google Meet'] as const).map((name) => (
+            <div
+              key={name}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px 12px',
+                border: '1px solid var(--line)',
+                borderRadius: 8,
+                opacity: 0.6,
+              }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{name}</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Coming</span>
+            </div>
+          ))}
         </div>
       </section>
     </main>

@@ -47,12 +47,12 @@ export function DeliverablesEmptyState() {
         className="section-title"
         style={{ margin: 0, fontSize: 20 }}
       >
-        No deliverables yet &mdash; they show up here when staff finish work.
+        No drops yet &mdash; they show up here when staff finish work.
       </h2>
       <p style={{ fontSize: 13, color: 'var(--ink-mute)', lineHeight: 1.5, marginTop: 8, marginBottom: 16 }}>
         Every time one of your staff completes a job &mdash; a draft
         email, a PPT, a spreadsheet, a summary &mdash; the result
-        lands here as a deliverable card. You review it; if accepted,
+        lands here as a drop. You review it; if accepted,
         it ships.
       </p>
 
