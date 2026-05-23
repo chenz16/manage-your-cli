@@ -199,7 +199,7 @@ function StaffCard({
         <span className={`badge badge-substrate substrate-${s.substrate.kind}`}>
           {translatedSubstrate(t, s.substrate.kind)}
         </span>
-        {lifecycle && <span className="badge">{lifecycle}</span>}
+        {lifecycle && <span className="badge">{lifecycle === 'long' ? '常驻 · persistent' : '临时 · transient'}</span>}
         {lifecycle && (
           <span className={`badge badge-status status-${alive ? 'active' : 'paused'}`}>
             {alive === null ? 'checking' : alive ? 'alive' : 'stopped'}

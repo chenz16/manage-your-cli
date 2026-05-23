@@ -24,6 +24,7 @@ import {
   type StaffPatch,
 } from './mutable-store.js';
 import { ensureAgentMemoryFile } from './cli-memory-scaffold.js';
+import { readDynamicStaff } from './owner-state-persistence.js';
 
 /** Mint a staff_<…> id matching the ID_SUFFIX_RE regex (20–30 alnum).
  *  9-char base36 timestamp + 16 hex chars = 25-char suffix, ALWAYS in range.
@@ -207,7 +208,14 @@ export function listStaffMerged(): Staff[] {
       const ov = getStaffOverride(s.id);
       return ov ? { ...s, ...ov } : s;
     });
-  const fromDynamic = listDynamicStaff()
+  // Re-read dynamic staff from the persistent DB each call so staff created by a
+  // SEPARATE process (e.g. the Secretary's Holon MCP via create_agent) show up in
+  // the web roster — the in-memory Map is only hydrated once at boot. DB is
+  // authoritative (also reflects cross-process retire); union with in-memory by id.
+  const dynById = new Map<string, Staff>();
+  for (const s of listDynamicStaff()) dynById.set(s.id, s);
+  for (const s of readDynamicStaff()) dynById.set(s.id, s);
+  const fromDynamic = [...dynById.values()]
     .filter((s) => !isStaffDismissed(s.id))
     .map((s) => {
       const ov = getStaffOverride(s.id);
