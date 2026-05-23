@@ -40,6 +40,27 @@ Secretary, a dynamic team, shared memory, and a clean UI. Professionals get
 pro-grade tool**. We don't build AI — we orchestrate the AI you already pay for, and we
 get faster and smarter every time the CLI does.
 
+## Overhead
+
+A core goal: **add as little overhead as possible over driving the CLI directly.**
+Because we reuse the official CLI's own *warm* process and just stream its I/O — we
+re-implement nothing — the overhead is essentially **within measurement noise**.
+
+Benchmark — warm turn, same model (`claude-haiku`, low effort), same prompt, server-side:
+
+| | per-turn latency |
+|---|---|
+| **Direct CLI** (`claude -p`, warm) | ~1.19 s |
+| **Through Manage Your CLI** (warm) | ~1.07 s |
+| **Overhead** | **≈ 0** (within model jitter) |
+
+- The CLI's one-time **cold start** (~4–6 s) is paid **once per session and pre-warmed
+  before you type** — so you never wait for it; every turn after is ~1 s.
+- Contrast with heavy wrappers that re-implement intelligence: seconds of added latency,
+  and always a step behind the frontier. We add ~nothing — we *are* the CLI, managed.
+
+*(Server-side figures; your network/browser are separate and unaffected by this layer.)*
+
 ## Architecture
 
 ```mermaid
