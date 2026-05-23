@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { pathToFileURL } from 'node:url';
 import {
+  consolidateMemory,
   createAgent,
   createAgentSchema,
   dispatch,
@@ -99,6 +100,16 @@ export function buildServer(): McpServer {
       inputSchema: writeMemorySchema,
     },
     async ({ scope, text }) => toolResult(await writeMemory(scope, text)),
+  );
+
+  server.registerTool(
+    'consolidate_memory',
+    {
+      title: 'Consolidate boss memory',
+      description: 'Dispatch the long-term memory-manager CLI agent to consolidate boss memory.',
+      inputSchema: {},
+    },
+    async () => toolResult(await consolidateMemory()),
   );
 
   return server;

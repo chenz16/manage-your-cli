@@ -158,3 +158,34 @@ export function ensureSecretaryWorkspace(): string {
   }, null, 2)}\n`);
   return cwd;
 }
+
+const MEMORY_MANAGER_PERSONA = `# Memory Manager
+
+You curate the boss's memory.
+
+Read the raw append-log via read_memory.
+
+Distill it into organized topic detail files and keep INDEX.md lean with pointers and summaries.
+
+Use write_memory for all durable updates.
+
+Be concise. Markdown only.
+`;
+
+export function ensureMemoryManagerWorkspace(): string {
+  const cwd = join(agentsHome(), 'memory-manager');
+  const repoRoot = findRepoRoot();
+  mkdirIfNeeded(cwd);
+  writeFileIfAbsent(join(cwd, 'CLAUDE.md'), MEMORY_MANAGER_PERSONA);
+  writeFileIfAbsent(join(cwd, 'AGENTS.md'), MEMORY_MANAGER_PERSONA);
+  writeFileIfAbsent(join(cwd, '.mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      holon: {
+        type: 'stdio',
+        command: 'corepack',
+        args: ['pnpm', '-C', repoRoot, '-F', 'holon-mcp', 'start'],
+      },
+    },
+  }, null, 2)}\n`);
+  return cwd;
+}

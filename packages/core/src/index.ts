@@ -50,6 +50,7 @@ export {
   ensureAgentMemoryFile,
   ensureManagerWorkspace,
   ensureSecretaryWorkspace,
+  ensureMemoryManagerWorkspace,
 } from './cli-memory-scaffold.js';
 
 export {
@@ -66,6 +67,7 @@ export {
 export {
   bossMemoryRoot,
   readBossMemory,
+  readBossMemoryLog,
   writeBossMemory,
   type BossMemoryRead,
   type BossMemoryWrite,
@@ -74,6 +76,14 @@ export {
   getOrCreateSecretaryStaff,
   ensureSecretaryCliSession,
 } from './secretary-service.js';
+export {
+  getOrCreateMemoryManagerStaff,
+  dispatchMemoryConsolidationTask,
+} from './memory-manager-service.js';
+export {
+  startMemoryConsolidationService,
+  type MemoryConsolidationServiceState,
+} from './memory-consolidation-service.js';
 export {
   createCliScreenFormatter,
   stripAnsi,

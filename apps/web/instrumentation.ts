@@ -82,6 +82,9 @@ export async function register(): Promise<void> {
     // Fixture cache warming moved to first API route call (loadFixtures is
     // cached after first invocation). Cannot warm here because instrumentation
     // is bundled by webpack which rejects node: protocol imports.
+    const dynamicImport = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
+    const core = await dynamicImport<typeof import('@holon/core')>('@holon/core');
+    core.startMemoryConsolidationService();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(

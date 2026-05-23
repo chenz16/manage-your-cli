@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join, normalize, relative, sep } from 'node:path';
 
@@ -128,6 +128,40 @@ export function readBossMemory(scope?: string): BossMemoryRead {
     return { ok: true, scope: target.scope, path: target.path, text: readFileSync(target.path, 'utf8') };
   } catch (err) {
     return classifyFs(`read boss memory ${target.scope}`, err);
+  }
+}
+
+function listMarkdownFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listMarkdownFiles(path));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith('.md')) out.push(path);
+  }
+  return out.sort();
+}
+
+export function readBossMemoryLog(): BossMemoryRead {
+  const ensured = ensureBossStore();
+  if (ensured) return ensured;
+
+  try {
+    const parts = [
+      `# Boss Memory Raw Append Log`,
+      '',
+      `## INDEX.md`,
+      readFileSync(indexPath(), 'utf8').trimEnd(),
+    ];
+    for (const path of listMarkdownFiles(memoryDir())) {
+      const scope = relative(memoryDir(), path).replace(/\\/g, '/').replace(/\.md$/i, '');
+      parts.push('', `## MEMORY/${scope}.md`, readFileSync(path, 'utf8').trimEnd());
+    }
+    return { ok: true, scope: '__log', path: memoryDir(), text: `${parts.join('\n')}\n` };
+  } catch (err) {
+    return classifyFs('read boss memory raw append log', err);
   }
 }
 

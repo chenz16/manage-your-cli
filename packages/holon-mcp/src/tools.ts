@@ -3,6 +3,7 @@ import {
   bossMemoryRoot,
   captureCliOutput,
   createCliAgentStaff,
+  dispatchMemoryConsolidationTask,
   dispatchCliTask,
   getCliStatus,
   killCliSession,
@@ -10,6 +11,7 @@ import {
   listStaffMerged,
   looksLikeBareShell,
   readBossMemory,
+  readBossMemoryLog,
   retireCliAgentStaff,
   writeBossMemory,
 } from '@holon/core';
@@ -22,6 +24,7 @@ export const TOOL_NAMES = [
   'retire_agent',
   'read_memory',
   'write_memory',
+  'consolidate_memory',
 ] as const;
 
 export const dispatchSchema = {
@@ -45,7 +48,7 @@ export const retireAgentSchema = {
 };
 
 export const readMemorySchema = {
-  scope: z.string().min(1).optional().describe('Optional boss-memory scope. Omit to read INDEX.md only.'),
+  scope: z.string().min(1).optional().describe('Optional boss-memory scope. Omit to read INDEX.md only. Use "__log" for the raw append-log snapshot.'),
 };
 
 export const writeMemorySchema = {
@@ -179,6 +182,7 @@ export async function retireAgent(agent: string): Promise<unknown> {
 
 export async function readMemory(scope?: string): Promise<unknown> {
   try {
+    if (scope?.trim() === '__log') return readBossMemoryLog();
     return readBossMemory(scope);
   } catch (err) {
     return classifyError(err);
@@ -188,6 +192,14 @@ export async function readMemory(scope?: string): Promise<unknown> {
 export async function writeMemory(scope: string, text: string): Promise<unknown> {
   try {
     return writeBossMemory(scope, text);
+  } catch (err) {
+    return classifyError(err);
+  }
+}
+
+export async function consolidateMemory(): Promise<unknown> {
+  try {
+    return dispatchMemoryConsolidationTask();
   } catch (err) {
     return classifyError(err);
   }
