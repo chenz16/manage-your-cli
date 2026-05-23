@@ -73,6 +73,16 @@ export const IntegrationLink = z.discriminatedUnion('kind', [
 ]);
 export type IntegrationLink = z.infer<typeof IntegrationLink>;
 
+export const OptionalFeature = z.enum([
+  'todo',
+  'deliverables',
+  'skills',
+  'references',
+  'templates',
+  'voice',
+]);
+export type OptionalFeature = z.infer<typeof OptionalFeature>;
+
 /** Narrow an `IntegrationLink` to the Gmail variant. Use at every read
  *  site that needs `config.email_address` / `config.access_token_ref`
  *  etc. Ã¢â‚¬â€ avoids `as` casts; consumed by Pass #3 + #4. */
@@ -144,6 +154,11 @@ export const OwnerAssistant = z.object({
    *  UI string locale-switching deferred to V1.1 iter-017 Pass (full
    *  i18n framework with t() + locale lazy-loading). */
   language_preference: z.enum(['en', 'zh-CN', 'auto']).optional(),
+
+  /** Optional feature modules hidden by the owner. Missing/empty means
+   *  every optional module is visible. Core modules are never toggleable:
+   *  chat, members, and connectors. */
+  hidden_features: z.array(OptionalFeature).default([]),
 
   stt_provider: z.enum(['openai', 'sensevoice', 'whisper_cpp', 'faster_whisper']).nullable().optional(),
   stt_server_url: z.string().nullable().optional(),

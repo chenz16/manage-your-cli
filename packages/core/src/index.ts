@@ -7,6 +7,7 @@ export type { Fixtures } from './fixture-store.js';
 
 export {
   clearMutableStore,
+  listJobs,
   type OwnerAssistantPatch,
   type StaffPatch,
 } from './mutable-store.js';
@@ -134,6 +135,17 @@ export {
   type TemplateKind,
   type CreateTemplateInput,
 } from './template-catalog.js';
+
+export {
+  getToday,
+  getBucketDetail,
+} from './today-service.js';
+
+export {
+  listDeliverables,
+  getDeliverable,
+  type ListDeliverablesQueryInput,
+} from './deliverables-service.js';
 
 export {
   transcribeAudio,

@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
+import type { OptionalFeature } from '@holon/api-contract';
 import { useOwner } from '../../lib/hooks/useOwner';
 import { getEffectiveLanguage } from '../../lib/i18n/get-effective-language';
 
@@ -44,6 +45,7 @@ interface NavItem {
   icon: ReactNode;
   /** Path pattern that marks this item active. */
   activeWhen: (path: string) => boolean;
+  optionalFeature?: OptionalFeature;
 }
 
 /* Nav restructured 2026-05-19 (ADR-029 alignment): the left rail now
@@ -76,6 +78,39 @@ const primaryItems: NavItem[] = [
     ),
   },
   {
+    key: 'todo',
+    href: '/today',
+    label: 'Today',
+    labelZh: 'Today',
+    optionalFeature: 'todo',
+    activeWhen: (p) => p.startsWith('/today'),
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 6h13" />
+        <path d="M8 12h13" />
+        <path d="M8 18h13" />
+        <path d="M3 6h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 18h.01" />
+      </svg>
+    ),
+  },
+  {
+    key: 'deliverables',
+    href: '/deliverables',
+    label: 'Deliverables',
+    labelZh: 'Deliverables',
+    optionalFeature: 'deliverables',
+    activeWhen: (p) => p.startsWith('/deliverables'),
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+        <path d="M9 15l2 2 4-5" />
+      </svg>
+    ),
+  },
+  {
     key: 'members',
     href: '/members',
     label: 'Team',
@@ -97,6 +132,7 @@ const secondaryItems: NavItem[] = [
     key: 'skills',
     href: '/skills',
     label: 'Skills',
+    optionalFeature: 'skills',
     labelZh: '技能',
     activeWhen: (p) => p.startsWith('/skills'),
     icon: (
@@ -109,6 +145,7 @@ const secondaryItems: NavItem[] = [
     key: 'references',
     href: '/references',
     label: 'References',
+    optionalFeature: 'references',
     labelZh: '资料',
     activeWhen: (p) => p.startsWith('/references'),
     icon: (
@@ -122,6 +159,7 @@ const secondaryItems: NavItem[] = [
     key: 'templates',
     href: '/templates',
     label: 'Templates',
+    optionalFeature: 'templates',
     labelZh: '模板',
     activeWhen: (p) => p.startsWith('/templates'),
     icon: (
@@ -193,6 +231,9 @@ export function Nav({ collapsed = false }: NavProps) {
    * collapsed mode loses ALL inline text, so the hover hint is the one
    * place we keep both languages as a small affordance. */
   const { owner } = useOwner();
+  const hiddenFeatures = new Set<OptionalFeature>(owner?.hidden_features ?? []);
+  const visiblePrimaryItems = primaryItems.filter((item) => !item.optionalFeature || !hiddenFeatures.has(item.optionalFeature));
+  const visibleSecondaryItems = secondaryItems.filter((item) => !item.optionalFeature || !hiddenFeatures.has(item.optionalFeature));
   const lang = owner
     ? getEffectiveLanguage(owner, typeof navigator !== 'undefined' ? navigator.language : undefined)
     : 'en';
@@ -223,7 +264,7 @@ export function Nav({ collapsed = false }: NavProps) {
 
   return (
     <nav className={clsx('nav', collapsed && 'nav-collapsed')} aria-label="Primary">
-      {primaryItems.map((item) => renderItem(item))}
+      {visiblePrimaryItems.map((item) => renderItem(item))}
       {/* ADR-029 alignment: "LIBRARY" caption introduces the catalog
        * group (Skills, References). Catalogs are configuration the owner
        * curates occasionally — they should look distinct from the work
@@ -231,7 +272,7 @@ export function Nav({ collapsed = false }: NavProps) {
        * Team. Caption is hidden in collapsed-rail mode (icons only). */}
       <div className="nav-section-label" aria-hidden="true">{lang === 'zh-CN' ? '资料' : 'Library'}</div>
       <div className="nav-secondary-group">
-        {secondaryItems.map((item) => renderItem(item))}
+        {visibleSecondaryItems.map((item) => renderItem(item))}
       </div>
       {/* Me-gear pinned to the rail floor (bug-20260518-045748) — the
        * .nav-footer rule uses margin-top: auto to push this against the

@@ -26,6 +26,7 @@ const ALLOWED_FIELDS: Array<keyof OwnerAssistantPatch> = [
   'upstream_display_name',
   'integrations',
   'language_preference',
+  'hidden_features',
   'stt_provider',
   'stt_server_url',
   'sensevoice_url',
@@ -125,7 +126,12 @@ export async function PATCH(req: Request): Promise<NextResponse> {
   let body: unknown;
   try {
     body = await req.json();
-  } catch {
+  } catch (err) {
+    console.warn(JSON.stringify({
+      audit: 'owner.config.patch_invalid_json',
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
   }
   if (typeof body !== 'object' || body === null) {

@@ -17,6 +17,8 @@ export * from './entities/skill.js';
 
 export * from './endpoints/members.js';
 export * from './endpoints/chat.js';
+export * from './endpoints/today.js';
+export * from './endpoints/deliverables.js';
 
 export { registry } from './registry.js';
 export * from './manifests/connectors.js';

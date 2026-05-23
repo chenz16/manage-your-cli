@@ -514,6 +514,8 @@ function AssistantReadAloudButton() {
 
 function ThreadView() {
   const { t } = useT();
+  const { owner } = useOwner();
+  const voiceVisible = !(owner?.hidden_features ?? []).includes('voice');
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -560,8 +562,8 @@ function ThreadView() {
             placeholder={t('chat.composer_placeholder', 'Message your desk AI…')}
             className="chat-input"
           />
-          <ComposerMicButton />
-          <VoiceModeControl />
+          {voiceVisible && <ComposerMicButton />}
+          {voiceVisible && <VoiceModeControl />}
           {/* Owner directive 2026-05-19 19:48 (2)+(3): swap the stock
            *  ComposerPrimitive.Send for our own button that knows about
            *  the in-memory queue. When idle = Send (↑). When running =
@@ -588,7 +590,7 @@ function ThreadView() {
       )}
       {mounted && <QueuedBubbles />}
       {mounted && <QueueDispatcher />}
-      <VoiceListening />
+      {voiceVisible && <VoiceListening />}
       {mounted && <MentionTypeahead />}
     </ThreadPrimitive.Root>
   );

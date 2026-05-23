@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { OwnerAssistant } from '@holon/api-contract';
+import type { OptionalFeature, OwnerAssistant } from '@holon/api-contract';
 import { InlineField } from './InlineField';
 import { PersonaPicker } from './PersonaPicker';
 import { FolderPicker } from './FolderPicker';
 import { AuthorizationsSection } from './AuthorizationsSection';
 import { ConnectPhoneSection } from './ConnectPhoneSection';
 import { LanguageSwitcher } from '../../_components/LanguageSwitcher';
+import { primeOwner } from '../../../lib/hooks/useOwner';
 import { useT } from '../../../lib/i18n/useT';
 
 /**
@@ -29,6 +30,15 @@ interface Desk {
   device_kind?: string;
   span_of_control_cap?: number;
 }
+
+const OPTIONAL_FEATURES: Array<{ key: OptionalFeature; label: string; desc: string }> = [
+  { key: 'todo', label: 'Today', desc: 'Work-in-flight tracker' },
+  { key: 'deliverables', label: 'Deliverables', desc: 'Returned work and drops' },
+  { key: 'skills', label: 'Skills', desc: 'Capability catalog' },
+  { key: 'references', label: 'References', desc: 'Reference catalog' },
+  { key: 'templates', label: 'Templates', desc: 'Reusable content forms' },
+  { key: 'voice', label: 'Voice', desc: 'Dictation and voice mode controls' },
+];
 
 
 
@@ -75,6 +85,18 @@ export function MeClient({
     if (!r.ok) throw new Error(`PATCH ${r.status}`);
     const j: OwnerAssistant = await r.json();
     setOwner(j);
+    primeOwner(j);
+  }
+
+  function isFeatureVisible(key: OptionalFeature): boolean {
+    return !(owner.hidden_features ?? []).includes(key);
+  }
+
+  async function setFeatureVisible(key: OptionalFeature, visible: boolean): Promise<void> {
+    const hidden = new Set<OptionalFeature>(owner.hidden_features ?? []);
+    if (visible) hidden.delete(key);
+    else hidden.add(key);
+    await patchField('hidden_features', Array.from(hidden));
   }
 
   const upstream = owner.upstream_connection_id
@@ -119,6 +141,39 @@ export function MeClient({
             {t('me.language.section_hint')}
           </p>
           <LanguageSwitcher hideLabel />
+        </section>
+
+        <section className="card" style={{ padding: 20 }}>
+          <h2 className="section-title" style={{ marginTop: 0 }}>{zh ? '功能显示' : 'Feature Visibility'}</h2>
+          <p style={{ fontSize: 12, color: 'var(--ink-mute)', marginTop: -4, marginBottom: 12 }}>
+            {zh ? '隐藏可选模块会移除左侧导航，并阻止直接打开该页面。Chat、Team、Connectors 始终显示。' : 'Hide optional modules from the left nav and direct page access. Chat, Team, and Connectors stay on.'}
+          </p>
+          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            {OPTIONAL_FEATURES.map((feature) => {
+              const checked = isFeatureVisible(feature.key);
+              return (
+                <label key={feature.key} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  border: '1px solid var(--line)', borderRadius: 8,
+                  padding: 12, cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(ev) => {
+                      setFeatureVisible(feature.key, ev.currentTarget.checked)
+                        .catch((e: unknown) => setReloadError(e instanceof Error ? e.message : String(e)));
+                    }}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{feature.label}</span>
+                    <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>{feature.desc}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </section>
 
         {/* Identity */}
