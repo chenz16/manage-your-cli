@@ -1718,7 +1718,7 @@ function VoiceListening() {
   const spaceFromFocusedRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gotFinalRef = useRef(false);
-  const useLocalStt = localSttConfigured(owner?.stt_provider);
+  const useLocalStt = localSttConfigured(owner?.stt_provider ?? undefined);
   const transcribeLanguage = lang === 'zh-CN' ? 'zh' : 'en';
   const useLocalSttRef = useRef(useLocalStt);
   const transcribeLanguageRef = useRef(transcribeLanguage);

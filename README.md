@@ -9,6 +9,9 @@ team of agents.** A lean **Secretary** you chat with creates and dispatches
 - **Thin shell.** All the intelligence is the CLI's. We add only **context, memory,
   orchestration, and a clean UI**. No RAG, no vector DB, no bespoke "AI" layer.
 - **Gets better for free.** Every model/CLI upgrade upgrades the whole product.
+- **You keep direct control.** Create a CLI agent from the app — *or* attach one you
+  already launched yourself. Either way it's your own `tmux` session: `attach` and drive
+  it directly anytime. We never sit between you and your CLI or lock you out of it.
 
 > **Ban-safe by design:** each user drives the *official* CLI on their *own* machine
 > with their *own* subscription — the safest, most vendor-aligned form of use. We
