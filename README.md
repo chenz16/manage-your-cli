@@ -14,6 +14,32 @@ team of agents.** A lean **Secretary** you chat with creates and dispatches
 > with their *own* subscription — the safest, most vendor-aligned form of use. We
 > never extract tokens, run subscriptions on a server, or share accounts.
 
+## Why
+
+**The CLI is the frontier.** Today, the fastest, most capable, and most efficient way
+to drive AI is the official agent CLI — Claude Code, Codex, Gemini, Qwen. Professionals
+already live there; nothing else keeps pace with it.
+
+But two real problems remain:
+
+- **For professionals — managing many CLIs gets expensive.** Once you're running
+  several CLI agents across projects and machines, keeping track of who's alive, who's
+  doing what, the shared context and memory, and coordinating them becomes a job in
+  itself.
+- **For everyone else — the terminal is unfamiliar.** The most powerful AI tool on the
+  planet is locked behind a command line most people won't touch.
+
+Today's tools try to *replace* the CLI with heavy custom stacks — and they suffer for
+it: **slow (high latency)**, and always a step behind the frontier because they
+re-implement intelligence instead of using the model directly.
+
+**We do the opposite: reuse the CLI, don't replace it.** We keep exactly what makes the
+CLI the fastest and most professional path, and add a thin management layer on top — a
+Secretary, a dynamic team, shared memory, and a clean UI. Professionals get
+**management without losing CLI speed**; everyone else gets a **friendly surface over a
+pro-grade tool**. We don't build AI — we orchestrate the AI you already pay for, and we
+get faster and smarter every time the CLI does.
+
 ## Architecture
 
 ```mermaid
