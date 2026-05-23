@@ -1,0 +1,2695 @@
+openapi: 3.1.0
+info:
+  title: Holon BFF
+  version: 0.0.0
+  description: |-
+    Backend-for-Frontend contract for the Holon desk app.
+
+    Source-of-truth is the Zod schemas in `packages/api-contract/src/`.
+    Regenerate this file with `pnpm -F api-contract openapi`.
+
+    Per ADR-001, this contract is what every iteration 003+ targets.
+servers:
+  - url: http://localhost:3000
+    description: Local Next.js dev server
+components:
+  schemas: {}
+  parameters: {}
+paths:
+  /api/v1/desk/today:
+    get:
+      summary: Today screen aggregate (buckets + personal queue + recent events).
+      tags:
+        - today
+      responses:
+        "200":
+          description: Today payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buckets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                          enum:
+                            - ai_running
+                            - peer_waiting
+                            - pending
+                            - returned
+                            - blocked
+                            - retrying
+                        count:
+                          type: integer
+                          minimum: 0
+                        preview_items:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                                enum:
+                                  - mission
+                                  - deliverable
+                                  - staff_job
+                                  - peer_member
+                                  - connection
+                              title:
+                                type: string
+                              id:
+                                type: string
+                            required:
+                              - type
+                              - title
+                          maxItems: 5
+                      required:
+                        - key
+                        - count
+                        - preview_items
+                  my_work_queue:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^pq_[0-9A-Za-z]{20,30}$
+                        title:
+                          type: string
+                          minLength: 1
+                        body:
+                          type: string
+                          minLength: 1
+                        source:
+                          type: string
+                          enum:
+                            - own
+                            - from_mission
+                        priority:
+                          type: integer
+                          minimum: 0
+                          maximum: 100
+                        deadline:
+                          type: string
+                      required:
+                        - id
+                        - title
+                        - body
+                        - source
+                        - priority
+                  recent_events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        at:
+                          type: string
+                        kind:
+                          type: string
+                          enum:
+                            - submitted
+                            - connection
+                            - mission
+                            - deliverable
+                        text:
+                          type: string
+                          minLength: 1
+                      required:
+                        - at
+                        - kind
+                        - text
+                    maxItems: 20
+                required:
+                  - buckets
+                  - my_work_queue
+                  - recent_events
+  /api/v1/desk/today/buckets/{key}:
+    get:
+      summary: Items inside one Today bucket.
+      tags:
+        - today
+      parameters:
+        - schema:
+            type: string
+            enum: &a1
+              - ai_running
+              - peer_waiting
+              - pending
+              - returned
+              - blocked
+              - retrying
+          required: true
+          name: key
+          in: path
+      responses:
+        "200":
+          description: Bucket items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    enum: *a1
+                  items:
+                    type: array
+                    items:
+                      anyOf:
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - mission
+                            mission:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^mission_[0-9A-Za-z]{20,30}$
+                                desk_id:
+                                  type: string
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                inbound_handoff_id:
+                                  type: string
+                                  pattern: ^handoff_[0-9A-Za-z]{20,30}$
+                                title:
+                                  type: string
+                                  minLength: 1
+                                body:
+                                  type: string
+                                  minLength: 1
+                                state:
+                                  type: string
+                                  enum: &a10
+                                    - queued
+                                    - accepted
+                                    - in_progress
+                                    - blocked
+                                    - submitted
+                                    - rejected
+                                    - expired
+                                    - returned_to_origin
+                                state_reason:
+                                  type: string
+                                priority:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 100
+                                sender_display_name:
+                                  type: string
+                                  minLength: 1
+                                sender_connection_id:
+                                  type: string
+                                  pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                form:
+                                  type: string
+                                  enum: &a11
+                                    - direct_order
+                                    - direct_takeover
+                                    - approval_chain
+                                    - dual_authorization
+                                    - negotiated
+                                    - advisory
+                                    - observer_brief
+                                    - watch_brief
+                                    - temporary_cover
+                                    - conditional_engagement
+                                    - subcontracting
+                                    - parallel_solicitation
+                                    - standing_request
+                                created_at:
+                                  type: string
+                                accepted_at:
+                                  type: string
+                                in_progress_at:
+                                  type: string
+                                blocked_at:
+                                  type: string
+                                submitted_at:
+                                  type: string
+                                rejected_at:
+                                  type: string
+                                expired_at:
+                                  type: string
+                                returned_to_origin_at:
+                                  type: string
+                                deadline_at:
+                                  type: string
+                                assigned_staff_id:
+                                  type: string
+                                  pattern: ^staff_[0-9A-Za-z]{20,30}$
+                              required:
+                                - id
+                                - desk_id
+                                - inbound_handoff_id
+                                - title
+                                - body
+                                - state
+                                - priority
+                                - sender_display_name
+                                - sender_connection_id
+                                - form
+                                - created_at
+                          required:
+                            - type
+                            - mission
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - deliverable
+                            deliverable:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^deliv_[0-9A-Za-z]{20,30}$
+                                desk_id:
+                                  type: string
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                title:
+                                  type: string
+                                  minLength: 1
+                                body_kind:
+                                  type: string
+                                  enum: &a14
+                                    - markdown
+                                    - structured
+                                body:
+                                  anyOf:
+                                    - type: object
+                                      properties:
+                                        markdown:
+                                          type: string
+                                      required:
+                                        - markdown
+                                    - type: object
+                                      additionalProperties: {}
+                                origin_label:
+                                  type: string
+                                  enum: &a15
+                                    - local
+                                    - remote
+                                    - submitted
+                                status:
+                                  type: string
+                                  enum: &a16
+                                    - draft
+                                    - final
+                                    - accepted
+                                    - rejected
+                                    - revised
+                                created_at:
+                                  type: string
+                                source_assignment_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^assign_[0-9A-Za-z]{20,30}$
+                                source_mission_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^mission_[0-9A-Za-z]{20,30}$
+                                author_staff_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^staff_[0-9A-Za-z]{20,30}$
+                                author_remote_desk_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                submitted_to_connection_id:
+                                  type: string
+                                  pattern: ^conn_[0-9A-Za-z]{20,30}$
+                              required:
+                                - id
+                                - desk_id
+                                - title
+                                - body_kind
+                                - body
+                                - origin_label
+                                - status
+                                - created_at
+                          required:
+                            - type
+                            - deliverable
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - staff_job
+                            staff:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^staff_[0-9A-Za-z]{20,30}$
+                                desk_id:
+                                  type: string
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                name:
+                                  type: string
+                                  minLength: 1
+                                role_name:
+                                  type: string
+                                  minLength: 1
+                                role_label:
+                                  type: string
+                                  minLength: 1
+                                substrate:
+                                  oneOf:
+                                    - type: object
+                                      properties:
+                                        kind:
+                                          type: string
+                                          enum:
+                                            - local_ai
+                                        agent_profile_id:
+                                          type: string
+                                          minLength: 1
+                                        tool_scope:
+                                          type: array
+                                          items:
+                                            type: string
+                                          default: &a2 []
+                                        budget:
+                                          type: object
+                                          properties:
+                                            max_tokens:
+                                              type: integer
+                                              exclusiveMinimum: 0
+                                            max_cost_millicents:
+                                              type: integer
+                                              minimum: 0
+                                          required:
+                                            - max_tokens
+                                            - max_cost_millicents
+                                        mentors:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              peer_id:
+                                                type: string
+                                                pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                              domain:
+                                                type: string
+                                                minLength: 1
+                                              invocation_policy:
+                                                type: string
+                                                enum: &a3
+                                                  - owner_picks_per_task
+                                                  - always_consult
+                                                  - never_consult
+                                              distillation_enabled:
+                                                type: boolean
+                                            required:
+                                              - peer_id
+                                              - domain
+                                              - invocation_policy
+                                              - distillation_enabled
+                                      required:
+                                        - kind
+                                        - agent_profile_id
+                                    - type: object
+                                      properties:
+                                        kind:
+                                          type: string
+                                          enum:
+                                            - cli
+                                        binary:
+                                          type: string
+                                          minLength: 1
+                                        args_template:
+                                          type: string
+                                          minLength: 1
+                                        approval_rules:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              operation_pattern:
+                                                type: string
+                                                minLength: 1
+                                              require_approval:
+                                                type: boolean
+                                            required:
+                                              - operation_pattern
+                                              - require_approval
+                                          default: &a4 []
+                                      required:
+                                        - kind
+                                        - binary
+                                        - args_template
+                                    - type: object
+                                      properties:
+                                        kind:
+                                          type: string
+                                          enum:
+                                            - peer
+                                        connection_id:
+                                          type: string
+                                          pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                        remote_staff_name:
+                                          type: string
+                                          minLength: 1
+                                      required:
+                                        - kind
+                                        - connection_id
+                                        - remote_staff_name
+                                autonomy_level:
+                                  type: string
+                                  enum: &a5
+                                    - Supervised
+                                    - Bounded
+                                    - Autonomous
+                                governance_mode:
+                                  type: string
+                                  enum: &a6
+                                    - graduated
+                                    - always_supervised
+                                status:
+                                  type: string
+                                  enum: &a7
+                                    - active
+                                    - paused
+                                    - archived
+                                current_jobs:
+                                  type: integer
+                                  minimum: 0
+                                max_concurrent_jobs:
+                                  type: integer
+                                  minimum: 0
+                                cultivation_maturity:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 5
+                                cultivation_profile:
+                                  type: object
+                                  properties:
+                                    cultivation_log:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          kind:
+                                            type: string
+                                            enum:
+                                              - mentor_consultation
+                                          mentor_peer_id:
+                                            type: string
+                                            pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                          topic:
+                                            type: string
+                                          consulted_at:
+                                            type: string
+                                          summary:
+                                            type: string
+                                          outcome:
+                                            type: string
+                                            enum: &a8
+                                              - applied
+                                              - ignored
+                                              - partial
+                                        required:
+                                          - kind
+                                          - mentor_peer_id
+                                          - topic
+                                          - consulted_at
+                                          - summary
+                                          - outcome
+                                      default: &a9 []
+                              required:
+                                - id
+                                - desk_id
+                                - name
+                                - role_name
+                                - role_label
+                                - substrate
+                                - autonomy_level
+                                - governance_mode
+                                - status
+                                - current_jobs
+                                - max_concurrent_jobs
+                                - cultivation_maturity
+                            job_label:
+                              type: string
+                          required:
+                            - type
+                            - staff
+                            - job_label
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - peer_member
+                            staff:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^staff_[0-9A-Za-z]{20,30}$
+                                desk_id:
+                                  type: string
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                name:
+                                  type: string
+                                  minLength: 1
+                                role_name:
+                                  type: string
+                                  minLength: 1
+                                role_label:
+                                  type: string
+                                  minLength: 1
+                                substrate:
+                                  oneOf:
+                                    - type: object
+                                      properties:
+                                        kind:
+                                          type: string
+                                          enum:
+                                            - local_ai
+                                        agent_profile_id:
+                                          type: string
+                                          minLength: 1
+                                        tool_scope:
+                                          type: array
+                                          items:
+                                            type: string
+                                          default: *a2
+                                        budget:
+                                          type: object
+                                          properties:
+                                            max_tokens:
+                                              type: integer
+                                              exclusiveMinimum: 0
+                                            max_cost_millicents:
+                                              type: integer
+                                              minimum: 0
+                                          required:
+                                            - max_tokens
+                                            - max_cost_millicents
+                                        mentors:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              peer_id:
+                                                type: string
+                                                pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                              domain:
+                                                type: string
+                                                minLength: 1
+                                              invocation_policy:
+                                                type: string
+                                                enum: *a3
+                                              distillation_enabled:
+                                                type: boolean
+                                            required:
+                                              - peer_id
+                                              - domain
+                                              - invocation_policy
+                                              - distillation_enabled
+                                      required:
+                                        - kind
+                                        - agent_profile_id
+                                    - type: object
+                                      properties:
+                                        kind:
+                                          type: string
+                                          enum:
+                                            - cli
+                                        binary:
+                                          type: string
+                                          minLength: 1
+                                        args_template:
+                                          type: string
+                                          minLength: 1
+                                        approval_rules:
+                                          type: array
+                                          items:
+                                            type: object
+                                            properties:
+                                              operation_pattern:
+                                                type: string
+                                                minLength: 1
+                                              require_approval:
+                                                type: boolean
+                                            required:
+                                              - operation_pattern
+                                              - require_approval
+                                          default: *a4
+                                      required:
+                                        - kind
+                                        - binary
+                                        - args_template
+                                    - type: object
+                                      properties:
+                                        kind:
+                                          type: string
+                                          enum:
+                                            - peer
+                                        connection_id:
+                                          type: string
+                                          pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                        remote_staff_name:
+                                          type: string
+                                          minLength: 1
+                                      required:
+                                        - kind
+                                        - connection_id
+                                        - remote_staff_name
+                                autonomy_level:
+                                  type: string
+                                  enum: *a5
+                                governance_mode:
+                                  type: string
+                                  enum: *a6
+                                status:
+                                  type: string
+                                  enum: *a7
+                                current_jobs:
+                                  type: integer
+                                  minimum: 0
+                                max_concurrent_jobs:
+                                  type: integer
+                                  minimum: 0
+                                cultivation_maturity:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 5
+                                cultivation_profile:
+                                  type: object
+                                  properties:
+                                    cultivation_log:
+                                      type: array
+                                      items:
+                                        type: object
+                                        properties:
+                                          kind:
+                                            type: string
+                                            enum:
+                                              - mentor_consultation
+                                          mentor_peer_id:
+                                            type: string
+                                            pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                          topic:
+                                            type: string
+                                          consulted_at:
+                                            type: string
+                                          summary:
+                                            type: string
+                                          outcome:
+                                            type: string
+                                            enum: *a8
+                                        required:
+                                          - kind
+                                          - mentor_peer_id
+                                          - topic
+                                          - consulted_at
+                                          - summary
+                                          - outcome
+                                      default: *a9
+                              required:
+                                - id
+                                - desk_id
+                                - name
+                                - role_name
+                                - role_label
+                                - substrate
+                                - autonomy_level
+                                - governance_mode
+                                - status
+                                - current_jobs
+                                - max_concurrent_jobs
+                                - cultivation_maturity
+                          required:
+                            - type
+                            - staff
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - connection
+                            connection:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                desk_id:
+                                  type: string
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                remote_person_id:
+                                  type: string
+                                  pattern: ^person_[0-9A-Za-z]{20,30}$
+                                display_name:
+                                  type: string
+                                  minLength: 1
+                                health_state:
+                                  type: string
+                                  enum: &a12
+                                    - healthy
+                                    - degraded
+                                    - offline
+                                    - retrying
+                                    - revoked
+                                    - invalid_token
+                                last_successful_at:
+                                  type: string
+                                paired_at:
+                                  type: string
+                                remote_desk_capabilities:
+                                  type: array
+                                  items:
+                                    type: string
+                                  default: &a13 []
+                                last_failure_at:
+                                  type: string
+                                last_failure_reason:
+                                  type: string
+                                revoked_at:
+                                  type: string
+                                revoked_reason:
+                                  type: string
+                              required:
+                                - id
+                                - desk_id
+                                - remote_person_id
+                                - display_name
+                                - health_state
+                                - last_successful_at
+                                - paired_at
+                          required:
+                            - type
+                            - connection
+                required:
+                  - key
+                  - items
+        "404":
+          description: Unknown bucket key
+  /api/v1/missions:
+    get:
+      summary: List inbound missions (optionally filtered by state).
+      tags:
+        - inbound
+      parameters:
+        - schema:
+            type: string
+            enum: *a10
+          required: false
+          name: state
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: Mission list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^mission_[0-9A-Za-z]{20,30}$
+                        desk_id:
+                          type: string
+                          pattern: ^desk_[0-9A-Za-z]{20,30}$
+                        inbound_handoff_id:
+                          type: string
+                          pattern: ^handoff_[0-9A-Za-z]{20,30}$
+                        title:
+                          type: string
+                          minLength: 1
+                        body:
+                          type: string
+                          minLength: 1
+                        state:
+                          type: string
+                          enum: *a10
+                        state_reason:
+                          type: string
+                        priority:
+                          type: integer
+                          minimum: 0
+                          maximum: 100
+                        sender_display_name:
+                          type: string
+                          minLength: 1
+                        sender_connection_id:
+                          type: string
+                          pattern: ^conn_[0-9A-Za-z]{20,30}$
+                        form:
+                          type: string
+                          enum: *a11
+                        created_at:
+                          type: string
+                        accepted_at:
+                          type: string
+                        in_progress_at:
+                          type: string
+                        blocked_at:
+                          type: string
+                        submitted_at:
+                          type: string
+                        rejected_at:
+                          type: string
+                        expired_at:
+                          type: string
+                        returned_to_origin_at:
+                          type: string
+                        deadline_at:
+                          type: string
+                        assigned_staff_id:
+                          type: string
+                          pattern: ^staff_[0-9A-Za-z]{20,30}$
+                      required:
+                        - id
+                        - desk_id
+                        - inbound_handoff_id
+                        - title
+                        - body
+                        - state
+                        - priority
+                        - sender_display_name
+                        - sender_connection_id
+                        - form
+                        - created_at
+                  next_cursor:
+                    type:
+                      - string
+                      - "null"
+                required:
+                  - items
+                  - next_cursor
+  /api/v1/missions/{id}:
+    get:
+      summary: Mission detail (body + context pack).
+      tags:
+        - inbound
+      parameters:
+        - schema:
+            type: string
+            pattern: ^mission_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Mission detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mission:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^mission_[0-9A-Za-z]{20,30}$
+                      desk_id:
+                        type: string
+                        pattern: ^desk_[0-9A-Za-z]{20,30}$
+                      inbound_handoff_id:
+                        type: string
+                        pattern: ^handoff_[0-9A-Za-z]{20,30}$
+                      title:
+                        type: string
+                        minLength: 1
+                      body:
+                        type: string
+                        minLength: 1
+                      state:
+                        type: string
+                        enum: *a10
+                      state_reason:
+                        type: string
+                      priority:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      sender_display_name:
+                        type: string
+                        minLength: 1
+                      sender_connection_id:
+                        type: string
+                        pattern: ^conn_[0-9A-Za-z]{20,30}$
+                      form:
+                        type: string
+                        enum: *a11
+                      created_at:
+                        type: string
+                      accepted_at:
+                        type: string
+                      in_progress_at:
+                        type: string
+                      blocked_at:
+                        type: string
+                      submitted_at:
+                        type: string
+                      rejected_at:
+                        type: string
+                      expired_at:
+                        type: string
+                      returned_to_origin_at:
+                        type: string
+                      deadline_at:
+                        type: string
+                      assigned_staff_id:
+                        type: string
+                        pattern: ^staff_[0-9A-Za-z]{20,30}$
+                    required:
+                      - id
+                      - desk_id
+                      - inbound_handoff_id
+                      - title
+                      - body
+                      - state
+                      - priority
+                      - sender_display_name
+                      - sender_connection_id
+                      - form
+                      - created_at
+                  context_pack:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            kind:
+                              type: string
+                              enum:
+                                - doc
+                                - sheet
+                                - image
+                                - audio
+                                - data
+                            size_bytes:
+                              type: integer
+                              minimum: 0
+                            ref:
+                              type: string
+                          required:
+                            - name
+                            - kind
+                      pack_id:
+                        type: string
+                    required:
+                      - items
+                required:
+                  - mission
+                  - context_pack
+        "404":
+          description: Unknown mission id
+  /api/v1/missions/{id}/accept:
+    post:
+      summary: Accept a queued mission.
+      tags:
+        - inbound
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^mission_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/missions/{id}/reject:
+    post:
+      summary: Reject a queued mission.
+      tags:
+        - inbound
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^mission_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+              required:
+                - reason
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/missions/{id}/questions:
+    post:
+      summary: Ask a clarifying question on a mission.
+      tags:
+        - inbound
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^mission_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+              required:
+                - question
+      responses:
+        "200":
+          description: Question recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/staff:
+    get:
+      summary: List flat-roster staff for this desk.
+      tags:
+        - members
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^staff_[0-9A-Za-z]{20,30}$
+                        desk_id:
+                          type: string
+                          pattern: ^desk_[0-9A-Za-z]{20,30}$
+                        name:
+                          type: string
+                          minLength: 1
+                        role_name:
+                          type: string
+                          minLength: 1
+                        role_label:
+                          type: string
+                          minLength: 1
+                        substrate:
+                          oneOf:
+                            - type: object
+                              properties:
+                                kind:
+                                  type: string
+                                  enum:
+                                    - local_ai
+                                agent_profile_id:
+                                  type: string
+                                  minLength: 1
+                                tool_scope:
+                                  type: array
+                                  items:
+                                    type: string
+                                  default: *a2
+                                budget:
+                                  type: object
+                                  properties:
+                                    max_tokens:
+                                      type: integer
+                                      exclusiveMinimum: 0
+                                    max_cost_millicents:
+                                      type: integer
+                                      minimum: 0
+                                  required:
+                                    - max_tokens
+                                    - max_cost_millicents
+                                mentors:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      peer_id:
+                                        type: string
+                                        pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                      domain:
+                                        type: string
+                                        minLength: 1
+                                      invocation_policy:
+                                        type: string
+                                        enum: *a3
+                                      distillation_enabled:
+                                        type: boolean
+                                    required:
+                                      - peer_id
+                                      - domain
+                                      - invocation_policy
+                                      - distillation_enabled
+                              required:
+                                - kind
+                                - agent_profile_id
+                            - type: object
+                              properties:
+                                kind:
+                                  type: string
+                                  enum:
+                                    - cli
+                                binary:
+                                  type: string
+                                  minLength: 1
+                                args_template:
+                                  type: string
+                                  minLength: 1
+                                approval_rules:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      operation_pattern:
+                                        type: string
+                                        minLength: 1
+                                      require_approval:
+                                        type: boolean
+                                    required:
+                                      - operation_pattern
+                                      - require_approval
+                                  default: *a4
+                              required:
+                                - kind
+                                - binary
+                                - args_template
+                            - type: object
+                              properties:
+                                kind:
+                                  type: string
+                                  enum:
+                                    - peer
+                                connection_id:
+                                  type: string
+                                  pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                remote_staff_name:
+                                  type: string
+                                  minLength: 1
+                              required:
+                                - kind
+                                - connection_id
+                                - remote_staff_name
+                        autonomy_level:
+                          type: string
+                          enum: *a5
+                        governance_mode:
+                          type: string
+                          enum: *a6
+                        status:
+                          type: string
+                          enum: *a7
+                        current_jobs:
+                          type: integer
+                          minimum: 0
+                        max_concurrent_jobs:
+                          type: integer
+                          minimum: 0
+                        cultivation_maturity:
+                          type: integer
+                          minimum: 0
+                          maximum: 5
+                        cultivation_profile:
+                          type: object
+                          properties:
+                            cultivation_log:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  kind:
+                                    type: string
+                                    enum:
+                                      - mentor_consultation
+                                  mentor_peer_id:
+                                    type: string
+                                    pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                  topic:
+                                    type: string
+                                  consulted_at:
+                                    type: string
+                                  summary:
+                                    type: string
+                                  outcome:
+                                    type: string
+                                    enum: *a8
+                                required:
+                                  - kind
+                                  - mentor_peer_id
+                                  - topic
+                                  - consulted_at
+                                  - summary
+                                  - outcome
+                              default: *a9
+                      required:
+                        - id
+                        - desk_id
+                        - name
+                        - role_name
+                        - role_label
+                        - substrate
+                        - autonomy_level
+                        - governance_mode
+                        - status
+                        - current_jobs
+                        - max_concurrent_jobs
+                        - cultivation_maturity
+                required:
+                  - items
+  /api/v1/staff/{id}:
+    get:
+      summary: Staff detail.
+      tags:
+        - members
+      parameters:
+        - schema:
+            type: string
+            pattern: ^staff_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Staff detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  staff:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^staff_[0-9A-Za-z]{20,30}$
+                      desk_id:
+                        type: string
+                        pattern: ^desk_[0-9A-Za-z]{20,30}$
+                      name:
+                        type: string
+                        minLength: 1
+                      role_name:
+                        type: string
+                        minLength: 1
+                      role_label:
+                        type: string
+                        minLength: 1
+                      substrate:
+                        oneOf:
+                          - type: object
+                            properties:
+                              kind:
+                                type: string
+                                enum:
+                                  - local_ai
+                              agent_profile_id:
+                                type: string
+                                minLength: 1
+                              tool_scope:
+                                type: array
+                                items:
+                                  type: string
+                                default: *a2
+                              budget:
+                                type: object
+                                properties:
+                                  max_tokens:
+                                    type: integer
+                                    exclusiveMinimum: 0
+                                  max_cost_millicents:
+                                    type: integer
+                                    minimum: 0
+                                required:
+                                  - max_tokens
+                                  - max_cost_millicents
+                              mentors:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    peer_id:
+                                      type: string
+                                      pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                    domain:
+                                      type: string
+                                      minLength: 1
+                                    invocation_policy:
+                                      type: string
+                                      enum: *a3
+                                    distillation_enabled:
+                                      type: boolean
+                                  required:
+                                    - peer_id
+                                    - domain
+                                    - invocation_policy
+                                    - distillation_enabled
+                            required:
+                              - kind
+                              - agent_profile_id
+                          - type: object
+                            properties:
+                              kind:
+                                type: string
+                                enum:
+                                  - cli
+                              binary:
+                                type: string
+                                minLength: 1
+                              args_template:
+                                type: string
+                                minLength: 1
+                              approval_rules:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    operation_pattern:
+                                      type: string
+                                      minLength: 1
+                                    require_approval:
+                                      type: boolean
+                                  required:
+                                    - operation_pattern
+                                    - require_approval
+                                default: *a4
+                            required:
+                              - kind
+                              - binary
+                              - args_template
+                          - type: object
+                            properties:
+                              kind:
+                                type: string
+                                enum:
+                                  - peer
+                              connection_id:
+                                type: string
+                                pattern: ^conn_[0-9A-Za-z]{20,30}$
+                              remote_staff_name:
+                                type: string
+                                minLength: 1
+                            required:
+                              - kind
+                              - connection_id
+                              - remote_staff_name
+                      autonomy_level:
+                        type: string
+                        enum: *a5
+                      governance_mode:
+                        type: string
+                        enum: *a6
+                      status:
+                        type: string
+                        enum: *a7
+                      current_jobs:
+                        type: integer
+                        minimum: 0
+                      max_concurrent_jobs:
+                        type: integer
+                        minimum: 0
+                      cultivation_maturity:
+                        type: integer
+                        minimum: 0
+                        maximum: 5
+                      cultivation_profile:
+                        type: object
+                        properties:
+                          cultivation_log:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                kind:
+                                  type: string
+                                  enum:
+                                    - mentor_consultation
+                                mentor_peer_id:
+                                  type: string
+                                  pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                topic:
+                                  type: string
+                                consulted_at:
+                                  type: string
+                                summary:
+                                  type: string
+                                outcome:
+                                  type: string
+                                  enum: *a8
+                              required:
+                                - kind
+                                - mentor_peer_id
+                                - topic
+                                - consulted_at
+                                - summary
+                                - outcome
+                            default: *a9
+                    required:
+                      - id
+                      - desk_id
+                      - name
+                      - role_name
+                      - role_label
+                      - substrate
+                      - autonomy_level
+                      - governance_mode
+                      - status
+                      - current_jobs
+                      - max_concurrent_jobs
+                      - cultivation_maturity
+                required:
+                  - staff
+        "404":
+          description: Unknown staff id
+  /api/v1/connections:
+    get:
+      summary: List peer connections with health-state summary counts.
+      tags:
+        - connections
+      responses:
+        "200":
+          description: Connections + summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^conn_[0-9A-Za-z]{20,30}$
+                        desk_id:
+                          type: string
+                          pattern: ^desk_[0-9A-Za-z]{20,30}$
+                        remote_person_id:
+                          type: string
+                          pattern: ^person_[0-9A-Za-z]{20,30}$
+                        display_name:
+                          type: string
+                          minLength: 1
+                        health_state:
+                          type: string
+                          enum: *a12
+                        last_successful_at:
+                          type: string
+                        paired_at:
+                          type: string
+                        remote_desk_capabilities:
+                          type: array
+                          items:
+                            type: string
+                          default: *a13
+                        last_failure_at:
+                          type: string
+                        last_failure_reason:
+                          type: string
+                        revoked_at:
+                          type: string
+                        revoked_reason:
+                          type: string
+                      required:
+                        - id
+                        - desk_id
+                        - remote_person_id
+                        - display_name
+                        - health_state
+                        - last_successful_at
+                        - paired_at
+                  summary:
+                    type: object
+                    properties:
+                      healthy:
+                        type: integer
+                        minimum: 0
+                      degraded:
+                        type: integer
+                        minimum: 0
+                      offline:
+                        type: integer
+                        minimum: 0
+                      retrying:
+                        type: integer
+                        minimum: 0
+                      revoked:
+                        type: integer
+                        minimum: 0
+                      invalid_token:
+                        type: integer
+                        minimum: 0
+                    required:
+                      - healthy
+                      - degraded
+                      - offline
+                      - retrying
+                      - revoked
+                      - invalid_token
+                required:
+                  - items
+                  - summary
+  /api/v1/connections/{id}:
+    get:
+      summary: Connection detail (timeline + recent handoffs + policy + masked token).
+      tags:
+        - connections
+      parameters:
+        - schema:
+            type: string
+            pattern: ^conn_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Connection detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connection:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^conn_[0-9A-Za-z]{20,30}$
+                      desk_id:
+                        type: string
+                        pattern: ^desk_[0-9A-Za-z]{20,30}$
+                      remote_person_id:
+                        type: string
+                        pattern: ^person_[0-9A-Za-z]{20,30}$
+                      display_name:
+                        type: string
+                        minLength: 1
+                      health_state:
+                        type: string
+                        enum: *a12
+                      last_successful_at:
+                        type: string
+                      paired_at:
+                        type: string
+                      remote_desk_capabilities:
+                        type: array
+                        items:
+                          type: string
+                        default: *a13
+                      last_failure_at:
+                        type: string
+                      last_failure_reason:
+                        type: string
+                      revoked_at:
+                        type: string
+                      revoked_reason:
+                        type: string
+                    required:
+                      - id
+                      - desk_id
+                      - remote_person_id
+                      - display_name
+                      - health_state
+                      - last_successful_at
+                      - paired_at
+                  health_timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ts:
+                          type: string
+                        state:
+                          anyOf:
+                            - type: string
+                              enum: *a12
+                            - type: string
+                              enum:
+                                - paired
+                        reason:
+                          type: string
+                      required:
+                        - ts
+                        - state
+                    maxItems: 20
+                  recent_handoffs:
+                    type: array
+                    items:
+                      anyOf:
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - mission
+                            mission:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^mission_[0-9A-Za-z]{20,30}$
+                                desk_id:
+                                  type: string
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                inbound_handoff_id:
+                                  type: string
+                                  pattern: ^handoff_[0-9A-Za-z]{20,30}$
+                                title:
+                                  type: string
+                                  minLength: 1
+                                body:
+                                  type: string
+                                  minLength: 1
+                                state:
+                                  type: string
+                                  enum: *a10
+                                state_reason:
+                                  type: string
+                                priority:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 100
+                                sender_display_name:
+                                  type: string
+                                  minLength: 1
+                                sender_connection_id:
+                                  type: string
+                                  pattern: ^conn_[0-9A-Za-z]{20,30}$
+                                form:
+                                  type: string
+                                  enum: *a11
+                                created_at:
+                                  type: string
+                                accepted_at:
+                                  type: string
+                                in_progress_at:
+                                  type: string
+                                blocked_at:
+                                  type: string
+                                submitted_at:
+                                  type: string
+                                rejected_at:
+                                  type: string
+                                expired_at:
+                                  type: string
+                                returned_to_origin_at:
+                                  type: string
+                                deadline_at:
+                                  type: string
+                                assigned_staff_id:
+                                  type: string
+                                  pattern: ^staff_[0-9A-Za-z]{20,30}$
+                              required:
+                                - id
+                                - desk_id
+                                - inbound_handoff_id
+                                - title
+                                - body
+                                - state
+                                - priority
+                                - sender_display_name
+                                - sender_connection_id
+                                - form
+                                - created_at
+                          required:
+                            - type
+                            - mission
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - deliverable
+                            deliverable:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  pattern: ^deliv_[0-9A-Za-z]{20,30}$
+                                desk_id:
+                                  type: string
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                title:
+                                  type: string
+                                  minLength: 1
+                                body_kind:
+                                  type: string
+                                  enum: *a14
+                                body:
+                                  anyOf:
+                                    - type: object
+                                      properties:
+                                        markdown:
+                                          type: string
+                                      required:
+                                        - markdown
+                                    - type: object
+                                      additionalProperties: {}
+                                origin_label:
+                                  type: string
+                                  enum: *a15
+                                status:
+                                  type: string
+                                  enum: *a16
+                                created_at:
+                                  type: string
+                                source_assignment_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^assign_[0-9A-Za-z]{20,30}$
+                                source_mission_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^mission_[0-9A-Za-z]{20,30}$
+                                author_staff_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^staff_[0-9A-Za-z]{20,30}$
+                                author_remote_desk_id:
+                                  type:
+                                    - string
+                                    - "null"
+                                  pattern: ^desk_[0-9A-Za-z]{20,30}$
+                                submitted_to_connection_id:
+                                  type: string
+                                  pattern: ^conn_[0-9A-Za-z]{20,30}$
+                              required:
+                                - id
+                                - desk_id
+                                - title
+                                - body_kind
+                                - body
+                                - origin_label
+                                - status
+                                - created_at
+                          required:
+                            - type
+                            - deliverable
+                    maxItems: 20
+                  policy:
+                    type: object
+                    properties:
+                      accepted_forms:
+                        type: array
+                        items:
+                          type: string
+                          enum: *a11
+                      rate_limit_per_day:
+                        type: integer
+                        minimum: 0
+                      auto_accept:
+                        type: boolean
+                    required:
+                      - accepted_forms
+                      - rate_limit_per_day
+                      - auto_accept
+                  token_info:
+                    type: object
+                    properties:
+                      last_rotated_at:
+                        type: string
+                      expires_at:
+                        type: string
+                      fingerprint:
+                        type: string
+                      masked:
+                        type: string
+                        enum:
+                          - ••••••••••••••••••••
+                    required:
+                      - fingerprint
+                      - masked
+                required:
+                  - connection
+                  - health_timeline
+                  - recent_handoffs
+                  - policy
+                  - token_info
+        "404":
+          description: Unknown connection id
+  /api/v1/connections/pair:
+    post:
+      summary: Pair a new peer connection using a personal code.
+      tags:
+        - connections
+        - actions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                personal_code:
+                  type: string
+                  minLength: 1
+                accepted_forms:
+                  type: array
+                  items:
+                    type: string
+                    enum: *a11
+                rate_limit_per_day:
+                  type: integer
+                  minimum: 1
+                  maximum: 10000
+                counterparty_label:
+                  type: string
+              required:
+                - personal_code
+                - accepted_forms
+                - rate_limit_per_day
+      responses:
+        "201":
+          description: Pairing complete
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connection:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^conn_[0-9A-Za-z]{20,30}$
+                      desk_id:
+                        type: string
+                        pattern: ^desk_[0-9A-Za-z]{20,30}$
+                      remote_person_id:
+                        type: string
+                        pattern: ^person_[0-9A-Za-z]{20,30}$
+                      display_name:
+                        type: string
+                        minLength: 1
+                      health_state:
+                        type: string
+                        enum: *a12
+                      last_successful_at:
+                        type: string
+                      paired_at:
+                        type: string
+                      remote_desk_capabilities:
+                        type: array
+                        items:
+                          type: string
+                        default: *a13
+                      last_failure_at:
+                        type: string
+                      last_failure_reason:
+                        type: string
+                      revoked_at:
+                        type: string
+                      revoked_reason:
+                        type: string
+                    required:
+                      - id
+                      - desk_id
+                      - remote_person_id
+                      - display_name
+                      - health_state
+                      - last_successful_at
+                      - paired_at
+                required:
+                  - connection
+        "400":
+          description: Invalid code or counterparty rejected
+  /api/v1/connections/{id}/test:
+    post:
+      summary: Trigger a one-shot connection test (heartbeat probe).
+      tags:
+        - connections
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^conn_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Test queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/connections/{id}/rotate:
+    post:
+      summary: Rotate the signing token for this connection.
+      tags:
+        - connections
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^conn_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Rotation initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/connections/{id}/revoke:
+    post:
+      summary: Revoke this connection.
+      tags:
+        - connections
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^conn_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+              required:
+                - reason
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/deliverables:
+    get:
+      summary: List deliverables (filterable by origin_label and status).
+      tags:
+        - deliverables
+      parameters:
+        - schema:
+            type: string
+            enum: *a15
+          required: false
+          name: origin
+          in: query
+        - schema:
+            type: string
+            enum: *a16
+          required: false
+          name: status
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: Deliverable list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          pattern: ^deliv_[0-9A-Za-z]{20,30}$
+                        desk_id:
+                          type: string
+                          pattern: ^desk_[0-9A-Za-z]{20,30}$
+                        title:
+                          type: string
+                          minLength: 1
+                        body_kind:
+                          type: string
+                          enum: *a14
+                        body:
+                          anyOf:
+                            - type: object
+                              properties:
+                                markdown:
+                                  type: string
+                              required:
+                                - markdown
+                            - type: object
+                              additionalProperties: {}
+                        origin_label:
+                          type: string
+                          enum: *a15
+                        status:
+                          type: string
+                          enum: *a16
+                        created_at:
+                          type: string
+                        source_assignment_id:
+                          type:
+                            - string
+                            - "null"
+                          pattern: ^assign_[0-9A-Za-z]{20,30}$
+                        source_mission_id:
+                          type:
+                            - string
+                            - "null"
+                          pattern: ^mission_[0-9A-Za-z]{20,30}$
+                        author_staff_id:
+                          type:
+                            - string
+                            - "null"
+                          pattern: ^staff_[0-9A-Za-z]{20,30}$
+                        author_remote_desk_id:
+                          type:
+                            - string
+                            - "null"
+                          pattern: ^desk_[0-9A-Za-z]{20,30}$
+                        submitted_to_connection_id:
+                          type: string
+                          pattern: ^conn_[0-9A-Za-z]{20,30}$
+                      required:
+                        - id
+                        - desk_id
+                        - title
+                        - body_kind
+                        - body
+                        - origin_label
+                        - status
+                        - created_at
+                  next_cursor:
+                    type:
+                      - string
+                      - "null"
+                required:
+                  - items
+                  - next_cursor
+  /api/v1/deliverables/{id}:
+    get:
+      summary: Deliverable detail (full body + attribution).
+      tags:
+        - deliverables
+      parameters:
+        - schema:
+            type: string
+            pattern: ^deliv_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Deliverable detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliverable:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^deliv_[0-9A-Za-z]{20,30}$
+                      desk_id:
+                        type: string
+                        pattern: ^desk_[0-9A-Za-z]{20,30}$
+                      title:
+                        type: string
+                        minLength: 1
+                      body_kind:
+                        type: string
+                        enum: *a14
+                      body:
+                        anyOf:
+                          - type: object
+                            properties:
+                              markdown:
+                                type: string
+                            required:
+                              - markdown
+                          - type: object
+                            additionalProperties: {}
+                      origin_label:
+                        type: string
+                        enum: *a15
+                      status:
+                        type: string
+                        enum: *a16
+                      created_at:
+                        type: string
+                      source_assignment_id:
+                        type:
+                          - string
+                          - "null"
+                        pattern: ^assign_[0-9A-Za-z]{20,30}$
+                      source_mission_id:
+                        type:
+                          - string
+                          - "null"
+                        pattern: ^mission_[0-9A-Za-z]{20,30}$
+                      author_staff_id:
+                        type:
+                          - string
+                          - "null"
+                        pattern: ^staff_[0-9A-Za-z]{20,30}$
+                      author_remote_desk_id:
+                        type:
+                          - string
+                          - "null"
+                        pattern: ^desk_[0-9A-Za-z]{20,30}$
+                      submitted_to_connection_id:
+                        type: string
+                        pattern: ^conn_[0-9A-Za-z]{20,30}$
+                    required:
+                      - id
+                      - desk_id
+                      - title
+                      - body_kind
+                      - body
+                      - origin_label
+                      - status
+                      - created_at
+                required:
+                  - deliverable
+        "404":
+          description: Unknown deliverable id
+  /api/v1/deliverables/{id}/accept:
+    post:
+      summary: Accept a deliverable (state → accepted).
+      tags:
+        - deliverables
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^deliv_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/deliverables/{id}/request-revision:
+    post:
+      summary: Request a revision of a deliverable.
+      tags:
+        - deliverables
+        - actions
+      parameters:
+        - schema:
+            type: string
+            pattern: ^deliv_[0-9A-Za-z]{20,30}$
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+              required:
+                - reason
+      responses:
+        "200":
+          description: Revision requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    enum:
+                      - true
+                required:
+                  - ok
+  /api/v1/chat/threads:
+    get:
+      summary: List chat threads (Myself + AI staff + peers).
+      tags:
+        - chat
+      responses:
+        "200":
+          description: Thread list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          minLength: 1
+                        participant_name:
+                          type: string
+                          minLength: 1
+                        participant_role:
+                          type: string
+                          minLength: 1
+                        staff_id:
+                          type: string
+                          pattern: ^staff_[0-9A-Za-z]{20,30}$
+                        messages:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              role:
+                                type: string
+                                enum:
+                                  - user
+                                  - agent
+                              ts:
+                                type: string
+                              body:
+                                type: string
+                              tool_call:
+                                type: object
+                                properties:
+                                  icon:
+                                    type: string
+                                  name:
+                                    type: string
+                                  args:
+                                    type: string
+                                required:
+                                  - icon
+                                  - name
+                                  - args
+                              citations:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    id:
+                                      type: string
+                                    label:
+                                      type: string
+                                  required:
+                                    - id
+                                    - label
+                              streaming:
+                                type: boolean
+                            required:
+                              - role
+                              - ts
+                              - body
+                      required:
+                        - id
+                        - participant_name
+                        - participant_role
+                        - staff_id
+                        - messages
+                required:
+                  - items
+  /api/v1/chat/threads/{id}/messages:
+    post:
+      summary: Send a message into a chat thread.
+      tags:
+        - chat
+        - actions
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+              required:
+                - body
+      responses:
+        "201":
+          description: Message accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum:
+                          - user
+                      ts:
+                        type: string
+                      body:
+                        type: string
+                    required:
+                      - role
+                      - ts
+                      - body
+                required:
+                  - message
+  /api/v1/handoffs:
+    post:
+      summary: Dispatch a new handoff to a peer connection (form-aware body).
+      tags:
+        - composer
+        - actions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    recipient_connection_id:
+                      type: string
+                      pattern: ^conn_[0-9A-Za-z]{20,30}$
+                    context_pack_id:
+                      type: string
+                    form:
+                      type: string
+                      enum:
+                        - direct_order
+                    instruction:
+                      type: string
+                      minLength: 1
+                  required:
+                    - recipient_connection_id
+                    - form
+                    - instruction
+                - type: object
+                  properties:
+                    recipient_connection_id:
+                      type: string
+                      pattern: ^conn_[0-9A-Za-z]{20,30}$
+                    context_pack_id:
+                      type: string
+                    form:
+                      type: string
+                      enum:
+                        - direct_takeover
+                    goal:
+                      type: string
+                      minLength: 1
+                  required:
+                    - recipient_connection_id
+                    - form
+                    - goal
+                - type: object
+                  properties:
+                    recipient_connection_id:
+                      type: string
+                      pattern: ^conn_[0-9A-Za-z]{20,30}$
+                    context_pack_id:
+                      type: string
+                    form:
+                      type: string
+                      enum:
+                        - approval_chain
+                    stages:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          stage_label:
+                            type: string
+                            minLength: 1
+                          approver_desk:
+                            type: string
+                            minLength: 1
+                          approval_form:
+                            type: string
+                            enum: *a11
+                        required:
+                          - stage_label
+                          - approver_desk
+                          - approval_form
+                      minItems: 1
+                  required:
+                    - recipient_connection_id
+                    - form
+                    - stages
+                - type: object
+                  properties:
+                    recipient_connection_id:
+                      type: string
+                      pattern: ^conn_[0-9A-Za-z]{20,30}$
+                    context_pack_id:
+                      type: string
+                    form:
+                      type: string
+                      enum:
+                        - watch_brief
+                    watching:
+                      type: string
+                      minLength: 1
+                    message:
+                      type: string
+                      minLength: 1
+                  required:
+                    - recipient_connection_id
+                    - form
+                    - watching
+                    - message
+      responses:
+        "201":
+          description: Handoff dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  handoff_id:
+                    type: string
+                    pattern: ^handoff_[0-9A-Za-z]{20,30}$
+                  preview_mission:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        pattern: ^mission_[0-9A-Za-z]{20,30}$
+                      desk_id:
+                        type: string
+                        pattern: ^desk_[0-9A-Za-z]{20,30}$
+                      inbound_handoff_id:
+                        type: string
+                        pattern: ^handoff_[0-9A-Za-z]{20,30}$
+                      title:
+                        type: string
+                        minLength: 1
+                      body:
+                        type: string
+                        minLength: 1
+                      state:
+                        type: string
+                        enum: *a10
+                      state_reason:
+                        type: string
+                      priority:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      sender_display_name:
+                        type: string
+                        minLength: 1
+                      sender_connection_id:
+                        type: string
+                        pattern: ^conn_[0-9A-Za-z]{20,30}$
+                      form:
+                        type: string
+                        enum: *a11
+                      created_at:
+                        type: string
+                      accepted_at:
+                        type: string
+                      in_progress_at:
+                        type: string
+                      blocked_at:
+                        type: string
+                      submitted_at:
+                        type: string
+                      rejected_at:
+                        type: string
+                      expired_at:
+                        type: string
+                      returned_to_origin_at:
+                        type: string
+                      deadline_at:
+                        type: string
+                      assigned_staff_id:
+                        type: string
+                        pattern: ^staff_[0-9A-Za-z]{20,30}$
+                    required:
+                      - id
+                      - desk_id
+                      - inbound_handoff_id
+                      - title
+                      - body
+                      - state
+                      - priority
+                      - sender_display_name
+                      - sender_connection_id
+                      - form
+                      - created_at
+                required:
+                  - handoff_id
+        "400":
+          description: Form not accepted by recipient or invalid body
+        "403":
+          description: Sender authority insufficient for requested form
+webhooks: {}

@@ -1,0 +1,27 @@
+{
+  "name": "@holon/api-contract",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Zod schemas + OpenAPI definition for the Holon BFF contract. See ADR-001.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "openapi": "tsx scripts/generate-openapi.ts"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "7.3.0",
+    "yaml": "2.5.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "20.16.5",
+    "tsx": "4.19.1",
+    "typescript": "5.5.4",
+    "vitest": "2.1.1"
+  }
+}

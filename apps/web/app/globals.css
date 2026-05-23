@@ -1,0 +1,1849 @@
+/**
+ * Global styles for the React UI.
+ *
+ * Brand tokens are mirrored both as CSS custom properties (for legacy
+ * components still using var(--*)) and as Tailwind theme.extend.colors.
+ * Both stay in sync until the vanilla mock retires.
+ */
+
+@import url('https://rsms.me/inter/inter.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Vanilla mock stylesheets — imported so React components can use the
+ * exact same class names without re-implementing 2k lines of CSS. The
+ * vanilla pages in public/ also load these files independently; both
+ * surfaces stay visually identical until each page completes its
+ * React port. */
+@import '../../../src/ui-mock/_shared/shell.css';
+@import '../../../src/ui-mock/_shared/components.css';
+@import '../../../src/ui-mock/_shared/drawer.css';
+
+:root {
+  --bg: #F8F6EF;
+  --bg-alt: #EFEBDD;
+  --bg-dark: #111111;
+  --ink: #1A1A18;
+  --ink-soft: #4A4A45;
+  --ink-mute: #6E6A60;
+  --line: #E2DCC8;
+  --gold: #C69A35;
+  --green: #2E7D52;
+  --blue: #1F6F9E;
+  --purple: #7B4FAB;
+  --red: #C0392B;
+  --radius: 16px;
+  --max: 1120px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--ink); text-decoration: none; }
+
+::selection { background: var(--green); color: #fff; }
+
+/* Accessibility — keyboard focus ring (carried from iter-001c polish). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="slider"]:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ─── iter-006: chat-first shell ───────────────────────────────────────
+ *
+ * Independent of the vanilla `.app-shell` grid (which lives in
+ * src/ui-mock/_shared/shell.css and serves vanilla pages from /public).
+ * The React app uses `.chat-shell` instead.
+ *
+ * L-014 (2026-05-18): nav moved out of `.chat-shell` into the new
+ * `.left-rail` (sibling). The chat-shell now only owns chat-surface +
+ * optional divider + main. Outer flex wrapper = `.app-shell-row`.
+ */
+
+/* ─── L-014: outer row (sidebar + main column) ───────────────────── */
+.app-shell-row {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+}
+.left-rail {
+  flex: 0 0 200px;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-alt);
+  border-right: 1px solid var(--line);
+  padding: 8px 8px 12px;
+  gap: 4px;
+  transition: width 180ms ease, flex-basis 180ms ease;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.app-shell-row.rail-collapsed .left-rail {
+  flex-basis: 56px;
+  width: 56px;
+  padding: 8px 6px 12px;
+}
+.app-shell-row.chat-first-mode.rail-collapsed .left-rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  flex-basis: 0;
+  width: 52px;
+  background: transparent;
+  border-right: none;
+  padding: 8px 6px;
+  overflow: visible;
+}
+.app-shell-row.chat-first-mode.rail-collapsed .left-rail .nav {
+  display: none;
+}
+.rail-toggle {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 36px;
+  height: 36px;
+  margin: 0 0 4px 4px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.rail-toggle:hover { background: var(--bg); color: var(--ink); border-color: var(--line); }
+.app-shell-row.rail-collapsed .rail-toggle { align-self: center; margin-left: 0; }
+
+.main-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.title-strip {
+  flex: 0 0 auto;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.title-strip-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.title-strip-spacer { flex: 1 1 auto; min-width: 0; }
+.title-strip-me {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  transition: background 0.12s;
+}
+.title-strip-me:hover { background: var(--bg-alt); }
+.title-strip-me-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Nav inside the rail: vertical stack, override the legacy .nav styles
+ * imported from shell.css so they don't fight us. */
+.left-rail .nav {
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 2px;
+  background: transparent;
+  border-right: none;
+  border-bottom: none;
+  overflow-x: visible;
+  overflow-y: auto;
+}
+.left-rail .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.12s, color 0.12s;
+}
+/* Section divider between primary work surfaces and supporting/catalog
+ * surfaces (Copilot/ChatGPT/Lindy pattern). bug-20260518-022318. */
+.left-rail .nav-divider {
+  height: 1px;
+  background: var(--line, rgba(0, 0, 0, 0.08));
+  margin: 8px 6px;
+  flex: 0 0 1px;
+}
+.app-shell-row.rail-collapsed .left-rail .nav-divider {
+  margin: 8px 10px;
+}
+
+/* ADR-029 left-rail restructure (2026-05-19): the Library group
+ * (Skills, References — catalogs the owner curates occasionally) gets a
+ * small caps caption above it and slightly de-weighted item styling so
+ * the four work verbs above (Today/Inbound/Deliverables/Team) own the
+ * eye-fixation. The pattern mirrors Notion / Linear "secondary list"
+ * sections: catalog items are still legible and clickable, just not
+ * competing with the daily-action stack for attention. */
+.left-rail .nav-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  opacity: 0.55;
+  padding: 14px 12px 4px 12px;
+  user-select: none;
+}
+.app-shell-row.rail-collapsed .left-rail .nav-section-label {
+  /* In collapsed-rail mode the caption text would clip awkwardly; we
+   * render a thin divider line in its place so the group boundary is
+   * still visible at the icon-only width. */
+  font-size: 0;
+  padding: 8px 0;
+  position: relative;
+}
+.app-shell-row.rail-collapsed .left-rail .nav-section-label::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
+  height: 1px;
+  background: var(--line, rgba(0, 0, 0, 0.08));
+}
+.left-rail .nav-secondary-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.left-rail .nav-secondary-group .nav-item {
+  font-size: 12.5px;
+  opacity: 0.78;
+}
+.left-rail .nav-secondary-group .nav-item:hover {
+  opacity: 1;
+}
+.left-rail .nav-secondary-group .nav-item.active {
+  opacity: 1;
+}
+.left-rail .nav-secondary-group .nav-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+.left-rail .language-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 8px 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.left-rail .language-switcher-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-mute);
+}
+.left-rail .language-switcher-options {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-alt);
+}
+.left-rail .language-switcher-options button {
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+.left-rail .language-switcher-options button.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+.left-rail .language-switcher-options button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+.left-rail .language-switcher-error {
+  font-size: 10px;
+  color: var(--red, #c0392b);
+}
+.app-shell-row.rail-collapsed .left-rail .language-switcher {
+  justify-content: center;
+  margin: 8px 6px 6px;
+  padding: 4px;
+}
+.app-shell-row.rail-collapsed .left-rail .language-switcher-options {
+  grid-template-columns: 1fr;
+  width: 34px;
+  flex: 0 0 34px;
+}
+/* Me-gear footer — pinned to the rail floor via `margin-top: auto`
+ * (VS Code / Discord / Linear pattern). Owner direction (bug-045748):
+ * config belongs at bottom-left ("大家都这么做"). The intermediate inline
+ * placements (bug-040112, bug-041538, bug-044356) are superseded for
+ * Me · Config; the bug-report button stays inline above as a regular
+ * nav-item row. */
+.left-rail .nav-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.left-rail .nav-item:hover { background: var(--bg); color: var(--ink); }
+.left-rail .nav-item.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+.left-rail .nav-item.active:hover { background: var(--ink); color: var(--bg); }
+/* Icon-only nav items (footer Me-gear) get a subtler active state — the
+ * heavy ink-inversion that signals "you are here" for primary nav is
+ * overkill for a tertiary config affordance. The icon centers itself,
+ * the active fill is the hover tint, and the icon goes to ink so it
+ * reads as "selected" without dominating the rail. bug-20260518-034924. */
+.left-rail .nav-item.nav-item-icon-only { justify-content: center; }
+.left-rail .nav-item.nav-item-icon-only.active,
+.left-rail .nav-item.nav-item-icon-only.active:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+.left-rail .nav-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  opacity: 0.85;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.left-rail .nav-icon svg { width: 100%; height: 100%; display: block; }
+.left-rail .nav-item.active .nav-icon { opacity: 1; }
+.left-rail .nav-label {
+  font: inherit;
+  opacity: 1;
+  transition: opacity 120ms ease;
+}
+/* Bilingual stack (2026-05-19): English label on top, Chinese label
+ * beneath in a smaller muted line. Sarah-Chen persona — bilingual SMB
+ * owner — scans whichever line her eye lands on first. The stack
+ * container is the vertical column; the parent .nav-item still uses
+ * `align-items: center` so the icon sits centered against the two-line
+ * block. Line-height kept tight (1.1) so the row only grows ~6px vs
+ * single-line. V1.1 i18n pass will swap one of the two based on
+ * owner.language_preference. */
+.left-rail .nav-label-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+  min-width: 0;
+  overflow: hidden;
+}
+.left-rail .nav-label-zh {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  opacity: 0.7;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+/* Active nav-item inverts to dark fill; lift the Chinese sub-label out
+ * of muted-grey (which would be invisible against ink) into a softened
+ * version of the inverted ink color so it stays legible. */
+.left-rail .nav-item.active .nav-label-zh {
+  color: var(--bg);
+  opacity: 0.72;
+}
+/* Collapsed: hide labels, center icons. */
+.app-shell-row.rail-collapsed .left-rail .nav-item {
+  justify-content: center;
+  padding: 8px 6px;
+}
+.app-shell-row.rail-collapsed .left-rail .nav-label,
+.app-shell-row.rail-collapsed .left-rail .nav-label-stack,
+.app-shell-row.rail-collapsed .left-rail .nav-label-zh {
+  display: none;
+}
+
+/* ─── chat-shell (now sits inside .main-col, no nav row) ───────── */
+.chat-shell {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.chat-shell > .chat-surface { grid-area: chat; }
+.chat-shell > .main   { grid-area: main; overflow-y: auto; padding: 14px 24px 32px; }
+
+/* Chevron stack (split mode): vertical column of collapse chevrons sitting
+ * on the chat-shell divider. bug-20260519-210429-jae1tarl — owner asked for
+ * the two collapse buttons to stack ("一上一下") instead of sitting
+ * horizontally side-by-side. Anchored at the divider's top so neither
+ * button overlaps panel content. */
+.chevron-stack {
+  position: absolute;
+  top: 8px;
+  left: calc(var(--chat-width, 380px) - 11px);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Chat-collapse toggle (split mode): chevron at top of divider, sitting in
+ * the .chevron-stack column. Mirrors the rail-toggle pattern — Copilot-style
+ * collapse button. */
+.chat-collapse-btn {
+  position: static;
+  z-index: 6;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-alt);
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.chat-collapse-btn:hover {
+  background: var(--bg);
+  color: var(--ink);
+  border-color: #d3cab1;
+}
+
+/* Main-collapse toggle (split mode): chevron stacked BELOW chat-collapse in
+ * the .chevron-stack column. Together they give the owner one button per
+ * panel (chat = top, main = bottom), stacked vertically.
+ * bug-20260519-204037: owner asked for two collapse buttons in this area.
+ * bug-20260519-210429-jae1tarl: stack vertically, not side-by-side. */
+.main-collapse-btn {
+  position: static;
+  z-index: 6;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-alt);
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.main-collapse-btn:hover {
+  background: var(--bg);
+  color: var(--ink);
+  border-color: #d3cab1;
+}
+
+/* Main-collapsed mode: chat fills, with a 44px expand rail on the right
+ * (mirror of mode-chat-collapsed). */
+.chat-shell.mode-main-collapsed {
+  grid-template-columns: 1fr 44px;
+  grid-template-rows: 1fr;
+  grid-template-areas: "chat mainrail";
+}
+.chat-shell.mode-main-collapsed > .main-expand-rail {
+  grid-area: mainrail;
+  border: none;
+  border-left: 1px solid var(--line);
+  background: var(--bg-alt);
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 14px;
+  color: var(--ink-soft);
+  transition: background 0.12s, color 0.12s;
+}
+.chat-shell.mode-main-collapsed > .main-expand-rail:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+.chat-shell.mode-main-collapsed > .chat-collapse-btn { display: none; }
+
+/* Chat-collapsed mode: 44px icon rail in place of chat-surface. */
+.chat-shell.mode-chat-collapsed {
+  grid-template-columns: 44px 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "chatrail main";
+}
+.chat-shell.mode-chat-collapsed > .chat-expand-rail {
+  grid-area: chatrail;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: var(--bg-alt);
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 14px;
+  color: var(--ink-soft);
+  transition: background 0.12s, color 0.12s;
+}
+.chat-shell.mode-chat-collapsed > .chat-expand-rail:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* Chat-only mode (route /): full-screen chat */
+.chat-shell.mode-chat-only {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "chat";
+}
+.chat-shell.mode-chat-only > .chat-surface {
+  /* Full-width chat — no left border, white bg */
+  background: var(--bg);
+  border-right: none;
+}
+
+/* Split mode (any other route): chat (resizable) + divider + page 1fr */
+.chat-shell.mode-split {
+  grid-template-columns: var(--chat-width, 380px) 6px 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas:
+    "chat  div   main";
+}
+.chat-shell > .chat-shell-divider { grid-area: div; }
+
+.chat-shell-divider {
+  position: relative;
+  background: var(--line);
+  cursor: col-resize;
+  transition: background 0.12s;
+  user-select: none;
+  touch-action: none;
+}
+.chat-shell-divider:hover { background: var(--ink-mute); }
+.chat-shell-divider-grip {
+  /* Visible grip dots in the middle, signaling "drag me" */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  background: currentColor;
+  color: var(--ink-mute);
+  border-radius: 2px;
+  box-shadow: 0 -8px 0 currentColor, 0 8px 0 currentColor;
+  pointer-events: none;
+  opacity: 0.6;
+}
+.chat-shell-divider:hover .chat-shell-divider-grip { opacity: 1; color: var(--ink); }
+
+/* L-014: Nav moved to .left-rail (see above). The legacy
+ * `.chat-shell .nav` horizontal-strip + mobile-clip rules are removed
+ * since Nav is no longer a child of .chat-shell. Sidebar responsive
+ * behavior lives in the `.app-shell-row` block below. */
+
+/* Mobile: in split mode the chat surface and main column stack
+ * vertically (chat above panel). Chat-only mode is already single
+ * column. The left rail stays on-screen (always-visible per design)
+ * and is auto-collapsed to 56px at ≤900px viewport by AppShell. */
+@media (max-width: 880px) {
+  .chat-shell.mode-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "chat"
+      "main";
+    height: auto;
+    min-height: 100%;
+  }
+  .chat-shell.mode-split > .chat-surface { max-height: 50vh; }
+  .chat-shell.mode-split > .chat-shell-divider { display: none; }
+  /* Hide chat collapse chevron on mobile — the surface already stacks
+   * and shrinks; the chevron would float over composer text. */
+  .chat-collapse-btn { display: none; }
+  .main-collapse-btn { display: none; }
+  .chevron-stack { display: none; }
+  /* On mobile, main-collapsed gives chat the full width. */
+  .chat-shell.mode-main-collapsed {
+    grid-template-columns: 1fr;
+    grid-template-areas: "chat";
+  }
+  .chat-shell.mode-main-collapsed > .main-expand-rail { display: none; }
+  /* On mobile, chat-collapsed gives main the full width. */
+  .chat-shell.mode-chat-collapsed {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main";
+  }
+  .chat-shell.mode-chat-collapsed > .chat-expand-rail { display: none; }
+}
+
+/* ─── 2026-05-17: collapse empty chat on mobile split routes ─────────
+ * On split layouts (/today, /inbound, /connections, /deliverables,
+ * /members) the chat surface eats ~50vh of blank space before the
+ * panel content scrolls into view. When the thread is empty there's
+ * no value to that real estate; cap it to a compact strip so the
+ * panel content is above the fold. */
+@media (max-width: 600px) {
+  .chat-shell.mode-split > .chat-surface {
+    max-height: 140px;
+    min-height: 0;
+  }
+  /* The empty-state "Holon" word + suggestions row would still overflow
+   * the 140px cap; shrink it so the composer stays visible. */
+  .chat-shell.mode-split > .chat-surface .chat-empty {
+    padding: 6px 12px;
+  }
+  .chat-shell.mode-split > .chat-surface .chat-empty-title { font-size: 14px; margin-bottom: 0; }
+  .chat-shell.mode-split > .chat-surface .chat-suggestions {
+    margin-top: 6px;
+    max-width: 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 6px;
+    scrollbar-width: none;
+  }
+  .chat-shell.mode-split > .chat-surface .chat-suggestions::-webkit-scrollbar { display: none; }
+  .chat-shell.mode-split > .chat-surface .chat-suggestion {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  /* Shorten the composer placeholder visually — the textarea wraps the
+   * long "Message your desk AI… (⌘M / Ctrl+M for voice)" placeholder
+   * awkwardly. Use ::placeholder + a small font bump to fit one line. */
+  .chat-shell.mode-split > .chat-surface .chat-input { font-size: 13px; min-height: 32px; }
+}
+
+/* ─── Chat surface ──────────────────────────────────────────────────── */
+
+.chat-surface {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-alt);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.chat-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.chat-header-title { font-size: 16px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+.chat-header-sub { font-size: 12px; color: var(--ink-mute); margin-top: 2px; }
+
+.chat-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  background: var(--bg);
+}
+.chat-tabs::-webkit-scrollbar { display: none; }
+
+.chat-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.chat-tab:hover { background: var(--bg-alt); color: var(--ink); }
+.chat-tab.chat-tab-active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.chat-tab-avatar {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--ink-mute);
+  color: #fff;
+  flex-shrink: 0;
+}
+.chat-tab.chat-tab-active .chat-tab-avatar { background: #fff; color: var(--ink); }
+.chat-tab-avatar.role-owner_assistant { background: var(--green); }
+.chat-tab-avatar.role-researcher      { background: var(--blue); }
+.chat-tab-avatar.role-peer            { background: var(--purple); }
+
+/* assistant-ui ThreadPrimitive shells */
+.chat-thread {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative; /* anchor for .voice-listening-pill */
+}
+.chat-viewport {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Smooth scroll keeps the streaming auto-pin from jittering as the
+   * tail of the assistant bubble grows. overscroll-behavior contains
+   * scroll bounces from leaking out to the page when the viewport
+   * hits its edges (iOS / trackpad). */
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+.chat-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--ink-mute);
+  padding: 24px;
+}
+.chat-empty-title { font-size: 22px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.chat-empty-sub { font-size: 13px; line-height: 1.5; }
+.chat-empty-chips { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px; }
+
+/* Pain-point nudge chip — prominent (never_asked state) */
+.chip-interview-prominent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--ink);
+  color: var(--bg);
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+}
+.chip-interview-prominent:hover { opacity: 0.85; }
+
+/* Pain-point nudge chip — muted (skipped/retry state) */
+.chip-interview-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.7;
+  background: var(--bg-alt, #f4f4f4);
+  color: var(--ink-mute);
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid var(--line, #e0e0e0);
+}
+.chip-interview-muted:hover { opacity: 0.9; }
+
+.chatmsg {
+  display: flex;
+  padding: 10px 14px;
+  border-radius: 14px;
+  max-width: 88%;
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.chatmsg-user {
+  align-self: flex-end;
+  background: var(--ink);
+  color: var(--bg);
+  border-bottom-right-radius: 4px;
+}
+.chatmsg-assistant {
+  align-self: flex-start;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 4px;
+  gap: 8px;
+  align-items: flex-start;
+}
+.chatmsg-content {
+  min-width: 0;
+}
+.chat-tts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.chat-tts-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-mute);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.chat-tts-button:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: #f4faf6;
+}
+.chat-tts-button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+.chat-tts-button-playing {
+  border-color: var(--green);
+  color: var(--green);
+  background: #f4faf6;
+}
+.chat-tts-status {
+  max-width: 180px;
+  color: #9a6a12;
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: normal;
+}
+.tts-rate-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+}
+/* Compact single chip — subtle, tap to cycle speed (replaces the 4-button row). */
+.tts-rate-chip {
+  min-width: 30px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.tts-rate-chip:hover { opacity: 1; background: #fff; }
+.tts-rate-option {
+  min-width: 30px;
+  height: 20px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tts-rate-option:hover {
+  color: var(--green);
+  background: #f4faf6;
+}
+.tts-rate-option--active {
+  color: #fff;
+  background: var(--green);
+}
+
+.chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.chat-input {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  min-height: 38px;
+  max-height: 160px;
+  font-size: 14px;
+  line-height: 1.4;
+  outline: none;
+}
+.chat-input:focus-visible { border-color: var(--green); box-shadow: 0 0 0 2px rgba(46, 125, 82, 0.18); outline: none; }
+
+/* @-mention typeahead — floats above the composer */
+.mention-menu {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(100% - 0px);
+  margin-bottom: 62px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  z-index: 30;
+  padding: 4px;
+}
+.mention-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+.mention-item.active,
+.mention-item:hover { background: rgba(46, 125, 82, 0.10); }
+.mention-name { font-weight: 600; font-size: 13.5px; }
+.mention-role { font-size: 12px; color: var(--ink-mute); }
+.mention-empty {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+.chat-send {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: var(--green);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-send:hover { background: #266843; }
+.chat-send:disabled { background: var(--ink-mute); cursor: not-allowed; opacity: 0.6; }
+
+/* Stop button (owner directive 2026-05-19 19:48 — cancel mid-generation).
+ * Same shape as .chat-send so the swap is non-jarring; red tint signals
+ * "interruptive action" (vs the green Send "go-action"). */
+.chat-send.chat-stop {
+  background: var(--red, #c0392b);
+  font-size: 14px;
+  letter-spacing: -1px;
+}
+.chat-send.chat-stop:hover { background: #952a1f; }
+
+.chat-trigger-button {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+.chat-trigger-button:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: #f4faf6;
+}
+.chat-trigger-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+.chat-trigger-icon,
+.voice-mode-button-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chat-mic-button--recording {
+  border-color: var(--red, #c0392b);
+  color: var(--red, #c0392b);
+  background: #fff6f4;
+  animation: composer-mic-pulse 1200ms ease-in-out infinite;
+}
+.chat-mic-button--transcribing {
+  border-color: var(--green);
+  color: var(--green);
+  background: #f4faf6;
+}
+.chat-mic-button--done {
+  border-color: var(--green);
+  color: #fff;
+  background: var(--green);
+}
+.voice-mode-button {
+  width: 38px;
+  height: 38px;
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.voice-mode-button:hover {
+  background: #262323;
+  color: #fff;
+  border-color: #262323;
+}
+.voice-mode-button--active {
+  border-color: var(--green);
+  color: #fff;
+  background: var(--green);
+}
+.voice-mode-button--active:hover {
+  color: #fff;
+  background: #266843;
+}
+@keyframes composer-mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.30); }
+  50%      { box-shadow: 0 0 0 6px rgba(192, 57, 43, 0); }
+}
+
+.voice-mode-overlay {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  z-index: 80;
+  width: auto;
+  min-width: 184px;
+  max-width: calc(100vw - 28px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(46, 125, 82, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  color: var(--ink);
+}
+.voice-mode-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(46, 125, 82, 0.24);
+  background: var(--green);
+  box-shadow: 0 0 0 0 rgba(46, 125, 82, 0.22);
+  flex: 0 0 auto;
+}
+.voice-mode-overlay--listening .voice-mode-indicator {
+  animation: voice-mode-pulse 1300ms ease-in-out infinite;
+}
+.voice-mode-overlay--speaking .voice-mode-indicator {
+  animation: voice-mode-speaking 900ms ease-in-out infinite;
+}
+.voice-mode-overlay--transcribing .voice-mode-indicator {
+  background: var(--blue);
+  border-color: rgba(31, 111, 158, 0.25);
+}
+.voice-mode-overlay--thinking .voice-mode-indicator {
+  background: var(--gold);
+  border-color: rgba(198, 154, 53, 0.28);
+}
+.voice-mode-title {
+  min-width: 38px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.voice-mode-close {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.voice-mode-close {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+.voice-mode-close:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: #f4faf6;
+}
+@keyframes voice-mode-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(46, 125, 82, 0.25); }
+  70% { box-shadow: 0 0 0 12px rgba(46, 125, 82, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 125, 82, 0); }
+}
+@keyframes voice-mode-speaking {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(0.82); opacity: 0.72; }
+}
+@media (max-width: 620px) {
+  .voice-mode-button {
+    width: 38px;
+  }
+  .voice-mode-overlay {
+    bottom: 76px;
+  }
+}
+
+/* Queued-while-replying pills (owner directive 2026-05-19 19:48 part 3).
+ * Dim italic strip below the composer, separated by border-top so it
+ * reads as a "preview area" not a part of the message thread itself.
+ * "+N more queued" collapsed pill for the long-tail case. */
+.chat-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 14px 8px;
+  border-top: 1px dashed var(--line);
+  background: rgba(0, 0, 0, 0.015);
+}
+.chat-queue-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--ink-mute);
+  opacity: 0.65;
+  background: rgba(46, 125, 82, 0.06);
+  border: 1px solid rgba(46, 125, 82, 0.18);
+  border-radius: 10px;
+  padding: 5px 10px;
+  line-height: 1.4;
+}
+.chat-queue-label {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--green);
+  opacity: 0.75;
+}
+.chat-queue-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.chat-queue-more {
+  justify-content: center;
+  font-weight: 500;
+}
+
+/* Per-queue-item ✕ button (owner directive 2026-05-19 20:14 — Esc /
+ * cancel UX). Hover-revealed so the queue strip reads clean at rest;
+ * lifts to full opacity when the button itself is hovered. The pill is
+ * already opacity:0.65 so the resting state of 0 keeps the chrome quiet. */
+.chat-queue-remove {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  padding: 2px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-mute);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+.chat-queue:hover .chat-queue-remove { opacity: 0.7; }
+.chat-queue-remove:hover,
+.chat-queue-remove:focus-visible {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+  outline: none;
+}
+
+/* "Clear all queued" footer link — only rendered when items.length >= 2. */
+.chat-queue-clear-all {
+  align-self: flex-end;
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-mute);
+  opacity: 0.65;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.chat-queue-clear-all:hover,
+.chat-queue-clear-all:focus-visible { opacity: 1; outline: none; }
+
+/* ─── iter-007 UX hotfix: compact strip + inline detail ──────────────── */
+
+/* main-inner = flex column that fills main, so inline-detail / list
+ * can flex:1 and occupy the full height instead of shrinking to content
+ * during empty/loading states (was rendering as a tiny corner box). */
+.chat-shell .main-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.chat-shell .main-inner > .mission-list,
+.chat-shell .main-inner > .connection-list {
+  flex: 1;
+  min-height: 0;
+}
+.chat-shell .main-inner > .inline-detail {
+  /* flex: 1 grows to fill the panel; min-height: 480 (base rule) keeps
+   * it usable in short viewports. NOT min-height: 0 — that would collapse
+   * the box to its loading-state content (~120px) which was the bug. */
+  flex: 1;
+}
+.inline-detail > .drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.page-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.page-strip-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.page-strip .filter-chips {
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+}
+.page-strip-count {
+  font-size: 12px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.inline-detail {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  min-height: 480px;
+}
+.inline-detail > .drawer-body { overflow-y: auto; }
+
+/* Buttons in chat-shell page-header / page-strip must never wrap their
+ * labels — "New handoff" + "Pair new connection" were breaking onto two
+ * lines because flex was squeezing them. */
+.chat-shell .btn { white-space: nowrap; flex-shrink: 0; }
+.inline-detail-back {
+  align-self: flex-start;
+  margin: 12px;
+  padding: 6px 12px;
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.inline-detail-back:hover { background: var(--line); color: var(--ink); }
+.inline-detail-loading,
+.inline-detail-error { padding: 24px; text-align: center; color: var(--ink-mute); font-size: 13px; }
+.inline-detail-error { color: var(--red); }
+
+.inline-detail .drawer-header,
+.inline-detail .drawer-body,
+.inline-detail .drawer-footer { background: transparent; border-radius: 0; }
+.inline-detail .drawer-header { border-bottom: 1px solid var(--line); }
+.inline-detail .drawer-footer { border-top: 1px solid var(--line); }
+.inline-detail .drawer-close-btn { display: none; }
+
+/* L2 panel rendered inline (no portal, no slide-in animation). */
+.inline-detail .drawer-l2 {
+  position: static;
+  transform: none;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+.inline-detail .drawer-l2-header {
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+.inline-detail .drawer-l2-back-btn { display: none; }
+.inline-detail .drawer-l2-body { flex: 1; overflow-y: auto; }
+
+/* ─── iter-007 P1 fixes: chat suggestions + Today hero polish ────────── */
+
+.chat-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  align-items: stretch;
+  max-width: 280px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.chat-suggestion {
+  text-align: left;
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.06s;
+}
+.chat-suggestion:hover {
+  background: var(--bg-alt);
+  border-color: #d3cab1;
+}
+.chat-suggestion:active { transform: scale(0.99); }
+
+/* Empty-state coaching extras (L-019 · 2026-05-19): @-mention hint +
+ * Gmail-inheritance pro-tip render below the chips for first-time
+ * SMB owners landing at `/`. Tone is subdued so the chips stay the
+ * primary call-to-action; the hint/protip read as guidance, not UI. */
+.chat-empty-hint {
+  margin: 14px auto 0;
+  max-width: 280px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-mute);
+  text-align: left;
+}
+.chat-empty-hint code {
+  background: rgba(46, 125, 82, 0.10);
+  color: var(--ink);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.chat-empty-at {
+  display: inline-block;
+  min-width: 18px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--green);
+}
+.chat-empty-protip {
+  margin: 10px auto 0;
+  max-width: 280px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-mute);
+  text-align: left;
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+.chat-empty-protip a { color: var(--green); text-decoration: underline; }
+
+/* Today hero — replace beige info-box with 4-card stats grid */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+@media (max-width: 720px) {
+  .hero-stats { grid-template-columns: repeat(2, 1fr); }
+}
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.12s, transform 0.06s;
+}
+.hero-stat:hover { border-color: #d3cab1; }
+.hero-stat-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.hero-stat-label {
+  font-size: 11px;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+  margin-top: 6px;
+}
+.hero-stat.is-attention .hero-stat-num { color: var(--red); }
+.hero-stat.is-positive .hero-stat-num { color: var(--green); }
+
+.chat-shell .main { position: relative; }
+
+/* Slide-in animation when navigating from chat-only to split mode.
+ * The .main panel fades + slides from the right; chat stays put. */
+.chat-shell.mode-split > .main {
+  animation: panel-slide-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Owner card on /members — distinct from regular staff cards */
+.staff-card-owner {
+  background: linear-gradient(135deg, var(--bg) 0%, var(--bg-alt) 100%);
+  border: 1.5px solid var(--ink);
+}
+.staff-card-owner:hover { border-color: var(--ink); background: var(--bg-alt); }
+
+/* Voice input pill — long-press Space and the composer mic button share the
+ * same recording/transcribe path. While recording, this floating pill confirms
+ * the mic is hot. */
+.voice-listening-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+  z-index: 50;
+}
+.voice-listening-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(192, 57, 43, 0); }
+}
+/* Status / error variant — amber tint, no dot */
+.voice-listening-pill--status {
+  background: rgba(40, 30, 10, 0.95);
+  border: 1px solid rgba(220, 160, 30, 0.45);
+  color: #f0c060;
+}
+/* Live interim transcript — slightly dimmer to distinguish from final */
+.voice-interim-text {
+  opacity: 0.88;
+  font-style: italic;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-status-msg {
+  max-width: 400px;
+}
+
+/* ── CLI terminal panel (xterm.js host) ─────────────────────────── */
+.cli-terminal-wrap {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0e0e10;
+  min-height: 360px;
+  margin-top: 6px;
+}
+.cli-terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #1a1a1d;
+  color: #d7d7d7;
+  border-bottom: 1px solid #2a2a2d;
+}
+.cli-terminal-bar .btn {
+  background: #2a2a2d;
+  color: #d7d7d7;
+  border: 1px solid #3a3a3d;
+}
+.cli-terminal-bar .btn:hover {
+  background: #3a3a3d;
+  color: #fff;
+}
+.cli-terminal-status {
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.cli-terminal-status-running { color: #9bd28a; background: rgba(155,210,138,0.12); }
+.cli-terminal-status-launching { color: #e6b35c; background: rgba(230,179,92,0.12); }
+.cli-terminal-status-error { color: #e0533a; background: rgba(224,83,58,0.12); }
+.cli-terminal-status-idle { color: #999; }
+.cli-terminal-body {
+  flex: 1;
+  min-height: 320px;
+  padding: 8px;
+}
+.cli-terminal-body .xterm-viewport { background: transparent !important; }
+
+/* ── Bug-report button — renders as a nav-item-style row inside
+ * .nav-bug-row so it carries the same visual weight as Members /
+ * Skills / References (bug-20260518-041538). Previously it was an
+ * icon-only square wedged next to the Me-gear in a horizontal footer
+ * cluster; per the owner it belongs in the vertical menu stack. */
+.bug-fab-inline {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.12s, color 0.12s;
+}
+.bug-fab-inline:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+/* Bug row sits in the menu stack between References and the
+ * Me-gear footer (bug-20260518-041538). No extra padding — the
+ * button itself owns the row height so it matches .nav-item. */
+.left-rail .nav-bug-row {
+  display: flex;
+}
+/* Collapsed rail (56px): hide the label and center the icon, same
+ * as the .nav-item collapsed treatment. */
+.app-shell-row.rail-collapsed .left-rail .nav-bug-row .bug-fab-inline {
+  justify-content: center;
+  padding: 8px 6px;
+}
+.app-shell-row.rail-collapsed .left-rail .nav-bug-row .nav-label {
+  display: none;
+}
+
+/* ── (legacy) Floating bug-report button — kept for reference ───── */
+.bug-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  z-index: 70;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.bug-fab:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24); }
+
+.bug-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 22, 0.42);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.bug-modal {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  padding: 18px 20px 16px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.22);
+}
+.bug-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.bug-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--ink-mute);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bug-modal-close:hover { background: var(--bg-alt); color: var(--ink); }
+.bug-modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.55;
+  resize: vertical;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+  margin-top: 4px;
+}
+.bug-modal-textarea:focus { border-color: var(--ink); }
+
+/* Members sub-category chips — replaces the page-strip on /members.
+ * Per user "点击member的时候 你直接出来子的category" — clicking Members
+ * in nav lands directly on the sub-kind tabs (no redundant title row). */
+.member-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 12px;
+  margin: -4px 0 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex-wrap: nowrap;
+}
+/* Mobile (≤600px): wrap to two rows so + Hire never clips off-screen.
+ * Per QA audit 2026-05-17 M-1 (P0). */
+@media (max-width: 600px) {
+  .member-filter-chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .member-filter-chips > .btn,
+  .member-filter-chips > .btn-primary {
+    margin-left: auto;
+  }
+}
+.member-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.member-filter-chip:hover:not(:disabled) {
+  background: var(--bg-alt);
+  border-color: var(--ink-mute);
+}
+.member-filter-chip.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.member-filter-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.member-filter-chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--bg-alt);
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.member-filter-chip.active .member-filter-chip-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* ───────── Connectors directory (iter-025, modern card grid) ───────── */
+.conn-wrap { max-width: 960px; }
+.conn-search-row { position: relative; max-width: 440px; margin-bottom: 28px; }
+.conn-search-row svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #9a948a; pointer-events: none; }
+.conn-search { width: 100%; box-sizing: border-box; padding: 10px 14px 10px 38px; border: 1px solid var(--border, #e7e4dc); border-radius: 12px; font-size: 14px; background: var(--card, #fff); outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+.conn-search:focus { border-color: var(--accent, #1D6FA4); box-shadow: 0 0 0 3px rgba(29,111,164,.12); }
+.conn-section { margin-bottom: 26px; }
+.conn-section-h { font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #8a847a; margin: 0; }
+.conn-section-toggle { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 12px; padding: 4px 0; background: transparent; border: none; cursor: pointer; text-align: left; }
+.conn-section-toggle:hover .conn-section-h { color: #6b665d; }
+.conn-chevron { font-size: 11px; color: #b3ada2; transition: transform .15s ease; transform: rotate(0deg); }
+.conn-chevron.is-collapsed { transform: rotate(-90deg); }
+.conn-section-count { font-size: 11px; font-weight: 500; color: #b3ada2; background: #efece6; border-radius: 10px; padding: 1px 8px; letter-spacing: 0; }
+.conn-section-h span { font-weight: 500; text-transform: none; letter-spacing: 0; color: #b3ada2; margin-left: 6px; }
+.conn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.conn-card { display: flex; align-items: center; gap: 14px; border: none; border-radius: 12px; padding: 12px 14px; background: transparent; transition: background .13s ease; }
+.conn-card:hover { background: rgba(20,18,12,.04); }
+.conn-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; letter-spacing: .3px; background: transparent; flex-shrink: 0; }
+.conn-meta { min-width: 0; flex: 1; }
+.conn-name { font-weight: 600; font-size: 15px; letter-spacing: -.1px; }
+.conn-name .zh { color: #9a948a; font-weight: 400; font-size: 13px; margin-left: 6px; }
+.conn-name .wip { color: var(--gold, #C69A35); font-weight: 500; font-size: 11px; margin-left: 6px; }
+.conn-desc { color: #8a847a; font-size: 12.5px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conn-add { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #d8d3c8; background: #efece6; color: #6b665d; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .13s ease; }
+.conn-add.active { background: #efece6; color: #4a453d; cursor: pointer; }
+.conn-add.active:hover { background: #e3ded3; }
+.conn-add:disabled { cursor: not-allowed; opacity: .75; color: #9a9490; }
+.conn-ok { color: var(--green, #2E7D52); font-size: 19px; flex-shrink: 0; }
+.conn-request-cta { margin-top: 22px; width: 100%; display: flex; align-items: center; gap: 10px; padding: 15px 16px; border: 1px dashed #d8d4ca; border-radius: 12px; background: transparent; color: #6b665d; font-size: 14px; text-align: left; cursor: pointer; transition: background .13s ease, border-color .13s ease; }
+.conn-request-cta:hover { background: rgba(20,18,12,.03); border-color: #c4bfb4; color: #4a453d; }
+.conn-icon-light { background: transparent; box-shadow: none; }
+.conn-icon-light img { display: block; object-fit: contain; }

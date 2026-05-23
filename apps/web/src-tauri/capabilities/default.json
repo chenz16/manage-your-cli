@@ -1,0 +1,26 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "enables default permissions + fs + dialog (folder-picker BFF, bug-20260517-200707) + shell (Pass #6.1 Node sidecar)",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "fs:default",
+    "dialog:default",
+    "shell:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "node",
+          "sidecar": true,
+          "args": [
+            { "validator": "^.+$" }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+      - name: Install pandoc (make_pdf skill)
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+      - name: Install python-pptx (make_slides skill)
+        run: pip install python-pptx
+      - name: Typecheck (api-contract + core + web)
+        run: pnpm -F api-contract typecheck && pnpm -F core typecheck && pnpm -F web typecheck
+      - name: Core unit tests
+        run: pnpm -F core test
+      - name: Install Playwright chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start dev server (background)
+        run: nohup pnpm dev > /tmp/holon-dev.log 2>&1 & disown
+      - name: Wait for dev server
+        run: |
+          until curl -s -o /dev/null -w '%{http_code}' http://localhost:3000 | grep -q 200; do sleep 2; done
+      - name: Daily-flow Playwright suite
+        run: pnpm test:e2e:daily

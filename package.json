@@ -1,0 +1,25 @@
+{
+  "name": "holon-engineering",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Holon engineering monorepo. iter-002 introduces the first package (api-contract).",
+  "type": "module",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e:daily": "playwright test --config=tests/e2e/daily-flows/playwright.config.ts",
+    "test:e2e:onboarding": "playwright test --config=tests/e2e/onboarding/playwright.config.ts",
+    "openapi": "pnpm -F api-contract openapi"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "typescript": "5.5.4"
+  },
+  "packageManager": "pnpm@9.10.0",
+  "engines": {
+    "node": ">=20.10.0"
+  },
+  "dependencies": {
+    "zod": "^3.25.0"
+  }
+}

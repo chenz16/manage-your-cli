@@ -1,0 +1,368 @@
+/* shell.css — app shell, nav, brand tokens for Holon desk UI mock.
+ * Brand tokens copied verbatim from the public Holon site
+ * (the marketing page :root block, lines ~15-29). Per
+ * iterations/001a-ui-mock-shell/plan.md sub-step 2a — copy ONLY these 13
+ * tokens; no other styles from the marketing page. */
+
+:root {
+  --bg: #F8F6EF;
+  --bg-alt: #EFEBDD;
+  --bg-dark: #111;
+  --ink: #1A1A18;
+  --ink-soft: #4A4A45;
+  --ink-mute: #6E6A60;
+  --line: #E2DCC8;
+  --gold: #C69A35;
+  --green: #2E7D52;
+  --blue: #1F6F9E;
+  --purple: #7B4FAB;
+  --red: #C0392B; /* iter-001b: added for connection invalid_token / alerts */
+  --radius: 16px;
+  --max: 1120px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--ink); text-decoration: none; }
+::selection { background: var(--green); color: #fff; }
+
+/* Accessibility focus states (per ui-architecture.md § 9.1).
+ * iter-001c polish: extend to inputs, textareas, selects, and elements
+ * marked role="button" (mission/conn cards, deliverable cards). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="slider"]:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ─── App shell layout (per ui-architecture.md § 3.3) ─────────────────────── */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  grid-template-rows: 56px 1fr;
+  grid-template-areas:
+    "topbar topbar"
+    "nav    main";
+  min-height: 100vh;
+}
+
+/* Top bar */
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 17px;
+}
+
+.topbar-brand img {
+  height: 32px;
+  width: auto;
+  display: block;
+}
+
+.topbar-brand-mark {
+  /* When using the full logotype svg the wordmark is inside it; we hide the
+   * inline text. When using a mark-only svg we show it. The mock uses the
+   * full svg so this is a fallback. */
+  display: none;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-soft);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.topbar-icon-btn:hover { background: var(--bg-alt); color: var(--ink); }
+.topbar-icon-btn svg { width: 18px; height: 18px; display: block; }
+
+/* ADR-013: chat toggle button active state — rendered by chat.css but
+ * the topbar z-index must be below the chat panel (z-index:100). */
+.topbar { z-index: 10; /* chat panel is z-index:100; backdrop z-index:90 */ }
+
+.topbar-me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.topbar-me:hover { background: var(--bg-alt); }
+
+.topbar-me-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.topbar-me-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+/* Left navigation */
+.nav {
+  grid-area: nav;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  padding: 12px 10px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  position: relative;
+}
+
+.nav-item:hover { background: var(--bg-alt); color: var(--ink); }
+.nav-item .nav-icon { width: 18px; height: 18px; flex: none; opacity: 0.85; }
+.nav-item .nav-icon svg { width: 100%; height: 100%; display: block; }
+
+.nav-item.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-item.active:hover { background: var(--ink); color: var(--bg); }
+
+.nav-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 12px 4px;
+}
+
+.nav-device {
+  margin-top: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--ink-mute);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Main content area */
+.main {
+  grid-area: main;
+  padding: 32px 40px 64px;
+  overflow-y: auto;
+  max-width: 100%;
+}
+
+.main-inner {
+  max-width: var(--max);
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--ink-mute);
+  margin: 0;
+}
+
+/* Stub-page centered placeholder */
+.stub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  color: var(--ink-mute);
+}
+.stub-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.stub-body {
+  max-width: 420px;
+  margin: 0 0 20px;
+}
+.stub a {
+  color: var(--green);
+  font-weight: 500;
+  border-bottom: 1px solid var(--green);
+  padding-bottom: 1px;
+}
+
+/* ─── iter-001c step 4: mobile responsive pass (<768px) ─────────────────
+ * Per plan §"Mobile responsive — design choice":
+ *   - Left nav collapses to bottom tab bar (1-tap, app-idiomatic).
+ *   - 5 primary nav-items remain in the bar; secondary items
+ *     (Settings, Audit, Device chip) hidden — accessible from a future
+ *     "more" sheet in iter-002.
+ *   - Main goes full width; bottom padding clears the tab bar.
+ *   - Page-header stacks vertically so action buttons don't collide
+ *     with the title.
+ */
+
+@media (max-width: 768px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 56px 1fr auto;
+    grid-template-areas:
+      "topbar"
+      "main"
+      "nav";
+  }
+
+  /* Topbar: compress the user chip; hide the name (avatar only) */
+  .topbar { padding: 0 12px; }
+  .topbar-me { padding: 4px 6px; }
+  .topbar-me-name { display: none; }
+  .topbar-brand img { height: 26px; }
+
+  /* Nav becomes a bottom horizontal tab bar */
+  .nav {
+    flex-direction: row;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    padding: 6px 4px max(6px, env(safe-area-inset-bottom));
+    gap: 0;
+    justify-content: space-around;
+    align-items: center;
+    background: var(--bg);
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+  }
+
+  .nav-item {
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 4px;
+    font-size: 10.5px;
+    border-radius: 8px;
+    text-align: center;
+    min-height: 50px;
+    justify-content: center;
+  }
+  .nav-item .nav-icon { width: 20px; height: 20px; opacity: 0.9; }
+
+  .nav-item.active {
+    background: transparent;
+    color: var(--green);
+  }
+  .nav-item.active .nav-icon { opacity: 1; color: var(--green); }
+  .nav-item.active:hover { background: var(--bg-alt); color: var(--green); }
+
+  /* Hide secondary nav items on mobile (Settings, Audit, Device chip, divider) */
+  .nav-divider,
+  .nav .nav-item[data-inert="settings"],
+  .nav .nav-item[data-inert="audit"],
+  .nav-device {
+    display: none;
+  }
+
+  /* Main: full width, less padding, room above bottom bar */
+  .main {
+    padding: 16px 14px 24px;
+  }
+
+  /* Page header: stack title above action button */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .page-title { font-size: 22px; }
+  .page-subtitle { font-size: 13px; }
+}

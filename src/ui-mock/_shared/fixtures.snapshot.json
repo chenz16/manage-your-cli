@@ -1,0 +1,49 @@
+{
+  "desks": [
+    {
+      "id": "desk_01HKQ8OWNERDESKBLANKVB3XKWT",
+      "person_id": "person_01HKQ8OWNERPERSONBLANKVBN3X",
+      "display_name": "My desk",
+      "device_kind": "laptop",
+      "presence": "online",
+      "is_primary": true,
+      "span_of_control_cap": 7
+    }
+  ],
+  "primary_desk_id": "desk_01HKQ8OWNERDESKBLANKVB3XKWT",
+  "staff": [],
+  "my_work_queue": [],
+  "owner_assistant": {
+    "id": "staff_01HKQ8OWNERASSISTVBN3XKWTCQ",
+    "name": "Desk AI",
+    "role_name": "owner_assistant",
+    "role_label": "Owner Assistant",
+    "substrate": {
+      "kind": "local_ai",
+      "agent_profile_id": "hermes_profile_owner_v1",
+      "tool_scope": [
+        "list_staff",
+        "query_staff",
+        "create_staff",
+        "update_staff",
+        "dismiss_staff",
+        "assign_to_staff",
+        "list_connections",
+        "dispatch_handoff",
+        "list_missions",
+        "list_deliverables",
+        "list_recent_jobs",
+        "cli_exec"
+      ]
+    },
+    "owner_name": "",
+    "owner_role": "",
+    "owner_intro": "",
+    "system_prompt": ""
+  },
+  "connections": [],
+  "missions": [],
+  "deliverables": [],
+  "recent_events": [],
+  "chat_threads": []
+}

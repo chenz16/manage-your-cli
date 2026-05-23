@@ -1,0 +1,60 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Holon fractal team logo</title>
+  <desc id="desc">A recursive network mark showing one local team branching into self-similar connected teams.</desc>
+  <rect width="960" height="320" rx="32" fill="#F8F6EF"/>
+  <g transform="translate(82 42)">
+    <g stroke="#1A1A18" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M102 118 L50 82"/>
+      <path d="M102 118 L50 154"/>
+      <path d="M102 118 L154 82"/>
+      <path d="M102 118 L154 154"/>
+      <path d="M50 82 L24 64"/>
+      <path d="M50 82 L24 100"/>
+      <path d="M50 154 L24 136"/>
+      <path d="M50 154 L24 172"/>
+      <path d="M154 82 L180 64"/>
+      <path d="M154 82 L180 100"/>
+      <path d="M154 154 L180 136"/>
+      <path d="M154 154 L180 172"/>
+    </g>
+    <g>
+      <circle cx="102" cy="118" r="34" fill="#111111"/>
+      <circle cx="102" cy="118" r="15" fill="#F8F6EF"/>
+      <circle cx="50" cy="82" r="19" fill="#C69A35"/>
+      <circle cx="50" cy="154" r="19" fill="#2E7D52"/>
+      <circle cx="154" cy="82" r="19" fill="#1F6F9E"/>
+      <circle cx="154" cy="154" r="19" fill="#7B4FAB"/>
+      <circle cx="24" cy="64" r="9" fill="#C69A35"/>
+      <circle cx="24" cy="100" r="9" fill="#C69A35"/>
+      <circle cx="24" cy="136" r="9" fill="#2E7D52"/>
+      <circle cx="24" cy="172" r="9" fill="#2E7D52"/>
+      <circle cx="180" cy="64" r="9" fill="#1F6F9E"/>
+      <circle cx="180" cy="100" r="9" fill="#1F6F9E"/>
+      <circle cx="180" cy="136" r="9" fill="#7B4FAB"/>
+      <circle cx="180" cy="172" r="9" fill="#7B4FAB"/>
+    </g>
+    <g opacity="0.2" stroke="#1A1A18" stroke-width="1.5">
+      <circle cx="102" cy="118" r="58"/>
+      <circle cx="50" cy="82" r="32"/>
+      <circle cx="50" cy="154" r="32"/>
+      <circle cx="154" cy="82" r="32"/>
+      <circle cx="154" cy="154" r="32"/>
+    </g>
+  </g>
+  <g transform="translate(330 84)">
+    <text x="0" y="68" fill="#1A1A18" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="72" font-weight="720" letter-spacing="-1">
+      Holon
+    </text>
+    <text x="3" y="112" fill="#4A4A45" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="24" font-weight="500">
+      Local teams. Connected workforce.
+    </text>
+    <g transform="translate(4 143)">
+      <rect x="0" y="0" width="122" height="30" rx="15" fill="#ECE5D5"/>
+      <rect x="136" y="0" width="148" height="30" rx="15" fill="#E2EFE8"/>
+      <rect x="298" y="0" width="178" height="30" rx="15" fill="#E7EEF5"/>
+      <text x="18" y="20" fill="#1A1A18" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="650">local desk</text>
+      <text x="154" y="20" fill="#1A1A18" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="650">proxy people</text>
+      <text x="316" y="20" fill="#1A1A18" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="650">human-AI network</text>
+    </g>
+  </g>
+</svg>

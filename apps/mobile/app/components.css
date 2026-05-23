@@ -1,0 +1,110 @@
+/* components.css — mobile-tuned subset of desk's _shared/components.css.
+   Reusable utility classes for Pass #2-#5 so passes don't redefine
+   buttons / cards / list rows / form inputs inline. Mobile tweaks:
+   44px tap targets, no hover transforms, larger touch padding.
+   Class names follow `m-*` prefix to avoid colliding with desk classes.
+   M-L-006: `:root` block deleted — globals.css (desk-aligned per M-L-005)
+   owns all tokens. Crown now resolves --gold → #C69A35, not #BD8C2A. */
+
+/* ─── Buttons (tap-sized variants) ─────────────────────────── */
+.m-btn-primary,
+.m-btn-secondary,
+.m-btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px;
+  font: 600 15px/1 inherit;
+  min-height: var(--tap);
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-btn-primary   { background: var(--ink); color: var(--cream); }
+.m-btn-primary:active   { background: #000; }
+.m-btn-secondary { background: #fff; color: var(--ink); border-color: var(--line); }
+.m-btn-secondary:active { background: var(--sand); }
+.m-btn-ghost     { background: transparent; color: var(--muted); }
+.m-btn-ghost:active     { background: var(--sand); color: var(--ink); }
+.m-btn-primary:disabled,
+.m-btn-secondary:disabled,
+.m-btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── List rows (for Today / Deliverables / Inbox) ─────────── */
+.m-list { display: flex; flex-direction: column; gap: 10px; }
+.m-list-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  min-height: var(--tap);
+  text-decoration: none;
+  color: var(--ink);
+}
+.m-list-row:active { background: var(--sand); }
+.m-list-row-main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.m-list-row-title {
+  font-size: 15px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.m-list-row-sub {
+  font-size: 13px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.m-list-row-meta {
+  font-size: 12px; color: var(--muted);
+  flex-shrink: 0; white-space: nowrap;
+}
+
+/* ─── Form inputs (chat composer, forms) ───────────────────── */
+.m-field { display: flex; flex-direction: column; gap: 6px; }
+.m-field-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.m-input, .m-textarea, .m-select {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px;
+  font: 15px/1.45 inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-height: var(--tap);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.m-textarea { resize: vertical; min-height: 88px; }
+.m-input:focus, .m-textarea:focus, .m-select:focus { border-color: var(--green); box-shadow: 0 0 0 2px rgb(46 125 82 / 0.18); }
+.m-input::placeholder, .m-textarea::placeholder { color: var(--muted); }
+
+/* ─── Badges (substrate + status pills) ─────────────────────── */
+.m-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+.m-badge.m-badge-local_ai { background: #E7EEF5; color: var(--blue);   border-color: #CBDCEC; }
+.m-badge.m-badge-cli      { background: #ECE5D5; color: #856515;       border-color: #DCD2B5; }
+.m-badge.m-badge-peer     { background: #EEE6F4; color: var(--purple); border-color: #DAC8E6; }
+.m-badge.m-badge-active   { background: #E2EFE8; color: var(--green);  border-color: #C4DECF; }
+.m-badge.m-badge-paused   { background: #ECE5D5; color: #856515;       border-color: #DCD2B5; }
+
+/* ─── Card utilities (extending .m-card from globals.css) ──── */
+.m-card-row     { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.m-card-actions { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.m-card-empty   { padding: 24px 16px; text-align: center; color: var(--muted); font-size: 14px; }
+
+/* ─── Section heading ───────────────────────────────────────── */
+.m-section-h {
+  font-size: 12px; font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin: 8px 2px 2px;
+}

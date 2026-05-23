@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Holon Functional Architecture Diagrams</title>
+  <style>
+    :root {
+      --paper: #f8f6ef;
+      --surface: #ffffff;
+      --ink: #1a1a18;
+      --muted: #6f6c63;
+      --line: #d8d0bf;
+      --gold: #c69a35;
+      --green: #2e7d52;
+      --blue: #1f6f9e;
+      --violet: #7b4fab;
+      --red: #b64a3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 72px;
+    }
+    header { margin-bottom: 28px; }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 42px;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 34px 0 14px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    p { margin: 0; color: var(--muted); max-width: 850px; }
+    .diagram {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      overflow: auto;
+      box-shadow: 0 10px 30px rgba(26, 26, 24, 0.06);
+    }
+    svg {
+      display: block;
+      min-width: 980px;
+      width: 100%;
+      height: auto;
+    }
+    .node { fill: #fff; stroke: var(--line); stroke-width: 2; }
+    .node-dark { fill: var(--ink); stroke: var(--ink); }
+    .label { fill: var(--ink); font-size: 15px; font-weight: 700; }
+    .small { fill: var(--muted); font-size: 12px; font-weight: 500; }
+    .lane { stroke: var(--line); stroke-width: 2; stroke-dasharray: 5 7; }
+    .arrow { stroke: var(--ink); stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+    .arrow-blue { stroke: var(--blue); }
+    .arrow-green { stroke: var(--green); }
+    .arrow-violet { stroke: var(--violet); }
+    .arrow-gold { stroke: var(--gold); }
+    .badge { fill: #f2ede1; stroke: var(--line); }
+    .step { fill: var(--ink); font-size: 13px; font-weight: 650; }
+    .caption { fill: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Holon Functional Architecture Diagrams</h1>
+    <p>Standalone HTML/SVG diagrams for the core functional architecture: local team routing, peer mission handoff, completion callback, and local Hermes execution.</p>
+  </header>
+
+  <section>
+    <h2>1. Functional Flow</h2>
+    <p>One local assignment enters the node, then routes either to local AI execution or to a peer member connected to a remote Holon node. Both paths return normalized events and durable deliverables.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 1180 640" role="img" aria-labelledby="flowTitle flowDesc">
+        <title id="flowTitle">Holon functional flow diagram</title>
+        <desc id="flowDesc">A functional flowchart showing owner, local desk, router, local AI member, Hermes runtime, peer member, protocol layer, remote node, event log, and deliverable store.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="currentColor"></path>
+          </marker>
+        </defs>
+
+        <rect x="34" y="38" width="1112" height="564" rx="24" fill="#fbfaf6" stroke="#e4dfd2"/>
+
+        <rect class="node" x="70" y="250" width="130" height="76" rx="16"/>
+        <text class="label" x="135" y="282" text-anchor="middle">Owner</text>
+        <text class="small" x="135" y="304" text-anchor="middle">accountability</text>
+
+        <rect class="node" x="250" y="238" width="150" height="100" rx="16"/>
+        <text class="label" x="325" y="276" text-anchor="middle">Local App</text>
+        <text class="small" x="325" y="300" text-anchor="middle">node UI + API</text>
+
+        <rect class="node-dark" x="455" y="238" width="160" height="100" rx="16"/>
+        <text class="label" x="535" y="276" text-anchor="middle" fill="#fff">Assignment</text>
+        <text class="label" x="535" y="298" text-anchor="middle" fill="#fff">Router</text>
+
+        <rect class="node" x="685" y="110" width="150" height="86" rx="16"/>
+        <text class="label" x="760" y="144" text-anchor="middle">Local AI</text>
+        <text class="small" x="760" y="166" text-anchor="middle">staff route</text>
+
+        <rect class="node" x="910" y="110" width="165" height="86" rx="16"/>
+        <text class="label" x="992" y="144" text-anchor="middle">Hermes</text>
+        <text class="small" x="992" y="166" text-anchor="middle">runtime adapter</text>
+
+        <rect class="node" x="685" y="385" width="150" height="86" rx="16"/>
+        <text class="label" x="760" y="419" text-anchor="middle">Proxy Staff</text>
+        <text class="small" x="760" y="441" text-anchor="middle">remote route</text>
+
+        <rect class="node" x="910" y="385" width="165" height="86" rx="16"/>
+        <text class="label" x="992" y="419" text-anchor="middle">Protocol</text>
+        <text class="small" x="992" y="441" text-anchor="middle">peer / cloud relay</text>
+
+        <rect class="node" x="910" y="520" width="165" height="56" rx="16"/>
+        <text class="label" x="992" y="553" text-anchor="middle">Remote Node</text>
+
+        <rect class="node" x="455" y="60" width="160" height="76" rx="16"/>
+        <text class="label" x="535" y="92" text-anchor="middle">Event Log</text>
+        <text class="small" x="535" y="114" text-anchor="middle">audit + timeline</text>
+
+        <rect class="node" x="455" y="500" width="160" height="76" rx="16"/>
+        <text class="label" x="535" y="532" text-anchor="middle">Deliverables</text>
+        <text class="small" x="535" y="554" text-anchor="middle">durable artifacts</text>
+
+        <path class="arrow" d="M200 288 H250"/>
+        <path class="arrow" d="M400 288 H455"/>
+        <path class="arrow arrow-green" d="M615 250 C650 205 655 166 685 153"/>
+        <path class="arrow arrow-blue" d="M835 153 H910"/>
+        <path class="arrow arrow-blue" d="M990 196 C945 262 690 112 615 102"/>
+        <path class="arrow arrow-blue" d="M910 172 C770 260 620 465 615 520"/>
+        <path class="arrow arrow-violet" d="M615 327 C650 370 655 416 685 428"/>
+        <path class="arrow arrow-gold" d="M835 428 H910"/>
+        <path class="arrow arrow-gold" d="M992 471 V520"/>
+        <path class="arrow arrow-gold" d="M910 548 C760 560 678 557 615 545"/>
+        <path class="arrow" d="M535 500 V338"/>
+        <path class="arrow" d="M535 238 V136"/>
+
+        <rect class="badge" x="224" y="260" width="96" height="26" rx="13"/>
+        <text class="caption" x="272" y="278" text-anchor="middle">assignment</text>
+        <rect class="badge" x="642" y="186" width="98" height="26" rx="13"/>
+        <text class="caption" x="691" y="204" text-anchor="middle">local route</text>
+        <rect class="badge" x="640" y="344" width="100" height="26" rx="13"/>
+        <text class="caption" x="690" y="362" text-anchor="middle">peer route</text>
+        <rect class="badge" x="785" y="532" width="96" height="26" rx="13"/>
+        <text class="caption" x="833" y="550" text-anchor="middle">callback</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Peer Mission Sequence</h2>
+    <p>The peer path is the signature Holon workflow: a local member identity represents a real person or team on a remote node.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 1180 700" role="img" aria-labelledby="seqTitle seqDesc">
+        <title id="seqTitle">Peer mission sequence diagram</title>
+        <desc id="seqDesc">A sequence diagram showing owner creating an assignment, local node routing to a peer member, protocol dispatching to a remote node, remote human completing work, and callback returning deliverable.</desc>
+        <defs>
+          <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#1a1a18"></path>
+          </marker>
+        </defs>
+        <rect x="34" y="38" width="1112" height="614" rx="24" fill="#fbfaf6" stroke="#e4dfd2"/>
+
+        <g>
+          <rect class="node" x="70" y="70" width="120" height="52" rx="14"/>
+          <rect class="node" x="230" y="70" width="150" height="52" rx="14"/>
+          <rect class="node" x="420" y="70" width="150" height="52" rx="14"/>
+          <rect class="node" x="610" y="70" width="130" height="52" rx="14"/>
+          <rect class="node" x="780" y="70" width="150" height="52" rx="14"/>
+          <rect class="node" x="970" y="70" width="120" height="52" rx="14"/>
+          <text class="label" x="130" y="102" text-anchor="middle">Owner</text>
+          <text class="label" x="305" y="102" text-anchor="middle">Node A</text>
+          <text class="label" x="495" y="102" text-anchor="middle">Router</text>
+          <text class="label" x="675" y="102" text-anchor="middle">Proxy</text>
+          <text class="label" x="855" y="102" text-anchor="middle">Node B</text>
+          <text class="label" x="1030" y="102" text-anchor="middle">Human</text>
+        </g>
+
+        <line class="lane" x1="130" y1="122" x2="130" y2="610"/>
+        <line class="lane" x1="305" y1="122" x2="305" y2="610"/>
+        <line class="lane" x1="495" y1="122" x2="495" y2="610"/>
+        <line class="lane" x1="675" y1="122" x2="675" y2="610"/>
+        <line class="lane" x1="855" y1="122" x2="855" y2="610"/>
+        <line class="lane" x1="1030" y1="122" x2="1030" y2="610"/>
+
+        <g stroke="#1a1a18" stroke-width="2.4" marker-end="url(#arrow2)">
+          <line x1="130" y1="165" x2="305" y2="165"/>
+          <line x1="305" y1="220" x2="495" y2="220"/>
+          <line x1="495" y1="275" x2="675" y2="275"/>
+          <line x1="675" y1="330" x2="855" y2="330"/>
+          <line x1="855" y1="385" x2="1030" y2="385"/>
+          <line x1="1030" y1="440" x2="855" y2="440"/>
+          <line x1="855" y1="495" x2="305" y2="495"/>
+          <line x1="305" y1="550" x2="130" y2="550"/>
+        </g>
+
+        <text class="step" x="145" y="156">1. create assignment for peer member</text>
+        <text class="step" x="325" y="211">2. store and route target</text>
+        <text class="step" x="515" y="266">3. resolve connection</text>
+        <text class="step" x="695" y="321">4. dispatch mission</text>
+        <text class="step" x="875" y="376">5. show inbound mission</text>
+        <text class="step" x="870" y="431">6. accept and complete</text>
+        <text class="step" x="520" y="486">7. callback with deliverable</text>
+        <text class="step" x="145" y="541">8. completed assignment visible</text>
+
+        <rect x="250" y="580" width="600" height="38" rx="19" fill="#f2ede1" stroke="#d8d0bf"/>
+        <text class="caption" x="550" y="604" text-anchor="middle">Node A never needs to see Node B's internal team; it only receives status and deliverables.</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. Local Hermes Execution Sequence</h2>
+    <p>The local AI path stays inside the node. Hermes executes bounded work, while Holon owns assignment status, events, and deliverables.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 1180 560" role="img" aria-labelledby="localSeqTitle localSeqDesc">
+        <title id="localSeqTitle">Local Hermes execution sequence diagram</title>
+        <desc id="localSeqDesc">A sequence diagram showing local assignment routing to local AI staff and Hermes adapter, returning events and deliverable.</desc>
+        <defs>
+          <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#1a1a18"></path>
+          </marker>
+        </defs>
+        <rect x="34" y="38" width="1112" height="474" rx="24" fill="#fbfaf6" stroke="#e4dfd2"/>
+
+        <g>
+          <rect class="node" x="80" y="70" width="120" height="52" rx="14"/>
+          <rect class="node" x="260" y="70" width="150" height="52" rx="14"/>
+          <rect class="node" x="470" y="70" width="150" height="52" rx="14"/>
+          <rect class="node" x="680" y="70" width="150" height="52" rx="14"/>
+          <rect class="node" x="890" y="70" width="170" height="52" rx="14"/>
+          <text class="label" x="140" y="102" text-anchor="middle">Owner</text>
+          <text class="label" x="335" y="102" text-anchor="middle">Node</text>
+          <text class="label" x="545" y="102" text-anchor="middle">Local AI</text>
+          <text class="label" x="755" y="102" text-anchor="middle">Hermes</text>
+          <text class="label" x="975" y="102" text-anchor="middle">Deliverables</text>
+        </g>
+
+        <line class="lane" x1="140" y1="122" x2="140" y2="470"/>
+        <line class="lane" x1="335" y1="122" x2="335" y2="470"/>
+        <line class="lane" x1="545" y1="122" x2="545" y2="470"/>
+        <line class="lane" x1="755" y1="122" x2="755" y2="470"/>
+        <line class="lane" x1="975" y1="122" x2="975" y2="470"/>
+
+        <g stroke="#1a1a18" stroke-width="2.4" marker-end="url(#arrow3)">
+          <line x1="140" y1="165" x2="335" y2="165"/>
+          <line x1="335" y1="220" x2="545" y2="220"/>
+          <line x1="545" y1="275" x2="755" y2="275"/>
+          <line x1="755" y1="330" x2="335" y2="330"/>
+          <line x1="755" y1="385" x2="975" y2="385"/>
+          <line x1="975" y1="440" x2="335" y2="440"/>
+        </g>
+
+        <text class="step" x="160" y="156">1. create local assignment</text>
+        <text class="step" x="356" y="211">2. route to local AI staff</text>
+        <text class="step" x="566" y="266">3. run bounded task</text>
+        <text class="step" x="430" y="321">4. normalized runtime events</text>
+        <text class="step" x="780" y="376">5. final deliverable draft</text>
+        <text class="step" x="560" y="431">6. persisted artifact updates UI</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. Handoff Lifecycle</h2>
+    <p>A handoff is the accountable transfer of work across an owner boundary. Assignments and missions are local records; handoff is the bridge between them.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 1180 520" role="img" aria-labelledby="handoffTitle handoffDesc">
+        <title id="handoffTitle">Handoff lifecycle diagram</title>
+        <desc id="handoffDesc">A lifecycle diagram showing handoff states from draft to proposed, sent, received, accepted, in progress, submitted, returned, plus rejected, blocked, expired, and failed branches.</desc>
+        <defs>
+          <marker id="arrow4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#1a1a18"></path>
+          </marker>
+        </defs>
+        <rect x="34" y="38" width="1112" height="430" rx="24" fill="#fbfaf6" stroke="#e4dfd2"/>
+
+        <g>
+          <rect class="node" x="70" y="120" width="110" height="54" rx="14"/>
+          <rect class="node" x="230" y="120" width="120" height="54" rx="14"/>
+          <rect class="node" x="400" y="120" width="100" height="54" rx="14"/>
+          <rect class="node" x="550" y="120" width="120" height="54" rx="14"/>
+          <rect class="node" x="720" y="120" width="120" height="54" rx="14"/>
+          <rect class="node" x="890" y="120" width="120" height="54" rx="14"/>
+          <text class="label" x="125" y="153" text-anchor="middle">Draft</text>
+          <text class="label" x="290" y="153" text-anchor="middle">Proposed</text>
+          <text class="label" x="450" y="153" text-anchor="middle">Sent</text>
+          <text class="label" x="610" y="153" text-anchor="middle">Received</text>
+          <text class="label" x="780" y="153" text-anchor="middle">Accepted</text>
+          <text class="label" x="950" y="153" text-anchor="middle">In Progress</text>
+        </g>
+
+        <g>
+          <rect class="node" x="720" y="292" width="120" height="54" rx="14"/>
+          <rect class="node" x="890" y="292" width="120" height="54" rx="14"/>
+          <rect class="node" x="1030" y="292" width="100" height="54" rx="14"/>
+          <text class="label" x="780" y="325" text-anchor="middle">Submitted</text>
+          <text class="label" x="950" y="325" text-anchor="middle">Returned</text>
+          <text class="label" x="1080" y="325" text-anchor="middle">Done</text>
+        </g>
+
+        <g>
+          <rect x="230" y="292" width="120" height="54" rx="14" fill="#fff5f2" stroke="#e1b0a8" stroke-width="2"/>
+          <rect x="400" y="292" width="100" height="54" rx="14" fill="#fff8e9" stroke="#e4ca86" stroke-width="2"/>
+          <rect x="550" y="292" width="120" height="54" rx="14" fill="#f8f6ef" stroke="#d8d0bf" stroke-width="2"/>
+          <text class="label" x="290" y="325" text-anchor="middle">Rejected</text>
+          <text class="label" x="450" y="325" text-anchor="middle">Blocked</text>
+          <text class="label" x="610" y="325" text-anchor="middle">Failed</text>
+        </g>
+
+        <g stroke="#1a1a18" stroke-width="2.4" marker-end="url(#arrow4)">
+          <line x1="180" y1="147" x2="230" y2="147"/>
+          <line x1="350" y1="147" x2="400" y2="147"/>
+          <line x1="500" y1="147" x2="550" y2="147"/>
+          <line x1="670" y1="147" x2="720" y2="147"/>
+          <line x1="840" y1="147" x2="890" y2="147"/>
+          <path d="M950 174 C950 230 825 250 780 292"/>
+          <line x1="840" y1="319" x2="890" y2="319"/>
+          <line x1="1010" y1="319" x2="1030" y2="319"/>
+          <path d="M290 174 V292"/>
+          <path d="M950 174 C870 250 520 242 450 292"/>
+          <path d="M450 174 V292"/>
+          <path d="M610 174 V292"/>
+        </g>
+
+        <text class="caption" x="124" y="101" text-anchor="middle">sender prepares</text>
+        <text class="caption" x="610" y="101" text-anchor="middle">receiver boundary</text>
+        <text class="caption" x="950" y="275" text-anchor="middle">return path</text>
+        <text class="caption" x="448" y="385" text-anchor="middle">exception states must be visible in UI and audit timeline</text>
+      </svg>
+    </div>
+  </section>
+</main>
+</body>
+</html>

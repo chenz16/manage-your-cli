@@ -1,0 +1,160 @@
+# ─── Vendored / cloned dependencies ─────────────────────────
+deps/hermes/
+deps/*/node_modules/
+
+# ─── Secrets ────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+# iter-013 Pass #2 (ADR-024): NextAuth SQLite DB + future per-vendor
+# private state. Sits next to .env at repo root; never sync to remote.
+.holon/
+
+# ─── Node / npm / pnpm ──────────────────────────────────────
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+# we use pnpm; allow pnpm-lock.yaml
+!pnpm-lock.yaml
+
+# ─── Build outputs ──────────────────────────────────────────
+dist/
+build/
+out/
+.next/
+.next-prod/
+# Build artifacts (Windows installer .exe/.msi — large binaries, distributed via GitHub Releases)
+artifacts/
+# Vendored third-party (Tencent OpenClaw probe deps)
+deps/openclaw-weixin/
+.nuxt/
+# Synced from src/ui-mock/ on every dev/build (apps/web/scripts/sync-vanilla.mjs)
+apps/web/public/
+.svelte-kit/
+*.tsbuildinfo
+
+# ─── Tool caches ────────────────────────────────────────────
+.cache/
+.turbo/
+.vercel/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+
+# ─── Test outputs ───────────────────────────────────────────
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+playwright/.cache/
+
+# ─── Python ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.venv-mcp/
+venv/
+env/
+# Isolated LiteLLM proxy venv (Phase 0 budget-aware orchestration) — never commit
+.venv-litellm/
+
+# ─── Database / data files ──────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+holon-local.db*
+*.sql.tmp
+
+# ─── Logs ───────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── OS junk ────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─── Editors / IDE ──────────────────────────────────────────
+.idea/
+*.iml
+.history/
+.vs/
+*.swp
+*.swo
+*~
+# Allow shared .vscode/extensions.json + .vscode/settings.json team-wide;
+# block per-user overrides via *.local convention below.
+.vscode/*.local.json
+
+# ─── Local-only conventions (anything ending .local is yours alone) ──
+*.local
+!scripts/.env.test.local.example
+scripts/.env.test.local
+.scratch/
+TODO.local.md
+NOTES.local.md
+
+# ─── Iteration scratch (Dev Agent local working files) ─────
+iterations/*/scratch/
+
+# ─── Generated artifacts ────────────────────────────────────
+*.generated.ts
+*.generated.js
+generated/
+/apps/web/public
+
+# ─── Owner-private bug queue (may contain PII / screenshots) ─────
+# AGENT_BRIEF.md is the only file in bugs/ that's part of the spec
+# — the actual filed bugs live in bugs/bug-<id>/ subdirs.
+bugs/bug-*
+
+# ─── Owner-produced deliverables (worker output, may be sensitive) ─
+# `deliverables/` accumulates per-job artifacts (reports, briefs,
+# spreadsheets). Out of git by default — the owner can `git add -f`
+# specific ones they want versioned.
+deliverables/
+# Negate mobile app route folder — that's UI source, not job output.
+!apps/mobile/app/deliverables/
+!apps/mobile/app/deliverables/**
+
+# ─── QA / one-off audit artifacts ────────────────────────────────
+tmp/
+docs/reviews/qa-watch-log.md
+
+# WeChat daemon exe — built by scripts/build-wechat-daemon.ps1, bundled by Tauri at build time (never commit the ~12MB binary)
+apps/web/src-tauri/resources/wechat-daemon/*.exe
+
+# WeChat diagnostic probe/query output — contains real message data (PII); never commit
+scripts/probe-result.txt
+scripts/query-result.txt
+scripts/logs/
+
+# ClawBot bind probe artifacts (live token / QR — never commit)
+scripts/clawbot-bind-result.json
+scripts/clawbot-qr.png
+
+# HTTPS proxy self-signed certs — never commit private key
+.certs/
+.venv-sensevoice/
+.venv-stt/
+.next-dev/

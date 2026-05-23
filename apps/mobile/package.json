@@ -1,0 +1,34 @@
+{
+  "name": "@holon/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Holon mobile app — Next.js 15 + React 19, wrapped via Capacitor (added in M001 Pass #6). Reuses @holon/api-contract + @holon/core; proxies to desk BFF on port 3000.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start --port 3002",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@assistant-ui/react": "^0.14.5",
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/ios": "^6.2.0",
+    "@holon/api-contract": "workspace:*",
+    "@holon/core": "workspace:*",
+    "lucide-react": "^0.460.0",
+    "next": "15.5.18",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0",
+    "@types/node": "20.16.5",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "typescript": "5.5.4"
+  }
+}

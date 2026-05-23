@@ -1,0 +1,826 @@
+/* Holon mobile — desk's paper/ink/gold tokens inside the phone-shell.
+   Mibusy-style dark page background OUTSIDE the frame (desktop only).
+   Per M-L-005 + M-G-006: tokens MUST match desk's apps/web/app/globals.css
+   (--bg #F8F6EF, --ink #1A1A18, --gold #C69A35) — invisible-frame on real
+   phones (<768px), phone-shaped on desktop browsers. */
+
+:root {
+  /* Desk paper-theme tokens (mirror of holon-engineering/apps/web/app/globals.css) */
+  --paper: #F8F6EF;
+  --paper-2: #EFEBDD;
+  --card: #FFFFFF;
+  --line: #E2DCC8;
+  --line-2: #D3CAB1;
+  --ink: #1A1A18;
+  --ink-2: #4A4A45;
+  --ink-3: #6E6A60;
+  --ink-4: #B5B2A8;
+  --gold: #C69A35;
+  --gold-soft: rgb(198 154 53 / 0.13);
+  /* M-L-058 — gold-on-light TEXT token (≈5.4:1 on card, AA body 4.5:1).
+     --gold (2.60:1) stays for fills/borders/the brand mark only. */
+  --gold-ink: #8A6418;
+
+  /* Desk accent tokens (mirror of apps/web globals.css) — referenced by
+     .m-badge-* status pills and other desk-mirrored classes (M-L-051). */
+  --blue: #1F6F9E;
+  --green: #2E7D52;
+  --purple: #7B4FAB;
+  --red: #C0392B;
+  /* Legacy desk aliases — mobile renamed these tokens; keep aliases so
+     desk-mirrored classes referencing the old names still resolve. */
+  --bg-alt: var(--paper-2);
+  --ink-soft: var(--ink-2);
+
+  /* Mibusy-derived frame chrome */
+  --shadow: 0 20px 60px rgb(27 25 20 / 0.18);
+  --serif: Fraunces, "Songti SC", Georgia, serif;
+  --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* Legacy mobile tokens retained for m-card / m-chatmsg / m-job-* / m-deliv-*
+     which Pass #2-#5 styles still reference. */
+  --cream: var(--paper);
+  --sand: var(--paper-2);
+  --muted: var(--ink-3);
+  --accent: var(--gold);
+  --tap: 44px;
+  /* M-L-052 — desk card-corner radius (mirror of apps/web globals.css
+     --radius: 16px); referenced by .m-list-row, which renders sharp
+     corners without it. */
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 14px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-size-adjust: 100%;
+  min-height: 100%;
+}
+
+a { color: inherit; text-decoration: none; }
+button, input, textarea, select { font: inherit; }
+
+/* M-L-060 — global visible focus indicator (WCAG 2.4.7). External-keyboard,
+   iOS Switch Control / Full Keyboard Access users need to see what's focused
+   on every <button>/<a>/.tab-link/.landing-chip/.m-deliv-card/.s-card etc.
+   :focus-visible keeps touch taps ring-free (tap-highlight already off). */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* ─── M-L-005 phone-shell (mibusy-pattern, Holon tokens) ─────────────
+   On real phones (<768px): app-shell is just paper, phone-shell is
+   full-bleed (invisible frame). On desktop (≥768px): app-shell shows
+   the dark page + radial gradient, phone-shell becomes a centered
+   393px iPhone 16 rounded card. */
+
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  background: var(--paper);
+}
+
+.phone-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+}
+
+.phone-status {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: calc(11px + env(safe-area-inset-top)) 18px 7px;
+  background: rgb(248 246 239 / 0.94);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--line);
+}
+
+.phone-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.1px;
+}
+
+.brand-mark {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--gold);
+}
+
+.main {
+  min-width: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  background: var(--paper);
+}
+
+/* Chat page's own shell handles its scroll — let the chat composer pin. */
+.main:has(.m-chat-shell) {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.bottom-tabs {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  border-top: 1px solid var(--line);
+  background: rgb(255 255 255 / 0.96);
+  padding: 6px 8px calc(env(safe-area-inset-bottom) + 8px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.tab-link {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-height: 52px;
+  border-radius: 18px;
+  padding: 7px 4px 5px;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.14s, color 0.14s;
+}
+
+.tab-link:hover { color: var(--ink-2); }
+
+/* M-L-010 · active state: gold-soft bg + 2px top border + bolder label
+   for glance-while-walking scannability (Linear/Notion-mobile/iOS HIG). */
+.tab-link.active {
+  background: var(--gold-soft);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.tab-link.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14%;
+  right: 14%;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--gold);
+}
+
+.tab-link[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+/* M004 Pass #4 — tab badge dot (Notion-mobile / Linear-mobile pattern).
+   Wraps the icon to anchor an absolutely-positioned red dot at top-right.
+   White ring blends against the translucent tabbar background. */
+.tab-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d23a2a;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.96);
+}
+
+/* ─── Desktop preview frame (≥768px) ──────────────────────────────────
+   Phone stands out: dark page bg + radial gradient, centered 393×852
+   rounded card with subtle border + shadow. iPhone 16 dimensions. */
+@media (min-width: 768px) {
+  body {
+    background: #1a1a18;
+  }
+  .app-shell {
+    align-items: center;
+    padding: 18px 10px;
+    background:
+      radial-gradient(circle at top, rgb(255 255 255 / 0.08), transparent 34rem),
+      #1a1a18;
+  }
+  .phone-shell {
+    /* iPhone 16 = 393×852 (aspect-ratio ≈ 0.461). Pin ratio so short
+       viewports (laptops, devtools open) don't squish the frame.
+       Height caps at viewport-chrome; width derives via aspect-ratio. */
+    aspect-ratio: 393 / 852;
+    height: min(852px, calc(100dvh - 36px));
+    width: auto;
+    max-width: min(100%, 393px);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 34px;
+    box-shadow: var(--shadow);
+  }
+}
+
+/* ─── Pass #2 — /me view cards ───────────────────────────────────────── */
+.mobile-section {
+  padding: 14px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.muted { color: var(--muted); font-size: 13px; }
+.m-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.m-card-title { font-size: 15px; font-weight: 600; }
+.m-card-sub { font-size: 13px; color: var(--muted); }
+.m-card-body { font-size: 14px; margin: 4px 0 0; white-space: pre-wrap; }
+.m-card-footnote { font-size: 12px; margin-top: 2px; }
+.m-row-link {
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 10px; margin-top: 6px;
+  min-height: var(--tap);
+  text-decoration: none; color: var(--ink); font-size: 14px;
+}
+.m-chev { color: var(--muted); font-size: 20px; }
+/* M-L-007 — /more entry-point cards (read-only views, deep-link to desk).
+   M-L-008 — visual polish: unified card rhythm, baseline-aligned CTA,
+   muted chevron so the gold label is the anchor (not the glyph). */
+.more-section { gap: 8px; }
+.more-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+/* M-L-011 — scannable count badge on the title row (Notion/Linear pattern).
+   Title anchors left, badge sits right; summary then drops below to its own
+   line so counts no longer hide inside the muted sublabel. */
+.more-header { align-items: center; }
+.more-badge {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-2, var(--ink));
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  min-width: 24px;
+  text-align: center;
+  line-height: 1.4;
+}
+.more-cta {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 12px; margin-top: 4px;
+  min-height: var(--tap);
+  text-decoration: none; color: var(--gold-ink); font-size: 13px;
+}
+.more-cta:active { color: var(--ink); }
+/* M-L-057 — chevron is the only "tap me / there's more" affordance; bump
+   from --ink-4 (2.12:1 on card) to --ink-3 (5.39:1) for WCAG 1.4.11 (3:1). */
+.more-cta .m-chev { font-size: 14px; color: var(--ink-3); line-height: 1; }
+.m-meter {
+  height: 8px; background: var(--paper-2); border-radius: 4px;
+  overflow: hidden; margin: 4px 0 2px;
+}
+.m-meter-fill { height: 100%; background: var(--accent); transition: width 200ms ease; }
+.m-meter-legend { display: flex; justify-content: space-between; font-size: 13px; }
+.m-btn {
+  align-self: flex-start; min-height: var(--tap); padding: 8px 14px; font-size: 14px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+  color: var(--ink); cursor: pointer;
+}
+.m-btn:active { background: var(--paper-2); }
+
+/* M-L-009 — work-tool empty states (Notion/Linear/Copilot 2026 patterns).
+   Mobile is the out-of-office triage surface; empty states must read as
+   professional + explain "what causes this to appear" + offer one
+   concrete next action chip. NOT a playful chat-app vibe. */
+.m-empty-card { gap: 6px; }
+.m-empty-title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.m-empty-hint { font-size: 13px; color: var(--ink-3); line-height: 1.45; margin: 0; }
+.m-empty-chip {
+  align-self: flex-start;
+  margin-top: 8px;
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.m-empty-chip:active { background: var(--paper); }
+.m-empty-chip .m-chev { font-size: 14px; color: var(--ink-3); line-height: 1; } /* M-L-057 */
+
+/* M-L-012 — /inbound mobile cards (read-only V1). Compact: state pill +
+   form chip + sender. Accept/Reject lives on desk per Principle 1. */
+.m-inbound-card { display: flex; flex-direction: column; gap: 6px; }
+.m-inbound-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.m-inbound-state {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgb(198 154 53 / 0.18); color: #7a5714;
+}
+.m-inbound-form { font-size: 11px; color: var(--muted); padding: 2px 6px; border: 1px solid var(--line); border-radius: 999px; }
+.m-inbound-cta { margin-top: 10px; }
+
+/* Page header inside .main (replaces old .mobile-header sticky) */
+.mobile-shell { display: flex; flex-direction: column; }
+/* M-L-008 — drop header border so it doesn't compete with first card's
+   top edge; compensate with extra bottom padding for breathing. */
+.mobile-header { padding: 14px 18px 14px; background: var(--paper); }
+.mobile-brand { font-size: 18px; font-weight: 600; letter-spacing: 0.2px; }
+.mobile-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+/* M-L-074 — non-blocking chat-persistence-failed notice in the chat header. */
+.m-chat-persist-warn {
+  margin-top: 6px; font-size: 12px; color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
+  border-radius: 8px; padding: 4px 8px;
+}
+.mobile-placeholder { padding: 22px 18px; display: flex; flex-direction: column; gap: 8px; }
+
+/* M-L-014 — landing-page first-value surface. Brand + tagline + optional
+   micro-summary + suggestion chips. Chinese-first per V1 owner persona;
+   chips mirror /chat empty-state suggestions and route into /chat?prompt=. */
+.landing-hero {
+  padding: 28px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.landing-brand {
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+}
+.landing-tagline {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  max-width: 22ch;
+}
+.landing-micro {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  padding: 8px 12px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  align-self: flex-start;
+}
+.landing-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.landing-chip {
+  min-height: 36px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.landing-chip:active { background: var(--paper-2); border-color: var(--gold); }
+
+/* ─── Pass #3 — chat surface ─────────────────────────────────────────── */
+.m-chat-shell { height: 100%; display: flex; flex-direction: column; }
+.m-chat-thread { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.m-chat-viewport {
+  flex: 1; overflow-y: auto; padding: 14px 14px 8px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.m-chat-empty { margin: 40px auto; text-align: center; display: flex; flex-direction: column; gap: 10px; max-width: 320px; padding: 0 12px; }
+.m-chat-empty-title { font-size: 17px; font-weight: 600; }
+.m-chat-empty-hint { font-size: 13px; color: var(--muted); }
+.m-chat-empty-chips {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.m-chat-empty-chip {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.m-chat-empty-chip:active {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+.m-chatmsg {
+  max-width: 86%; padding: 9px 13px; border-radius: 14px;
+  font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word;
+}
+.m-chatmsg-user { align-self: flex-end; background: var(--ink); color: var(--paper); border-bottom-right-radius: 4px; }
+.m-chatmsg-assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.m-chat-composer {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  margin-bottom: calc(72px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); background: var(--paper);
+}
+.m-chat-input {
+  flex: 1; min-height: var(--tap); max-height: 140px; resize: none;
+  padding: 10px 12px; font: inherit; background: var(--card);
+  border: 1px solid var(--line); border-radius: 18px; color: var(--ink); outline: none;
+}
+.m-chat-input:focus { border-color: var(--green); box-shadow: 0 0 0 2px rgb(46 125 82 / 0.18); }
+.m-chat-send {
+  min-width: var(--tap); min-height: var(--tap); border: none; border-radius: 50%;
+  background: var(--gold); color: #fff; font-size: 18px; font-weight: 600; cursor: pointer;
+}
+.m-chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Pass #4 — /today jobs ──────────────────────────────────────────── */
+.m-list { display: flex; flex-direction: column; gap: 10px; }
+.m-job-card { gap: 6px; }
+.m-job-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.m-job-status {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--paper-2); color: var(--ink);
+}
+.m-job-status-queued   { background: var(--paper-2);            color: var(--muted); }
+.m-job-status-running  { background: rgb(198 154 53 / 0.18);    color: #7a5714; }
+.m-job-status-done     { background: rgb(46 125 82 / 0.18);     color: #1f5638; }
+.m-job-status-failed   { background: rgb(192 57 43 / 0.18);     color: #8a2a1f; }
+.m-job-time { font-size: 12px; color: var(--muted); }
+.m-job-brief { font-size: 14px; line-height: 1.4; }
+.m-job-staff { font-size: 12px; font-family: var(--mono); }
+
+/* ─── Pass #5 — /deliverables list + detail ─────────────────────────── */
+.m-deliv-card { text-align: left; cursor: pointer; font: inherit; width: 100%; border-radius: 12px; }
+.m-deliv-card:active { background: var(--paper-2); }
+.m-deliv-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.m-deliv-grow { flex: 1; }
+.m-deliv-status {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  padding: 2px 8px; border-radius: 999px; background: var(--paper-2); color: var(--ink);
+}
+.m-deliv-status-draft    { background: var(--paper-2);            color: var(--muted); }
+.m-deliv-status-final    { background: #E7EEF5;                   color: var(--blue); }
+.m-deliv-status-accepted { background: rgb(46 125 82 / 0.30);     color: #133f25; }
+.m-deliv-status-rejected { background: rgb(192 57 43 / 0.18);     color: #8a2a1f; }
+.m-deliv-status-revised  { background: rgb(198 154 53 / 0.18);    color: #8a6418; }
+.m-deliv-origin { font-size: 14px; line-height: 1; }
+.m-deliv-kind { font-size: 11px; color: var(--muted); padding: 2px 6px; border: 1px solid var(--line); border-radius: 999px; }
+.m-deliv-ts { font-size: 12px; color: var(--muted); }
+.m-deliv-title { font-size: 15px; }
+.m-deliv-excerpt {
+  font-size: 13px; color: var(--muted); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.m-deliv-detail-shell { padding-bottom: env(safe-area-inset-bottom); }
+.m-deliv-detail-header { display: flex; align-items: flex-start; gap: 10px; }
+.m-deliv-back {
+  background: none; border: none; color: var(--ink); font-size: 15px;
+  cursor: pointer; padding: 4px 6px; min-height: var(--tap);
+}
+.m-deliv-back:active { color: var(--gold); }
+.m-deliv-detail-title-wrap { flex: 1; min-width: 0; }
+.m-deliv-detail-title { word-break: break-word; }
+.m-deliv-detail-origin {
+  font-size: 11px; color: var(--muted);
+  padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; margin-left: 6px;
+}
+.m-deliv-detail-body { padding-top: 8px; }
+.m-deliv-body {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; font-size: 15px; line-height: 1.5;
+  white-space: pre-wrap; word-wrap: break-word; font-family: inherit;
+}
+
+/* ─── M002 P1 / M-L-034 — bug-report FAB (anchored bottom-left). M-L-034:
+   moved from right to left to avoid stacking on top of /chat composer's
+   Send button (both used to share the right edge above the tabbar).
+   M-L-061: the button is a full 44×44 tap target (HIG min / WCAG 2.5.8),
+   but the visible circle is drawn smaller (36px) via ::before with
+   transparent padding around it, so it stays visually deprioritized vs
+   the composer's Send while remaining easy to hit one-handed. */
+.bug-fab {
+  position: absolute;
+  left: 10px;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--paper);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 40;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Visible 36px circle — smaller than the 44px hit area. */
+.bug-fab::before {
+  content: "";
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgb(26 26 24 / 0.78);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.bug-fab > svg { position: relative; z-index: 1; }
+.bug-fab:active::before { background: var(--ink-2); }
+.bug-fab-backdrop {
+  position: fixed; inset: 0; background: rgb(0 0 0 / 0.45);
+  z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+}
+.bug-fab-sheet {
+  width: 100%; max-width: 560px; background: var(--paper);
+  border-top-left-radius: 14px; border-top-right-radius: 14px;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 85vh; overflow-y: auto;
+}
+.bug-fab-sheet-grip { width: 38px; height: 4px; border-radius: 2px; background: var(--line); align-self: center; margin: 4px 0 6px; }
+.bug-fab-sheet-title { font-size: 16px; font-weight: 600; }
+.bug-fab-sheet-hint { font-size: 12px; color: var(--muted); }
+.bug-fab-sheet-hint code { background: var(--paper-2); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+.bug-fab-textarea { min-height: 110px; }
+.bug-fab-result { font-size: 13px; color: var(--muted); }
+.bug-fab-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+
+/* M-L-Pass#3 — pull-to-refresh indicator (Linear/Notion mobile pattern).
+   Indicator grows from 0 to ~64px as the user drags; spinner rotates with
+   progress until release, then spins continuously while onRefresh resolves. */
+.ptr-root { position: relative; }
+.ptr-indicator {
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ptr-spinner {
+  width: 22px; height: 22px;
+  border: 2px solid var(--line);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  transition: transform 80ms linear;
+}
+.ptr-spinner-spin { animation: ptr-spin 0.8s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+.ptr-content { will-change: transform; }
+
+/* ─── M-L-017 / M-L-021 · today-strip on /chat (MetricsBar + collapsible) ─ */
+.t-strip {
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  flex-shrink: 0;
+}
+.t-strip-metrics {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.t-strip-date { font-weight: 600; letter-spacing: 0.2px; }
+.t-strip-stats { display: flex; gap: 10px; }
+.t-strip-stat { font-variant-numeric: tabular-nums; }
+.t-strip-stat strong { font-weight: 700; color: var(--ink); }
+/* M-L-044 — desk-unreachable affordance; muted amber, not alarming */
+.t-strip-stale { font-size: 11px; color: #8a6418; white-space: nowrap; }
+.t-strip-summary {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 6px 14px 9px;
+  background: transparent; border: 0;
+  border-top: 1px solid var(--line);
+  text-align: left; cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  -webkit-tap-highlight-color: transparent;
+}
+.t-strip-summary:active { background: var(--paper-2); }
+.t-strip-summary-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-strip-summary-text strong { font-weight: 700; }
+.t-strip-link {
+  font-size: 12px;
+  color: var(--gold-ink);
+  text-decoration: none;
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.t-strip-link:active { background: var(--gold-soft); }
+.t-strip-list {
+  margin: 0; padding: 0 14px 10px;
+  list-style: none;
+  display: flex; flex-direction: column; gap: 6px;
+  border-top: 1px solid var(--line);
+}
+.t-strip-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px;
+}
+.t-strip-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--line);
+}
+.t-strip-dot-running { background: #2E7D52; animation: t-pulse 1.6s ease-in-out infinite; }
+.t-strip-dot-queued  { background: var(--gold); }
+.t-strip-brief { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-strip-staff { font-size: 11px; flex-shrink: 0; }
+@keyframes t-pulse {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 0.35; }
+}
+
+/* ─── M-L-017 · 成员 (/staff list) ─────────────────────────────────────── */
+.s-section { display: flex; flex-direction: column; gap: 8px; }
+.s-section + .s-section { margin-top: 14px; }
+.s-section-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  letter-spacing: 0.4px; text-transform: uppercase;
+  padding: 0 2px;
+}
+.s-section-toggle {
+  background: transparent; border: 0; cursor: pointer;
+  padding: 4px 2px; -webkit-tap-highlight-color: transparent;
+  text-transform: uppercase;
+}
+.s-section-toggle:active { color: var(--ink); }
+.s-section-title-mt { margin-top: 16px; }
+.s-list { display: flex; flex-direction: column; gap: 8px; }
+.s-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s;
+}
+.s-card:active { background: var(--paper-2); }
+.s-avatar {
+  position: relative;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+.s-avatar-letter { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+.s-online-dot {
+  position: absolute; right: 0; bottom: 0;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #2E7D52;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.s-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.s-name { font-size: 14px; font-weight: 600; }
+.s-role { font-size: 13px; }
+.s-status { font-size: 12px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.s-recruit-hint { margin-top: 8px; gap: 6px; }
+.s-recruit-link {
+  color: var(--gold-ink);
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--gold-soft);
+  padding-bottom: 1px;
+}
+.s-recruit-link:active { color: var(--ink); }
+
+/* ─── M-L-017 · /staff/[id] detail ─────────────────────────────────────── */
+.s-detail { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+.s-detail-back-row {
+  padding: 12px 14px 4px;
+}
+.m-back-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 14px; color: var(--ink-2);
+  text-decoration: none;
+  padding: 4px 6px; border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-back-link:active { background: var(--paper-2); }
+.s-detail-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 16px 14px;
+}
+.s-avatar-lg { width: 60px; height: 60px; }
+.s-avatar-lg .s-avatar-letter { font-size: 24px; }
+.s-detail-meta { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.s-detail-name { font-size: 18px; font-weight: 700; }
+.s-detail-role { font-size: 14px; }
+.s-detail-sub  { font-size: 12px; }
+.s-task-strip {
+  margin: 0; padding: 0;
+  list-style: none;
+  display: flex; gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 4px;
+}
+.s-task-card {
+  flex: 0 0 200px;
+  scroll-snap-align: start;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-height: 80px;
+}
+.s-task-card[data-status="running"] { border-left: 3px solid #2E7D52; }
+.s-task-card[data-status="queued"]  { border-left: 3px solid var(--gold); }
+.s-task-status { font-size: 11px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.4px; text-transform: uppercase; }
+.s-task-brief  { font-size: 13px; line-height: 1.35; }
+.s-info-card { gap: 6px; }
+.s-kv { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.s-kv > span:first-child { font-size: 12px; }
+.s-detail-cta {
+  position: absolute; left: 14px; right: 14px;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  z-index: 25;
+}
+.s-cta-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%;
+  height: 44px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 22px;
+  font-size: 14px; font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.22);
+  -webkit-tap-highlight-color: transparent;
+}
+.s-cta-btn:active { background: var(--ink-2); }
+
+/* M-L-062 · respect prefers-reduced-motion for always-on infinite loops (WCAG 2.3.3).
+   Dot keeps its static green background so running-status is still conveyed. */
+@media (prefers-reduced-motion: reduce) {
+  .ptr-spinner-spin,
+  .t-strip-dot-running { animation: none; }
+}
+

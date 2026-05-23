@@ -1,0 +1,511 @@
+name: windows-installer
+
+# Reproducible Windows .exe / .msi build for Holon Personal Edition V1.
+#
+# Path of least resistance per ADR-005 + iter-012:
+#   - Tauri 2.x shell wraps the Next.js standalone bundle
+#   - Node sidecar (binaries/node-<triple>.exe) runs `next start` against
+#     resources/next-server/server.js
+#   - PyInstaller-bundled Hermes sidecar built on Windows-side (cross-OS
+#     PyInstaller is not portable; per-OS lane required — iter-012 known)
+#   - Tauri bundler emits NSIS (.exe) + WiX (.msi) — see tauri.conf.json
+#     bundle.targets=all + bundle.windows.{nsis,wix}.
+#
+# Why GitHub Actions windows-latest:
+#   - WSL2 cannot run cargo tauri build for Windows targets without a
+#     full Windows host (Q-009: libwebkit2gtk + MSVC + Win SDK are
+#     Windows-only). The Actions runner has MSVC + Windows SDK +
+#     WiX 3 + NSIS preinstalled, sidestepping the issue entirely.
+#   - Authorized 2026-05-18T18:35Z for Personal-Edition V1 ship.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Optional release notes for the artifact (free-form)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Holon Personal (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    env:
+      # Node sidecar version pin — must match scripts/fetch-node-sidecar.sh.
+      NODE_VERSION: '22.14.0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.10.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Rust (stable, MSVC host)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/web/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache cargo build (src-tauri/target)
+        uses: actions/cache@v4
+        with:
+          path: apps/web/src-tauri/target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('apps/web/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
+      - name: Install JS deps (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # ----------------------------------------------------------------
+      # Clone the vendored Hermes runtime (deps/hermes/).
+      # ----------------------------------------------------------------
+      # iter-016 Pass #1 (Q-002 resolution): deps/hermes/ is .gitignored
+      # in this repo (per README.md:65 — "upstream clone, do not modify").
+      # The Windows runner needs it on disk before the PyInstaller build
+      # script can ship its modules in the bundle.
+      #
+      # Strategy: side-clone the upstream nousresearch/hermes-agent repo
+      # at a pinned SHA. Chose side-clone over (a) git submodule [repo
+      # structure churn, would touch .gitmodules + .git/config across
+      # every dev machine] and (c) vendor-as-non-ignored [adds ~150 MB
+      # of upstream code to this repo's tracked tree — see iter-016
+      # dev-questions.md Q-002 for the full trade-off].
+      #
+      # SHA pin matches the local developer clone at the time iter-016
+      # opened (deps/hermes/.git HEAD = 7fee1f6 as of 2026-05-18). When
+      # bumping: bump HERMES_PIN below + re-run the CI; if anything in
+      # acp_adapter/entry.py:main signature changes, sidecar_main.py
+      # also needs a sync.
+      - name: Clone deps/hermes (pinned upstream)
+        shell: bash
+        env:
+          HERMES_REPO: 'https://github.com/nousresearch/hermes-agent.git'
+          HERMES_PIN: '7fee1f61eb52d1706af04c9606ee1a2e7ef3afc3'
+        run: |
+          set -euo pipefail
+          if [ -d deps/hermes/.git ]; then
+            echo "[clone-hermes] deps/hermes/.git already present — fetching pin"
+            (cd deps/hermes && git fetch --depth 1 origin "$HERMES_PIN" && git checkout "$HERMES_PIN")
+          else
+            mkdir -p deps
+            echo "[clone-hermes] cloning $HERMES_REPO @ $HERMES_PIN"
+            git clone --filter=blob:none "$HERMES_REPO" deps/hermes
+            (cd deps/hermes && git checkout "$HERMES_PIN")
+          fi
+          echo "[clone-hermes] HEAD = $(cd deps/hermes && git rev-parse HEAD)"
+          test -f deps/hermes/acp_adapter/entry.py || { echo "[clone-hermes:err] acp_adapter/entry.py missing after clone — wrong repo or shallow-fetch dropped it" >&2; exit 1; }
+
+      - name: Install Python deps for Hermes sidecar
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller requests python-pptx
+          # iter-016 Pass #1: install Hermes runtime deps so PyInstaller
+          # can resolve the --hidden-imports added in build script.
+          # We install from deps/hermes/pyproject.toml in non-editable
+          # mode (-e would leave .egg-link pointers that PyInstaller's
+          # static analyzer can't follow). Skips the optional extras
+          # (anthropic, exa, etc.) — those lazy-install at runtime via
+          # tools/lazy_deps.py when the user picks that backend.
+          python -m pip install ./deps/hermes
+
+      # ----------------------------------------------------------------
+      # Build Hermes Python sidecar (PyInstaller --onedir)
+      # ----------------------------------------------------------------
+      # build-hermes-sidecar.sh is OS-portable via Git Bash on Windows
+      # (uname returns MINGW*/MSYS* — handled by the script's case).
+      #
+      # iter-016 Pass #1: the script now bundles the full deps/hermes/
+      # runtime (acp_adapter, hermes_cli, etc.) — expect bundle size
+      # 130-220 MB per Q-001 estimate; the script enforces ADR-023's
+      # 250 MB hard ceiling (fails the build if exceeded).
+      - name: Build Hermes sidecar (PyInstaller)
+        shell: bash
+        run: bash scripts/build-hermes-sidecar.sh
+
+      # Copy the PyInstaller --onedir output (build/hermes-sidecar/dist/
+      # hermes-sidecar/) into apps/web/src-tauri/resources/hermes-sidecar/
+      # so the Tauri bundler picks it up via the tauri.conf.json
+      # bundle.resources glob. Without this step the PyInstaller bundle is
+      # built but the Windows installer ships hollow — Gmail / make_pdf /
+      # summarize_inbox skills die silently at runtime (the V1 ship-blocker
+      # this branch closes; per ADR-023 § Decision "single-folder mode" the
+      # sidecar lives in Tauri resources, NOT externalBin).
+      - name: Copy Hermes sidecar into Tauri resources
+        shell: bash
+        run: node scripts/copy-hermes-sidecar-for-tauri.mjs
+
+      # ----------------------------------------------------------------
+      # Fetch Node sidecar binary for the Rust target triple.
+      # Tauri's externalBin convention requires binaries/node-<triple>.exe
+      # for windows-latest the triple is x86_64-pc-windows-msvc.
+      # ----------------------------------------------------------------
+      - name: Fetch Node sidecar (x86_64-pc-windows-msvc)
+        shell: bash
+        env:
+          NODE_VERSION: ${{ env.NODE_VERSION }}
+        run: bash scripts/fetch-node-sidecar.sh x86_64-pc-windows-msvc
+
+      # ----------------------------------------------------------------
+      # Build Next.js standalone bundle + copy into src-tauri/resources.
+      # tauri.conf.json's beforeBuildCommand also runs these, but doing
+      # them here surfaces failures earlier and caches the output.
+      # ----------------------------------------------------------------
+      - name: Build Next.js standalone
+        run: pnpm -F web build
+
+      - name: Copy Next standalone into Tauri resources
+        run: node scripts/copy-standalone-for-tauri.mjs
+
+      # ----------------------------------------------------------------
+      # Tauri build — emits .exe (NSIS) + .msi (WiX) into
+      # apps/web/src-tauri/target/release/bundle/{nsis,msi}/
+      # ----------------------------------------------------------------
+      # Re-run the Next build before tauri build? No — tauri.conf.json's
+      # beforeBuildCommand (`pnpm build && node ...copy-standalone...`) will
+      # idempotently re-run; the earlier explicit steps just front-load any
+      # failure. Setting --skip-frontend would require config changes; the
+      # double-build cost is ~2 min and worth the simpler diagnostics.
+      - name: Tauri build (release)
+        working-directory: apps/web
+        run: pnpm tauri build --verbose
+
+      # ----------------------------------------------------------------
+      # Collect artifacts. Tauri 2.x output layout:
+      #   apps/web/src-tauri/target/release/bundle/nsis/*.exe
+      #   apps/web/src-tauri/target/release/bundle/msi/*.msi
+      # ----------------------------------------------------------------
+      - name: Stage installer artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist-windows"
+          mkdir -p "$STAGE"
+          BUNDLE_DIR="apps/web/src-tauri/target/release/bundle"
+          if [ -d "$BUNDLE_DIR/nsis" ]; then
+            cp "$BUNDLE_DIR/nsis"/*.exe "$STAGE"/ || true
+          fi
+          if [ -d "$BUNDLE_DIR/msi" ]; then
+            cp "$BUNDLE_DIR/msi"/*.msi "$STAGE"/ || true
+          fi
+          ls -la "$STAGE"
+          # Fail loudly if nothing landed (matches Engineering Rule #4).
+          if [ -z "$(ls -A "$STAGE")" ]; then
+            echo "[windows-installer:err:no_artifacts] bundle dir contained no .exe or .msi" >&2
+            find "$BUNDLE_DIR" -type f | head -50 >&2 || true
+            exit 1
+          fi
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: holon-personal-windows-${{ github.sha }}
+          path: dist-windows/*
+          if-no-files-found: error
+          retention-days: 30
+
+      # ----------------------------------------------------------------
+      # Optional: attach to a GitHub Release when triggered by a v* tag.
+      # Soft-fails if release-creation permissions are missing.
+      # ----------------------------------------------------------------
+      - name: Attach to release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-windows/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # --------------------------------------------------------------------
+  # Verify the produced .exe / .msi actually contain the Hermes sidecar.
+  # Without this gate, a regression in scripts/build-hermes-sidecar.sh or
+  # scripts/copy-hermes-sidecar-for-tauri.mjs would silently produce a
+  # hollow installer (Gmail / make_pdf / summarize_inbox skills die at
+  # runtime). Engineering Rule #4 — fail loudly here, not at a customer's
+  # laptop. This is the SHIP gate per the hermes-sidecar-bundle brief.
+  # --------------------------------------------------------------------
+  verify-installer-contents:
+    name: Verify Hermes sidecar in installer
+    runs-on: windows-latest
+    needs: build-windows
+    timeout-minutes: 10
+    steps:
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: holon-personal-windows-${{ github.sha }}
+          path: dist-windows
+
+      # 7-Zip is preinstalled on GitHub windows-latest runners (at
+      # C:\Program Files\7-Zip\7z.exe). Using bash + 7z keeps the
+      # extraction logic identical to what a developer can run locally
+      # against a downloaded artifact.
+      - name: Extract NSIS .exe + verify Hermes sidecar payload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EXE_PATH="$(ls dist-windows/*.exe 2>/dev/null | head -n1 || true)"
+          if [ -z "$EXE_PATH" ]; then
+            echo "[verify:err:no_exe] dist-windows/*.exe not found" >&2
+            ls -la dist-windows >&2 || true
+            exit 1
+          fi
+          echo "[verify] installer = $EXE_PATH"
+
+          EXTRACT_DIR="installer-extracted"
+          mkdir -p "$EXTRACT_DIR"
+
+          # 7z can crack open NSIS installers and list / extract their
+          # internal $PLUGINSDIR + payload tree without actually installing.
+          SEVEN_ZIP="/c/Program Files/7-Zip/7z.exe"
+          if [ ! -x "$SEVEN_ZIP" ]; then
+            # Fall back to whatever 7z is on PATH (Chocolatey etc).
+            SEVEN_ZIP="$(command -v 7z || true)"
+          fi
+          if [ -z "$SEVEN_ZIP" ]; then
+            echo "[verify:err:no_7zip] 7z.exe not found on runner" >&2
+            exit 2
+          fi
+          echo "[verify] 7zip = $SEVEN_ZIP"
+
+          "$SEVEN_ZIP" x -y -o"$EXTRACT_DIR" "$EXE_PATH" > /tmp/7z.log 2>&1 \
+            || { echo "[verify:err:extract_failed]" >&2; tail -40 /tmp/7z.log >&2; exit 3; }
+
+          echo "[verify] extracted contents (top 30 lines):"
+          find "$EXTRACT_DIR" -type f | head -30
+
+          # Look for the Hermes sidecar payload. Tauri's NSIS bundler nests
+          # resources under `$INSTDIR\resources\` inside the installer
+          # archive, so after 7z extraction we expect the tree at
+          # `<EXTRACT_DIR>/**/resources/hermes-sidecar/hermes-sidecar.exe`.
+          # Match either the .exe (Windows) or bare name (defensive) so a
+          # future cross-target reuse of this verify still works.
+          HERMES_HITS="$(find "$EXTRACT_DIR" -type f \( -name 'hermes-sidecar.exe' -o -name 'hermes-sidecar' \) 2>/dev/null || true)"
+          if [ -z "$HERMES_HITS" ]; then
+            echo "[verify:err:hermes_missing] no hermes-sidecar binary inside installer payload" >&2
+            echo "--- full installer file listing ---" >&2
+            find "$EXTRACT_DIR" -type f | head -100 >&2 || true
+            echo "--- searching for 'hermes' anywhere in the tree ---" >&2
+            find "$EXTRACT_DIR" -iname '*hermes*' 2>/dev/null | head -50 >&2 || true
+            exit 4
+          fi
+
+          echo "[verify] hermes-sidecar binary found inside installer:"
+          echo "$HERMES_HITS"
+
+          # Belt-and-suspenders: also confirm at least one _internal/ file
+          # made it (PyInstaller --onedir puts the CPython runtime + packed
+          # wheels under _internal/ next to the bootloader). If the entry
+          # binary is there but _internal/ is missing, the sidecar would
+          # spawn and immediately fail with a "missing dependencies" error
+          # at the customer's machine.
+          INTERNAL_HITS="$(find "$EXTRACT_DIR" -type d -name '_internal' 2>/dev/null | head -3 || true)"
+          if [ -z "$INTERNAL_HITS" ]; then
+            echo "[verify:err:internal_missing] hermes-sidecar entry binary present but _internal/ runtime directory missing" >&2
+            exit 5
+          fi
+          echo "[verify] _internal/ runtime directories: $INTERNAL_HITS"
+
+          echo "[verify] PASS — Hermes sidecar bundled into installer"
+
+      # ----------------------------------------------------------------
+      # AC-6 (iter-016 Pass #1): assert the bundled binary actually
+      # accepts ACP-stdio protocol — not just a /health HTTP shim.
+      #
+      # Before iter-016, this job only checked file presence. That
+      # passed even when the bundle was the wrong protocol entirely
+      # (the original V1 ship-blocker per docs/dev-questions.md Q-001).
+      # This step closes the regression class — if a future change to
+      # sidecar_main.py or build-hermes-sidecar.sh reverts to a shim,
+      # this job FAILS at CI time, not at a customer's laptop.
+      #
+      # Two checks, in order:
+      #   1. `hermes-sidecar.exe --check` exits 0 and prints the
+      #      `Hermes ACP check OK` line from acp_adapter.entry._run_check.
+      #      This verifies the import-time wiring (acp + acp_adapter)
+      #      actually resolves inside the bundle.
+      #   2. Pipe a minimal ACP `initialize` JSON-RPC request via stdin
+      #      and assert a JSON-RPC response containing `"result"` (NOT
+      #      `"error"`) appears on stdout within 30 s. This is the real
+      #      protocol smoke — anything that responds with `result` is
+      #      an ACP server; a shim that returns HTML or hangs fails.
+      - name: Verify Hermes binary accepts ACP-stdio (iter-016 AC-6)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Locate the extracted binary (same find as the previous step).
+          EXTRACT_DIR="installer-extracted"
+          HERMES_BIN="$(find "$EXTRACT_DIR" -type f \( -name 'hermes-sidecar.exe' -o -name 'hermes-sidecar' \) 2>/dev/null | head -n1)"
+          if [ -z "$HERMES_BIN" ]; then
+            echo "[verify:err:hermes_acp_handshake_failed] cannot re-locate hermes-sidecar binary (the previous step found it — extraction state was lost?)" >&2
+            exit 1
+          fi
+          echo "[verify-acp] binary = $HERMES_BIN"
+
+          # --------------------------------------------------------
+          # Step 1: --check smoke
+          # --------------------------------------------------------
+          # Times out after 30 s so a hung binary doesn't burn the job.
+          # The `--check` flag is registered in acp_adapter.entry._parse_args
+          # and runs _run_check which imports acp + acp_adapter.server and
+          # prints `Hermes ACP check OK`.
+          echo "[verify-acp] step 1 — --check smoke"
+          set +e
+          CHECK_OUT="$(timeout 30 "$HERMES_BIN" --check 2>&1)"
+          CHECK_RC=$?
+          set -e
+          echo "$CHECK_OUT" | head -40
+          if [ "$CHECK_RC" -ne 0 ]; then
+            echo "[verify:err:hermes_acp_handshake_failed] --check exited $CHECK_RC" >&2
+            echo "$CHECK_OUT" >&2
+            exit 6
+          fi
+          if ! echo "$CHECK_OUT" | grep -q 'Hermes ACP check OK'; then
+            echo "[verify:err:hermes_acp_handshake_failed] --check exited 0 but didn't print expected 'Hermes ACP check OK' line" >&2
+            echo "$CHECK_OUT" >&2
+            exit 7
+          fi
+          echo "[verify-acp] step 1 PASS — --check OK"
+
+          # --------------------------------------------------------
+          # Step 2: ACP initialize over stdio
+          # --------------------------------------------------------
+          # Pipe a minimal JSON-RPC `initialize` request via stdin and
+          # assert the response (on stdout) is a valid JSON-RPC envelope
+          # with `result` (not `error`). Per ACP spec, every server MUST
+          # respond to `initialize` before any session operations.
+          #
+          # We use a `printf` here (not echo -e) so the literal `\n` is
+          # interpreted as a newline-delimited JSON-RPC frame; ACP's
+          # ndjson transport expects one JSON object per line.
+          #
+          # 30 s timeout protects against a binary that accepts stdin
+          # but never responds (e.g., import path silently dropped acp).
+          echo "[verify-acp] step 2 — initialize handshake"
+          INIT_REQ='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false}}}}'
+
+          set +e
+          INIT_OUT="$(printf '%s\n' "$INIT_REQ" | timeout 30 "$HERMES_BIN" 2>/tmp/hermes-acp-stderr.log | head -5)"
+          INIT_RC=$?
+          set -e
+
+          echo "[verify-acp] stdout:"
+          echo "$INIT_OUT"
+          echo "[verify-acp] stderr (tail 20):"
+          tail -20 /tmp/hermes-acp-stderr.log || true
+
+          # `timeout` exits 124 when it kills the process. We expect the
+          # ACP server to keep running until stdin closes, so 124 here is
+          # actually OK as long as we got a valid response line first.
+          # Exit codes 0 (clean exit), 124 (timeout — server still alive),
+          # and 143 (SIGTERM) are all acceptable; anything else indicates
+          # the server crashed during/before the response.
+          if [ "$INIT_RC" -ne 0 ] && [ "$INIT_RC" -ne 124 ] && [ "$INIT_RC" -ne 143 ]; then
+            echo "[verify:err:hermes_acp_handshake_failed] hermes-sidecar exited $INIT_RC during initialize handshake" >&2
+            tail -40 /tmp/hermes-acp-stderr.log >&2 || true
+            exit 8
+          fi
+
+          # Response check: look for a JSON-RPC response with "result".
+          # Hermes' acp.run_agent uses ndjson, so the first line of
+          # stdout after initialize should be `{"jsonrpc":"2.0","id":1,"result":{...}}`.
+          if ! echo "$INIT_OUT" | grep -q '"result"'; then
+            echo "[verify:err:hermes_acp_handshake_failed] no 'result' field in initialize response" >&2
+            echo "stdout was: $INIT_OUT" >&2
+            tail -40 /tmp/hermes-acp-stderr.log >&2 || true
+            exit 9
+          fi
+          if echo "$INIT_OUT" | grep -q '"error"'; then
+            echo "[verify:err:hermes_acp_handshake_failed] initialize returned JSON-RPC error envelope" >&2
+            echo "stdout was: $INIT_OUT" >&2
+            tail -40 /tmp/hermes-acp-stderr.log >&2 || true
+            exit 10
+          fi
+
+          echo "[verify-acp] step 2 PASS — initialize returned valid result"
+          echo "[verify-acp] AC-6 PASS — bundled binary speaks ACP-stdio (iter-016)"
+
+      # ----------------------------------------------------------------
+      # iter-016 Pass #3: also verify the BFF env-var contract is wired
+      # into the bundled Next.js standalone server. Without this check,
+      # a regression that reverts Pass #3's hermes-acp-client.ts to the
+      # pre-iter-016 hardcoded `spawn('uv', ...)` would PASS verify-acp
+      # (the Hermes binary is still ACP-compliant; the regression is in
+      # the BFF that talks to it). Catches the regression class at CI
+      # time, not on a customer laptop where they'd see ENOENT for `uv`.
+      #
+      # Strategy: grep the bundled hermes-acp-client.js (Next.js
+      # standalone build emits a transpiled .js next to apps/web/lib/)
+      # for the HOLON_HERMES_PORT env-var reference + the
+      # hermes_envvar_missing_in_prod classified error. Both must be
+      # present for Pass #3's branching to be in the shipped artifact.
+      - name: Verify BFF env-var branching shipped in installer (iter-016 AC-3 wire)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EXTRACT_DIR="installer-extracted"
+          # The Next.js standalone bundle ships hermes-acp-client.js under
+          # resources/next-server/apps/web/.next/server/. Path may vary by
+          # Next minor version; search broadly.
+          HITS="$(find "$EXTRACT_DIR" -type f -name '*.js' 2>/dev/null \
+            | xargs grep -l 'HOLON_HERMES_PORT' 2>/dev/null || true)"
+          if [ -z "$HITS" ]; then
+            echo "[verify:err:bff_envvar_missing] no JS file in installer references HOLON_HERMES_PORT — iter-016 Pass #3 BFF branching not shipped" >&2
+            echo "--- searching for hermes-acp-client.js anywhere in tree ---" >&2
+            find "$EXTRACT_DIR" -name 'hermes-acp-client*.js' 2>/dev/null | head -20 >&2 || true
+            exit 11
+          fi
+          echo "[verify-bff] HOLON_HERMES_PORT referenced in:"
+          echo "$HITS" | head -5
+
+          # Belt-and-suspenders: also confirm the production-safety
+          # classified error survived the Next.js minify pass (it's a
+          # string literal so it should — if it doesn't, the build is
+          # over-aggressive about dead-code elimination + we'd lose
+          # the Engineering Rule #4 classification at runtime).
+          PROD_SAFETY_HITS="$(find "$EXTRACT_DIR" -type f -name '*.js' 2>/dev/null \
+            | xargs grep -l 'hermes_envvar_missing_in_prod' 2>/dev/null || true)"
+          if [ -z "$PROD_SAFETY_HITS" ]; then
+            echo "[verify:err:bff_prod_safety_missing] hermes_envvar_missing_in_prod classified error not found in installer JS — Engineering Rule #4 surface lost in build pipeline" >&2
+            exit 12
+          fi
+          echo "[verify-bff] production safety throw classified error present in installer"
+          echo "[verify-bff] AC-3 PASS (CI wire) — BFF env-var branching shipped"

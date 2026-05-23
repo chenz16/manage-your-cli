@@ -1,0 +1,26 @@
+{
+  "name": "holon-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Holon CLI-only MCP stdio server.",
+  "bin": {
+    "holon-mcp": "./src/server.ts"
+  },
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "scaffold-secretary": "tsx src/scaffold-secretary.ts",
+    "self-test": "tsx src/self-test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@holon/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "20.16.5",
+    "tsx": "4.19.1",
+    "typescript": "5.5.4"
+  }
+}

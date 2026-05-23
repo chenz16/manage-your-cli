@@ -1,0 +1,26 @@
+{
+  "name": "@holon/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Holon core domain services. iter-003 ships the connections-service stub; iter-004+ expands.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@holon/api-contract": "workspace:*",
+    "@holon/auth": "workspace:*",
+    "better-sqlite3": "^12.10.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "20.16.5",
+    "typescript": "5.5.4",
+    "vitest": "2.1.1"
+  }
+}

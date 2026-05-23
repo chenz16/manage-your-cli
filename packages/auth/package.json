@@ -1,0 +1,22 @@
+{
+  "name": "@holon/auth",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Holon auth substrate. src/oauth/ hosts third-party OAuth 2.0 (Gmail, Slack, ...); src/identity/ reserved for peer Ed25519/JWT per ADR-022. One-way dep: core → auth, never reverse.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "20.16.5",
+    "typescript": "5.5.4",
+    "vitest": "2.1.1"
+  }
+}
