@@ -16,10 +16,19 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pandoc
       - name: Install python-pptx (make_slides skill)
         run: pip install python-pptx
-      - name: Typecheck (api-contract + core + web)
-        run: pnpm -F api-contract typecheck && pnpm -F core typecheck && pnpm -F web typecheck
+      - name: Typecheck (all workspace packages)
+        run: pnpm -F api-contract typecheck && pnpm -F core typecheck && pnpm -F @holon/auth typecheck && pnpm -F holon-mcp typecheck && pnpm -F web typecheck
       - name: Core unit tests
         run: pnpm -F core test
+      - name: Auth unit tests
+        run: pnpm -F @holon/auth test
+      - name: Web auth-gate security tests
+        # Locks the auth invariants: spoofed Host rejected, device-token enforced,
+        # plugin shared-secret + loopback gate (lib/loopback-guard, device-token-auth).
+        # Explicitly clear the demo escape hatch so the gate is asserted, never bypassed.
+        env:
+          HOLON_OPEN_DEMO: ''
+        run: pnpm -F web test
       - name: Install Playwright chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Start dev server (background)
