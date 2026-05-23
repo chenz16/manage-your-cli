@@ -94,3 +94,55 @@ export {
   personaToolScope,
   type PersonaPreset,
 } from './persona-catalog.js';
+
+export {
+  listSkills,
+  getSkill,
+  createSkill,
+  updateSkill,
+  deleteSkill,
+  isBuiltInSkill,
+  type SkillDescriptor,
+  type SkillKind,
+  type CreateSkillInput,
+} from './skill-catalog.js';
+
+export {
+  listReferences,
+  getReference,
+  createReference,
+  updateReference,
+  deleteReference,
+  isBuiltInReference,
+  listPinnedFileReferences,
+  type ReferenceDescriptor,
+  type ReferenceKind,
+  type CreateReferenceInput,
+} from './reference-catalog.js';
+
+export {
+  listTemplates,
+  getTemplate,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  isBuiltInTemplate,
+  GENERAL_SECRETARY_MENTALITY_TEMPLATE_ID,
+  GENERAL_SECRETARY_MENTALITY_BODY,
+  isSecretaryInstructionTooThin,
+  type TemplateDescriptor,
+  type TemplateKind,
+  type CreateTemplateInput,
+} from './template-catalog.js';
+
+export {
+  transcribeAudio,
+  type TranscribeAudioInput,
+  type TranscribeResult,
+} from './voice-transcription-service.js';
+
+export {
+  synthesizeSpeech,
+  type SynthesizeSpeechInput,
+  type SynthesizeSpeechResult,
+} from './voice-synthesis-service.js';

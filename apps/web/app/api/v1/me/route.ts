@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { getOwner, updateOwner, type OwnerAssistantPatch } from '@holon/core';
 import { db } from '@/db';
 import { accountsTable } from '@/db/schema';
 
 /**
- * /api/v1/me — read + patch the owner assistant config.
+ * /api/v1/me â€” read + patch the owner assistant config.
  *
- * GET  → full record (fixture baseline + in-memory overrides applied).
- * PATCH → shallow merge a subset of fields. v1 stores in mutable-store;
+ * GET  â†’ full record (fixture baseline + in-memory overrides applied).
+ * PATCH â†’ shallow merge a subset of fields. v1 stores in mutable-store;
  *   admin reset wipes overrides.
  *
  * iter-007 step 6. The /me page's InlineField calls PATCH on blur.
@@ -25,9 +25,16 @@ const ALLOWED_FIELDS: Array<keyof OwnerAssistantPatch> = [
   'upstream_connection_id',
   'upstream_display_name',
   'integrations',
-  'language_preference', // iter-017 Phase A — persist only; UI swap deferred.
+  'language_preference',
+  'stt_provider',
+  'stt_server_url',
+  'sensevoice_url',
+  'stt_openai_api_key',
+  'tts_provider',
+  'tts_server_url',
+  'tts_openai_api_key',
   // Note: `name`, `role_label`, `substrate` deliberately excluded from
-  // this surface — they're structural and changing them mid-session
+  // this surface â€” they're structural and changing them mid-session
   // could break the chat runtime.
 ];
 
@@ -36,13 +43,13 @@ export async function GET(): Promise<NextResponse> {
   // panel rendered "No connectors" while CEO chat happily read real Gmail via
   // the Hermes plugin. Two stores disagreed: owner-config-service.integrations
   // (TD-011-persisted, mutated by the /integrations UI) vs the NextAuth
-  // `account` table (drizzle DB at <repoRoot>/.holon/auth.db — populated by
+  // `account` table (drizzle DB at <repoRoot>/.holon/auth.db â€” populated by
   // the OAuth callback, source of truth for the plugin token-fetch path at
   // /api/v1/integrations/auth/session). MembersClient already dual-sources
   // these two via ea27c65 client-side; we mirror the same merge server-side
   // here so the rendered payload reflects the same reality the chat layer sees.
   //
-  // Read-only against accountsTable — no decrypt (the token never leaves this
+  // Read-only against accountsTable â€” no decrypt (the token never leaves this
   // route; we only need existence + expiry + scope to synthesize the link).
   const owner = getOwner();
 
@@ -60,7 +67,7 @@ export async function GET(): Promise<NextResponse> {
       .where(eq(accountsTable.provider, 'google'))
       .get();
     const hasLinkGmail = (owner.integrations ?? []).some((g) => g.kind === 'gmail');
-    // Existence-of-row IS the connectedness signal — NextAuth's drizzle adapter
+    // Existence-of-row IS the connectedness signal â€” NextAuth's drizzle adapter
     // rotates the refresh_token on demand, so an `expires_at` in the past does
     // NOT mean the user is disconnected (validated empirically 2026-05-19:
     // chat answered Gmail queries with a 53-min-stale `expires_at`). We
@@ -72,7 +79,7 @@ export async function GET(): Promise<NextResponse> {
       // Synthesize a display-only IntegrationLink. The /me Authorizations panel
       // and downstream consumers only inspect `kind` + `label` + `enabled`; the
       // token fields stay as opaque markers (refs point at the NextAuth row,
-      // not at the legacy token-store — that's why `source` is tagged).
+      // not at the legacy token-store â€” that's why `source` is tagged).
       const expiresAtMs = (row.expires_at ?? Math.floor(Date.now() / 1000) + 3600) * 1000;
       synthetic.push({
         kind: 'gmail',
@@ -93,7 +100,7 @@ export async function GET(): Promise<NextResponse> {
       synthetic_from_nextauth = true;
     }
   } catch (err) {
-    // Best-effort merge — a failed read on the auth DB (corrupt / locked /
+    // Best-effort merge â€” a failed read on the auth DB (corrupt / locked /
     // missing) must not 500 the /me page. Log and fall through with owner-
     // only integrations; UX degrades to "No connectors" which is the
     // pre-fix state, not a regression.
