@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getStaffMerged, updateStaff, dismissStaffById, type StaffPatch } from '@holon/core';
+import { getStaffMerged, updateStaff, dismissStaffById, retireCliAgentStaff, type StaffPatch } from '@holon/core';
 
 interface Context { params: Promise<{ id: string }> }
 
@@ -13,9 +13,11 @@ const PATCHABLE: Array<keyof StaffPatch> = [
 
 export async function GET(_req: Request, ctx: Context): Promise<NextResponse> {
   const { id } = await ctx.params;
-  const payload = getStaffMerged(id);
-  if (!payload) return NextResponse.json({ error: 'staff not found', id }, { status: 404 });
-  return NextResponse.json(payload);
+  const staff = getStaffMerged(id);
+  if (!staff) return NextResponse.json({ error: 'staff not found', id }, { status: 404 });
+  // GetStaffResponse = { staff }. getStaffMerged returns a bare Staff, so
+  // wrap it — the detail/config view reads `detail.staff`.
+  return NextResponse.json({ staff });
 }
 
 /**
@@ -54,15 +56,23 @@ export async function PATCH(req: Request, ctx: Context): Promise<NextResponse> {
 }
 
 /**
- * DELETE /api/v1/staff/:id — dismiss (soft-delete) a virtual staff.
+ * DELETE /api/v1/staff/:id — kill / retire a staff member.
  *
- * iter-007 step 7. Only `substrate.kind === 'local_ai'` rows can be
- * dismissed via this path; peer / cli / owner_assistant are structural
- * and need a different unwind story.
+ * Routes by substrate: CLI agents (cli / cli_agent) are *retired* (tmux
+ * stopped, archived; short agents drop off the roster, long agents keep
+ * their soul) via retireCliAgentStaff. local_ai virtual staff are
+ * dismissed (soft-delete). peer / owner_assistant are structural and
+ * rejected. Per owner 2026-05-23: every employee card needs a Kill button.
  */
 export async function DELETE(_req: Request, ctx: Context): Promise<NextResponse> {
   const { id } = await ctx.params;
-  const r = dismissStaffById(id);
+  const s = getStaffMerged(id);
+  if (!s) return NextResponse.json({ error: 'not_found_or_dismissed' }, { status: 404 });
+
+  const r =
+    s.substrate.kind === 'cli' || s.substrate.kind === 'cli_agent'
+      ? retireCliAgentStaff(id)
+      : dismissStaffById(id);
   if (!r.ok) {
     return NextResponse.json({ error: r.reason ?? 'dismiss failed' }, {
       status: r.reason === 'not_found_or_dismissed' ? 404 : 400,

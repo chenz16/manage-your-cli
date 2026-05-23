@@ -144,7 +144,13 @@ function StaffCard({
   const { t, tFmt } = useT();
   const initial = (s.name || '?').charAt(0).toUpperCase();
   const cult = s.cultivation_maturity ?? 0;
-  const canDismiss = s.substrate.kind === 'local_ai';
+  // Every hired employee can be killed — local AI staff are dismissed,
+  // CLI agents are retired (tmux stopped). Only peer / owner-assistant
+  // are structural. Per owner 2026-05-23: each card needs a Kill button.
+  const canKill =
+    s.substrate.kind === 'local_ai' ||
+    s.substrate.kind === 'cli' ||
+    s.substrate.kind === 'cli_agent';
   const lifecycle = cliLifecycle(s);
   const alive = useCliAlive(s);
   async function dismiss(e: React.MouseEvent) {
@@ -178,21 +184,6 @@ function StaffCard({
             {s.role_label || s.role_name} · {translatedSubstrate(t, s.substrate.kind)}
           </div>
         </div>
-        {canDismiss && (
-          <button
-            type="button"
-            onClick={dismiss}
-            title={tFmt('members.card.dismiss_title', { name: s.name })}
-            aria-label={tFmt('members.card.dismiss_aria', { name: s.name })}
-            style={{
-              border: 'none', background: 'transparent', cursor: 'pointer',
-              color: 'var(--ink-mute)', padding: 4, borderRadius: 6,
-              fontSize: 16, lineHeight: 1, transition: 'background 0.12s, color 0.12s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.10)'; e.currentTarget.style.color = 'var(--red, #c0392b)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ink-mute)'; }}
-          >×</button>
-        )}
       </div>
       <div className="staff-status-line">
         <span className={`badge badge-status status-${s.status}`}>{s.status}</span>
@@ -221,6 +212,29 @@ function StaffCard({
           <CliTerminalLauncher staffId={s.id} staffName={s.name} />
         </div>
       )}
+      {/* Per-employee actions (owner 2026-05-23): Config opens the detail
+       * (persona / 人设 + direct CLI access), Kill retires/dismisses. */}
+      <div className="staff-card-actions" style={{ display: 'flex', gap: 8, marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className="btn"
+          style={{ fontSize: 12, padding: '4px 10px' }}
+          onClick={() => onOpen(s.id)}
+        >
+          ⚙ Config
+        </button>
+        {canKill && (
+          <button
+            type="button"
+            className="btn"
+            style={{ fontSize: 12, padding: '4px 10px', color: 'var(--red, #c0392b)', borderColor: 'var(--red, #c0392b)' }}
+            onClick={dismiss}
+            title={tFmt('members.card.dismiss_title', { name: s.name })}
+          >
+            ✕ Kill
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -232,6 +246,11 @@ function MemberDetailInline({ id, onClose }: { id: string; onClose: () => void }
   const [detail, setDetail] = useState<GetStaffResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Persona (人设) editor — bound to staff.system_prompt, saved via PATCH.
+  const [persona, setPersona] = useState('');
+  const [personaSaved, setPersonaSaved] = useState('');
+  const [personaStatus, setPersonaStatus] = useState<string | null>(null);
+  const [attachCopied, setAttachCopied] = useState(false);
   // Owner integrations — staff inherit every authorization the CEO holds
   // unless explicitly denied (V1: no per-staff deny field yet). Bug
   // 2026-05-17: owner asked to surface inherited authorizations on the
@@ -251,13 +270,38 @@ function MemberDetailInline({ id, onClose }: { id: string; onClose: () => void }
     fetch(`/api/v1/staff/${id}`, { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`BFF ${r.status}`);
-        const j: unknown = await r.json();
-        if (!cancelled) setDetail(j as GetStaffResponse);
+        const j = (await r.json()) as GetStaffResponse;
+        if (!cancelled) {
+          setDetail(j);
+          const sp = j.staff?.system_prompt ?? '';
+          setPersona(sp);
+          setPersonaSaved(sp);
+        }
       })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [id]);
+
+  async function savePersona() {
+    setPersonaStatus('Saving…');
+    try {
+      const r = await fetch(`/api/v1/staff/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_prompt: persona }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        setPersonaStatus(`Save failed: ${j.error ?? r.status}`);
+        return;
+      }
+      setPersonaSaved(persona);
+      setPersonaStatus('Saved. Applies on the agent\'s next turn.');
+    } catch (e) {
+      setPersonaStatus(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   useEffect(() => {
     function onKey(ev: KeyboardEvent) { if (ev.key === 'Escape') onClose(); }
@@ -303,6 +347,67 @@ function MemberDetailInline({ id, onClose }: { id: string; onClose: () => void }
                 <span className="badge">{tFmt(detail.staff.current_jobs === 1 ? 'members.detail.jobs_running_singular' : 'members.detail.jobs_running_plural', { n: detail.staff.current_jobs })}</span>
               )}
             </div>
+
+            {/* Persona / 人设 — per-staff system prompt that shapes every
+             * reply. Owner 2026-05-23: "config 里面也有 (员工) 的人设". */}
+            <div className="drawer-section">
+              <div className="drawer-section-label">Persona · 人设</div>
+              <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--ink-mute)' }}>
+                Work style, tone, focus. Injected into this agent&apos;s prompt every turn.
+              </p>
+              <textarea
+                className="input"
+                value={persona}
+                onChange={(e) => setPersona(e.target.value)}
+                rows={5}
+                placeholder="e.g. Senior research analyst. Terse, cite sources, flag uncertainty."
+                style={{ width: '100%', fontFamily: 'inherit', resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ fontSize: 12, padding: '4px 12px' }}
+                  onClick={savePersona}
+                  disabled={persona === personaSaved}
+                >
+                  Save persona
+                </button>
+                {personaStatus && <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>{personaStatus}</span>}
+              </div>
+            </div>
+
+            {/* Direct CLI access — owner 2026-05-23: "我能直接去CLI 打开没?
+             * 要给 user instruction how to access". Attach the live tmux
+             * session from any terminal; same session the in-app terminal drives. */}
+            {(detail.staff.substrate.kind === 'cli' || detail.staff.substrate.kind === 'cli_agent') && (() => {
+              const session = `holon-${detail.staff.id.replace(/[.:]/g, '-')}`;
+              const cmd = `tmux attach -t ${session}`;
+              return (
+                <div className="drawer-section">
+                  <div className="drawer-section-label">Direct CLI access</div>
+                  <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--ink-mute)' }}>
+                    Open this agent&apos;s live session in your own terminal — it&apos;s the same tmux
+                    session the in-app terminal drives, so you can drive it directly and detach with
+                    <code style={{ margin: '0 4px' }}>Ctrl-b d</code>.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <code style={{ flex: 1, padding: '8px 10px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12, overflowX: 'auto' }}>{cmd}</code>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ fontSize: 12, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                      onClick={async () => {
+                        try { await navigator.clipboard.writeText(cmd); setAttachCopied(true); setTimeout(() => setAttachCopied(false), 1500); } catch { /* clipboard denied */ }
+                      }}
+                    >
+                      {attachCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="drawer-section">
               <div className="drawer-section-label">{t('members.detail.cultivation')}</div>
               <div className="cultivation">
