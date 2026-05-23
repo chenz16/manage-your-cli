@@ -1,89 +1,94 @@
-# Holon Engineering
+# Manage Your CLI
 
-[![CI](https://github.com/chenz16/holon-engineering/actions/workflows/ci.yml/badge.svg)](https://github.com/chenz16/holon-engineering/actions/workflows/ci.yml)
+**Turn your CLI subscriptions (Claude Code, Codex, Gemini, Qwen, …) into a managed
+team of agents.** A lean **Secretary** you chat with creates and dispatches
+**employee** agents to do the heavy work — all running on *your own* CLI logins.
 
-The development repository for Holon. Companion to the public marketing repo at <https://github.com/chenz16/Holon>.
+- **No API keys.** It drives the official CLI you're already logged into. Your
+  subscription, your machine, your auth — we never touch tokens.
+- **Thin shell.** All the intelligence is the CLI's. We add only **context, memory,
+  orchestration, and a clean UI**. No RAG, no vector DB, no bespoke "AI" layer.
+- **Gets better for free.** Every model/CLI upgrade upgrades the whole product.
 
-## Installing Holon
+> **Ban-safe by design:** each user drives the *official* CLI on their *own* machine
+> with their *own* subscription — the safest, most vendor-aligned form of use. We
+> never extract tokens, run subscriptions on a server, or share accounts.
 
-**If you're a customer / non-developer / just got a `.exe` or `.apk` from someone — start at [`docs/install/`](docs/install/), not this file.** This README is dev-onboarding context; the install docs are the customer entry point.
+## Architecture
 
-- Windows desk app — [`docs/install/windows.md`](docs/install/windows.md)
-- Android / iPhone mobile clients — see the matching files in `docs/install/` (mobile docs sync from the `mobile-v1` branch; if missing on `dev`, check `main`)
+```mermaid
+flowchart LR
+  Owner["👤 You (owner)"]
 
-## Folder Map
+  subgraph Machine["🖥️ Your machine (local)"]
+    direction TB
+    Sec["🧑‍💼 Secretary<br/>warm CLI · fast · clean<br/>(claude/codex/…)"]
+    E1["🤖 Employee<br/>tmux CLI"]
+    E2["🤖 Employee<br/>tmux CLI"]
+    Mem[("🗂️ Boss memory<br/>markdown files<br/>INDEX + details")]
+    MCP{{"Holon MCP<br/>list · dispatch · read<br/>create · retire · memory"}}
 
-```
-.
-├── docs/              All design documentation (product, architecture, decisions)
-│   ├── product/       Product definition, MVP scope, roadmap
-│   ├── architecture/  System map, component specs, contracts
-│   └── decisions/     Architecture Decision Records (ADRs) — written as we go
-│
-├── requirements/      Requirements management (input to iterations)
-│   ├── current.md     What this iteration is building
-│   ├── backlog.md     What's queued
-│   └── completed/     Snapshots of past iterations' requirements
-│
-├── iterations/        Iteration logs, plans, deliverables, feedback
-│   ├── README.md      Process overview
-│   └── NNN-name/      One folder per iteration
-│       ├── requirements.md   What we agreed to build
-│       ├── plan.md           How we'll build it
-│       ├── deliverables/     What was produced
-│       └── feedback.md       Human review at iteration end
-│
-├── agents/            Definitions of the three working agents
-│   ├── dev-agent.md
-│   ├── test-agent.md
-│   └── requirements-agent.md
-│
-├── apis/              API specs / contracts (user-provided)
-│
-├── deps/              External dependencies vendored here
-│   └── hermes/        Hermes runtime (gitignored; run scripts/setup-hermes.sh to clone)
-│
-└── src/               Our own code
-    └── ui-mock/       The first iteration's deliverable
+    Sec -- via MCP --> MCP
+    MCP --> E1
+    MCP --> E2
+    E1 <-->|agent ↔ agent| E2
+    Sec --- Mem
+    MCP --- Mem
+  end
+
+  Owner <-->|chat| Sec
+  Sec <-->|A2A| Ext["🌐 External agents<br/>other Holons /<br/>internet of agents"]
+
+  classDef hub fill:#1F6F9E,color:#fff,stroke:#0d3d57;
+  class Sec hub
 ```
 
-## How Iteration Works
+**Connection structure:** *local agents ↔ Secretary ↔ you ↔ the outside* — an
+**internet of agents**. The Secretary is the hub: it coordinates your local team and
+is the single gateway out to other people's agents (over the **A2A** standard).
 
-```
-You (human)
-  ↓ provide requirements / give feedback (between iterations only)
-  
-Iteration N
-  ├─ Requirements Agent  ── structures requirements; folds feedback into plan
-  ├─ Dev Agent           ── implements
-  └─ Test Agent          ── writes tests; verifies UI; checks human-reviewed criteria
-  
-  ↓ deliverable + iteration log
-  
-You review → feedback → Iteration N+1
+## The 6 core pieces
+
+| # | Piece | What it is |
+|---|---|---|
+| 1 | **CLI–tmux shell** | Launch/drive official CLIs — Secretary as a *warm* headless process (~1s/turn); employees in persistent *tmux* (watchable, driveable). |
+| 2 | **Agent ↔ agent comms** | Secretary orchestrates employees via the **Holon MCP**; **A2A** for event-driven + cross-machine ("internet of agents"). |
+| 3 | **Clean UI** | Chat with the Secretary (clean reading surface), live roster, create-CLI flow. |
+| 4 | **Persistent agents** | The Secretary (always-warm) + long-term employees (with a "soul" doc). |
+| 5 | **Dynamic-agent UI** | Employees are created/retired on demand; the roster reflects them live. Everything dynamic — nothing hardcoded. |
+| 6 | **Memory management** | File-based (markdown) memory at the *boss*: an index + detail files, **progressive disclosure**. A periodic memory-manager agent consolidates short→long term. No vector DB. |
+
+## How it works
+
+- **Secretary** = a *warm, persistent* official-CLI process (e.g. `claude --print
+  --input-format stream-json …`, lean model + low effort). It pays the CLI cold-start
+  **once**, then answers in ~1s and streams cleanly. It does light work itself and
+  **dispatches heavy work to employees**.
+- **Employees** = official CLIs in their own tmux sessions — you can watch or drive
+  any of them directly. Created short-term by default, long-term on request.
+- **Memory lives at the boss** as plain markdown (employees fetch what they need), so
+  agents can be created and destroyed freely without losing knowledge. Each agent also
+  has its own native `CLAUDE.md`/`AGENTS.md`.
+- **No LLM config.** You log into your CLI(s) once; the app detects and uses them.
+
+## Quickstart
+
+```bash
+corepack pnpm install
+bash scripts/build-web.sh                 # production build
+# serve the standalone build (bind 0.0.0.0); HOLON_OPEN_DEMO=1 = single-user, no device token
+NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3100 HOLON_OPEN_DEMO=1 \
+  node apps/web/.next/standalone/apps/web/server.js
 ```
 
-Each iteration is meant to run with minimal human intervention in the middle. You review at the end; feedback becomes input to the next iteration via the Requirements Agent.
+Then open the app, chat with your Secretary, and ask it to hire an employee.
 
 ## Status
 
-- **Design phase** — complete to commercial-grade. 14 architecture specs + 3 product docs in `docs/`.
-- **Iteration 001 — UI Mock** — in progress, split into three sub-iterations: `iterations/001a-ui-mock-shell/`, `iterations/001b-ui-mock-inbox-conn/`, `iterations/001c-ui-mock-deliverables-composer/` (see `iterations/README.md` § Sub-Iterations for the convention).
-- **Hermes integration** — `deps/hermes/` is the upstream clone (do not modify).
+Early. Branches: **`dev`** (work) → **`main`** (stable). Subscription-only, local-first.
+Cloud/multi-user is a future open-core layer (it would use API keys — out of scope here).
 
-## How To Get Started
+---
 
-1. Read `docs/product/holon-product-definition.md` and `docs/architecture/functional-architecture.md` first.
-2. Then jump to whichever spec matches your work area (see `docs/architecture/implementation-architecture.md` § 5.1 for the package → spec map).
-3. For dev work, see `iterations/README.md` for the iteration process.
-
-## Repo Discipline
-
-- **Specs are the contract; code is the implementation.** When code disagrees with a spec, the bug is in the code unless the spec is wrong (in which case update the spec FIRST).
-- **No silent failure** (per `docs/architecture/functional-architecture.md` § 7.3) — every error path surfaces in audit + UI.
-- **Flat-roster invariant** for local agents (per `docs/architecture/local-agent-management.md` § 2) — no agent owns sub-agents.
-- See `docs/architecture/implementation-architecture.md` § 10 for the full Engineering Rules.
-
-## Public Marketing Site
-
-The marketing landing page lives in a separate public repo: <https://github.com/chenz16/Holon> (deployed at <https://chenz16.github.io/Holon/>). Design docs stay here in private.
+*Built on the thin-shell principle: we don't build AI — we orchestrate the AI you
+already pay for.*
