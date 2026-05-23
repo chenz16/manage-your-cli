@@ -1,4 +1,5 @@
 import type { Staff } from '@holon/api-contract';
+import { getCliAdapter } from './cli-adapters.js';
 import { ensureMemoryManagerWorkspace } from './cli-memory-scaffold.js';
 import { dispatchCliTask, type DispatchCliTaskResult } from './cli-dispatch-service.js';
 import { createStaff, listStaffMerged } from './staff-management-service.js';
@@ -30,7 +31,7 @@ export function getOrCreateMemoryManagerStaff(): Staff {
       lifecycle: 'long',
       cwd: ensureMemoryManagerWorkspace(),
       auto_launch: true,
-      args_template: binary === 'claude' ? '--dangerously-skip-permissions' : '',
+      args_template: getCliAdapter(binary).interactiveArgs,
       approval_rules: [],
     },
     system_prompt: 'You curate the boss memory. Read the raw append-log via read_memory, distill it into organized topic detail files, and keep INDEX.md lean with pointers and summaries via write_memory. Be concise. Markdown only.',

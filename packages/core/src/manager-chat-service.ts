@@ -1,4 +1,5 @@
 import type { Staff } from '@holon/api-contract';
+import { getCliAdapter } from './cli-adapters.js';
 import { ensureManagerWorkspace } from './cli-memory-scaffold.js';
 import { looksLikeBareShell } from './cli-dispatch-service.js';
 import { captureCliOutput, getCliStatus, launchCliSession, sendPrompt } from './cli-session-service.js';
@@ -46,7 +47,7 @@ export function ensureManagerStaff(): Staff {
       lifecycle: 'long',
       cwd: ensureManagerWorkspace(),
       auto_launch: true,
-      args_template: binary === 'claude' ? '--dangerously-skip-permissions' : '',
+      args_template: getCliAdapter(binary).interactiveArgs,
       approval_rules: [],
     },
   });

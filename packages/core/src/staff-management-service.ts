@@ -23,6 +23,7 @@ import {
   dismissStaff as markDismissed, isStaffDismissed,
   type StaffPatch,
 } from './mutable-store.js';
+import { getCliAdapter } from './cli-adapters.js';
 import { ensureAgentMemoryFile } from './cli-memory-scaffold.js';
 import { readDynamicStaff } from './owner-state-persistence.js';
 
@@ -94,10 +95,7 @@ export function createCliAgentStaff(input: CreateCliAgentInput): Staff {
     substrate: {
       kind: 'cli_agent',
       binary,
-      args_template:
-        binary === 'claude' ? '--dangerously-skip-permissions'
-        : binary === 'codex' ? '--dangerously-bypass-approvals-and-sandbox'
-        : '',
+      args_template: getCliAdapter(binary).interactiveArgs,
       approval_rules: [],
       lifecycle,
       cwd,

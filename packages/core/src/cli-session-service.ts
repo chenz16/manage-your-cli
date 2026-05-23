@@ -31,6 +31,7 @@ import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { getStaffMerged } from './staff-management-service.js';
 import { ensureAgentMemoryFile } from './cli-memory-scaffold.js';
+import { getCliAdapter } from './cli-adapters.js';
 
 const TMUX = 'tmux';
 const FIFO_DIR = join(tmpdir(), 'holon-cli');
@@ -185,7 +186,7 @@ export function launchCliSession(staffId: string): LaunchResult | LaunchError {
   }
   // Claude stalls on a first-time folder-trust prompt → pre-accept it so the
   // auto-launched agent starts straight into its input and stays alive.
-  if (autoLaunch && binary === 'claude' && cwd) pretrustClaudeFolder(cwd);
+  if (autoLaunch && binary && getCliAdapter(binary).pretrust && cwd) pretrustClaudeFolder(cwd);
   const banner = binary
     ? `echo '[holon] session for ${staff.name} (${binary})${autoLaunch ? '' : ' — type your commands'}.'`
     : `echo '[holon] session for ${staff.name}.'`;

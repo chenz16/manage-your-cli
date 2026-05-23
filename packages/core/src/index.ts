@@ -92,6 +92,12 @@ export {
 } from './cli-screen-format.js';
 
 export {
+  CLI_ADAPTERS,
+  getCliAdapter,
+  type CliAdapter,
+} from './cli-adapters.js';
+
+export {
   ensureManagerStaff,
   runManagerTurn,
   extractManagerReply,

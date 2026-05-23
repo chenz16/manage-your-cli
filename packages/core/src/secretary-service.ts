@@ -1,4 +1,5 @@
 import type { Staff } from '@holon/api-contract';
+import { getCliAdapter } from './cli-adapters.js';
 import { ensureSecretaryWorkspace } from './cli-memory-scaffold.js';
 import { getCliStatus, launchCliSession, type LaunchError, type LaunchResult } from './cli-session-service.js';
 import { createStaff, listStaffMerged } from './staff-management-service.js';
@@ -28,7 +29,7 @@ export function getOrCreateSecretaryStaff(): Staff {
       lifecycle: 'long',
       cwd: ensureSecretaryWorkspace(),
       auto_launch: true,
-      args_template: binary === 'claude' ? '--dangerously-skip-permissions' : '',
+      args_template: getCliAdapter(binary).interactiveArgs,
       approval_rules: [],
     },
     system_prompt: 'You are the CEO secretary. Answer concise owner questions directly, and use Holon MCP to create, dispatch, read, and retire CLI employees for heavy work.',
