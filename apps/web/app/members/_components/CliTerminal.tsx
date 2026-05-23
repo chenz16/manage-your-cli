@@ -124,8 +124,19 @@ export function CliTerminal({ staffId, staffName, onClose }: Props) {
     const ro = new ResizeObserver(onResize);
     ro.observe(containerRef.current);
 
+    // Scroll containment (#9): stop wheel events from bubbling to the
+    // page scroller while the pointer is over the terminal. xterm's own
+    // .xterm-viewport handles the actual scroll natively; we only need
+    // to prevent the event from reaching ancestor scroll containers.
+    // { passive: true } keeps the browser fast-path for the viewport's
+    // own scroll; stopPropagation() stops ancestor handlers from firing.
+    const onWheel = (e: WheelEvent) => { e.stopPropagation(); };
+    const container = containerRef.current;
+    container.addEventListener('wheel', onWheel, { passive: true });
+
     return () => {
       window.removeEventListener('resize', onResize);
+      container.removeEventListener('wheel', onWheel);
       ro.disconnect();
       disposable.dispose();
       streamRef.current?.close();

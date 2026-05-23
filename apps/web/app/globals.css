@@ -1622,8 +1622,18 @@ select:focus-visible,
   flex: 1;
   min-height: 440px;
   padding: 8px;
+  /* Prevent wheel events from chaining to the page when the terminal
+   * scrollback hits its top/bottom edge (overscroll containment). */
+  overscroll-behavior: contain;
 }
-.cli-terminal-body .xterm-viewport { background: transparent !important; }
+.cli-terminal-body .xterm-viewport {
+  background: transparent !important;
+  /* The xterm viewport is the actual scrollable element — ensure it
+   * scrolls vertically and contains overscroll so the page never
+   * hijacks wheel events that belong to the terminal. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
 /* ── Bug-report button — renders as a nav-item-style row inside
  * .nav-bug-row so it carries the same visual weight as Members /
