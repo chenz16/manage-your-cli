@@ -34,6 +34,10 @@ const ALLOWED_FIELDS: Array<keyof OwnerAssistantPatch> = [
   'tts_provider',
   'tts_server_url',
   'tts_openai_api_key',
+  'slack_webhook_url',
+  'discord_webhook_url',
+  'telegram_bot_token',
+  'telegram_chat_id',
   // Note: `name`, `role_label`, `substrate` deliberately excluded from
   // this surface â€” they're structural and changing them mid-session
   // could break the chat runtime.

@@ -175,6 +175,13 @@ export {
   type SynthesizeSpeechResult,
 } from './voice-synthesis-service.js';
 
+export {
+  sendMessagingTest,
+  type MessagingChannel,
+  type MessagingCfg,
+  type MessagingSendResult,
+} from './messaging-service.js';
+
 // Feedback / bug-report (ported from holon-engineering main)
 export {
   startBugWatcher, stopBugWatcher, bugWatcherStatus,

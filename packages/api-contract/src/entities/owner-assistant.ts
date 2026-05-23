@@ -178,6 +178,16 @@ export const OwnerAssistant = z.object({
   tts_server_url: z.string().nullable().optional(),
   tts_openai_api_key: z.string().nullable().optional(),
 
+  // -- Messaging connectors (webhook/token-based, owner-scoped like voice keys) --
+  /** Slack incoming webhook URL, e.g. https://hooks.slack.com/services/... */
+  slack_webhook_url: z.string().nullable().optional(),
+  /** Discord channel webhook URL, e.g. https://discord.com/api/webhooks/... */
+  discord_webhook_url: z.string().nullable().optional(),
+  /** Telegram bot token from @BotFather, e.g. 123456:ABC-... */
+  telegram_bot_token: z.string().nullable().optional(),
+  /** Telegram chat id (numeric, stored as string) where messages are sent. */
+  telegram_chat_id: z.string().nullable().optional(),
+
   // Voice connector config
   /** Optional auxiliary voice connector settings. Chat intelligence stays in the subscribed CLI. */
   // Ã¢â€â‚¬Ã¢â€â‚¬ ADR-038: CEO remote-terminal channel user-ids Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬

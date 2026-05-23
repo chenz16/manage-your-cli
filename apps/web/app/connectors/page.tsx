@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
 
+type MessagingChannel = 'slack' | 'discord' | 'telegram';
+
 type SttEngine = 'off' | 'whisper_cpp' | 'sensevoice' | 'faster_whisper' | 'openai';
 type TtsEngine = 'off' | 'cosyvoice' | 'openai';
 
@@ -52,6 +54,15 @@ export default function ConnectorsPage() {
   const [ttsKey, setTtsKey] = useState('');
   const [ttsStatus, setTtsStatus] = useState<string | null>(null);
 
+  // Messaging state
+  const [slackUrl, setSlackUrl] = useState('');
+  const [slackStatus, setSlackStatus] = useState<string | null>(null);
+  const [discordUrl, setDiscordUrl] = useState('');
+  const [discordStatus, setDiscordStatus] = useState<string | null>(null);
+  const [telegramToken, setTelegramToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [telegramStatus, setTelegramStatus] = useState<string | null>(null);
+
   useEffect(() => {
     if (!owner) return;
     const nextStt = normalizeStt(owner.stt_provider);
@@ -62,6 +73,11 @@ export default function ConnectorsPage() {
     setTtsEngine(nextTts);
     setTtsUrl(typeof owner.tts_server_url === 'string' ? owner.tts_server_url : TTS_DEFAULT_URL.cosyvoice);
     setTtsKey(typeof owner.tts_openai_api_key === 'string' ? owner.tts_openai_api_key : '');
+    // Messaging pre-fill
+    setSlackUrl(typeof owner.slack_webhook_url === 'string' ? owner.slack_webhook_url : '');
+    setDiscordUrl(typeof owner.discord_webhook_url === 'string' ? owner.discord_webhook_url : '');
+    setTelegramToken(typeof owner.telegram_bot_token === 'string' ? owner.telegram_bot_token : '');
+    setTelegramChatId(typeof owner.telegram_chat_id === 'string' ? owner.telegram_chat_id : '');
   }, [owner]);
 
   async function saveVoiceConfig(kind: 'stt' | 'tts') {
@@ -93,6 +109,50 @@ export default function ConnectorsPage() {
     }
     invalidateOwner();
     statusSetter('Saved.');
+  }
+
+  async function saveMessagingConfig(channel: MessagingChannel) {
+    const statusSetter =
+      channel === 'slack' ? setSlackStatus
+        : channel === 'discord' ? setDiscordStatus
+          : setTelegramStatus;
+    statusSetter('Saving...');
+    const body =
+      channel === 'slack'
+        ? { slack_webhook_url: slackUrl.trim() || null }
+        : channel === 'discord'
+          ? { discord_webhook_url: discordUrl.trim() || null }
+          : {
+              telegram_bot_token: telegramToken.trim() || null,
+              telegram_chat_id: telegramChatId.trim() || null,
+            };
+    const res = await fetch('/api/v1/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      statusSetter(`Save failed: ${text || res.status}`);
+      return;
+    }
+    invalidateOwner();
+    statusSetter('Saved.');
+  }
+
+  async function sendMessagingTestMsg(channel: MessagingChannel) {
+    const statusSetter =
+      channel === 'slack' ? setSlackStatus
+        : channel === 'discord' ? setDiscordStatus
+          : setTelegramStatus;
+    statusSetter('Sending...');
+    const res = await fetch('/api/v1/connectors/messaging/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel }),
+    });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    statusSetter(data.ok ? 'Test message sent.' : (data.error ?? `HTTP ${res.status}`));
   }
 
   async function checkSttHealth() {
@@ -193,17 +253,77 @@ export default function ConnectorsPage() {
         </div>
       </section>
 
-      <section className="card" style={{ padding: 20, display: 'grid', gap: 12, maxWidth: 760, marginTop: 18 }}>
+      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760, marginTop: 18 }}>
         <div>
           <p className="eyebrow">Messaging &amp; Social</p>
           <h2 style={{ margin: 0, fontSize: 18 }}>Message &amp; social channels</h2>
           <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
-            Reach your team from where you already are. Being restored from the previous build — not
-            yet wired, so nothing here saves.
+            Webhook/token-based channels let the desk push notifications. Tokens are owner-scoped, like voice keys.
           </p>
         </div>
+
+        {/* Slack */}
+        <div style={{ display: 'grid', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Slack</h3>
+          <input
+            className="input"
+            value={slackUrl}
+            onChange={(event) => setSlackUrl(event.target.value)}
+            placeholder="https://hooks.slack.com/services/..."
+            autoComplete="off"
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="btn primary" onClick={() => saveMessagingConfig('slack')}>Save</button>
+            <button type="button" className="btn" onClick={() => sendMessagingTestMsg('slack')}>Send test</button>
+          </div>
+          {slackStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{slackStatus}</p>}
+        </div>
+
+        {/* Discord */}
+        <div style={{ display: 'grid', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Discord</h3>
+          <input
+            className="input"
+            value={discordUrl}
+            onChange={(event) => setDiscordUrl(event.target.value)}
+            placeholder="https://discord.com/api/webhooks/..."
+            autoComplete="off"
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="btn primary" onClick={() => saveMessagingConfig('discord')}>Save</button>
+            <button type="button" className="btn" onClick={() => sendMessagingTestMsg('discord')}>Send test</button>
+          </div>
+          {discordStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{discordStatus}</p>}
+        </div>
+
+        {/* Telegram */}
+        <div style={{ display: 'grid', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Telegram</h3>
+          <input
+            className="input"
+            value={telegramToken}
+            onChange={(event) => setTelegramToken(event.target.value)}
+            placeholder="Bot token (from @BotFather)"
+            autoComplete="off"
+          />
+          <input
+            className="input"
+            value={telegramChatId}
+            onChange={(event) => setTelegramChatId(event.target.value)}
+            placeholder="Chat ID (numeric)"
+            autoComplete="off"
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="btn primary" onClick={() => saveMessagingConfig('telegram')}>Save</button>
+            <button type="button" className="btn" onClick={() => sendMessagingTestMsg('telegram')}>Send test</button>
+          </div>
+          {telegramStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{telegramStatus}</p>}
+        </div>
+
+        {/* Coming channels (OAuth-required) */}
         <div style={{ display: 'grid', gap: 8 }}>
-          {(['Slack', 'Discord', 'Telegram', 'Feishu', 'Gmail', 'Google Meet'] as const).map((name) => (
+          <h3 style={{ margin: 0, fontSize: 15, color: 'var(--ink-mute)' }}>Coming (OAuth required)</h3>
+          {(['Gmail', 'Google Meet'] as const).map((name) => (
             <div
               key={name}
               style={{
@@ -213,7 +333,7 @@ export default function ConnectorsPage() {
                 padding: '10px 12px',
                 border: '1px solid var(--line)',
                 borderRadius: 8,
-                opacity: 0.6,
+                opacity: 0.5,
               }}
             >
               <span style={{ fontSize: 14, fontWeight: 600 }}>{name}</span>
