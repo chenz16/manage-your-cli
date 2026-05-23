@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMember, updateStaff, dismissStaffById, type StaffPatch } from '@holon/core';
+import { getStaffMerged, updateStaff, dismissStaffById, type StaffPatch } from '@holon/core';
 
 interface Context { params: Promise<{ id: string }> }
 
@@ -13,7 +13,7 @@ const PATCHABLE: Array<keyof StaffPatch> = [
 
 export async function GET(_req: Request, ctx: Context): Promise<NextResponse> {
   const { id } = await ctx.params;
-  const payload = getMember(id);
+  const payload = getStaffMerged(id);
   if (!payload) return NextResponse.json({ error: 'staff not found', id }, { status: 404 });
   return NextResponse.json(payload);
 }

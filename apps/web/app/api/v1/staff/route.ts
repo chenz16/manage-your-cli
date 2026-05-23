@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createStaff, listMembers, type CreateStaffInput } from '@holon/core';
+import { createStaff, listStaffMerged, type CreateStaffInput } from '@holon/core';
 import { SubstrateSchema } from '@holon/api-contract';
 
 export async function GET(): Promise<NextResponse> {
-  return NextResponse.json(listMembers());
+  return NextResponse.json({ items: listStaffMerged() });
 }
 
 export async function POST(req: Request): Promise<NextResponse> {

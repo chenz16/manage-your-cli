@@ -1,5 +1,5 @@
 import type { OwnerAssistant } from '@holon/api-contract';
-import { listMembers, loadFixtures } from '@holon/core';
+import { listStaffMerged, loadFixtures } from '@holon/core';
 import { MembersClient } from './_components/MembersClient';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * (bug-20260517-201500-153lwnta).
  */
 export default async function MembersPage() {
-  const data = listMembers();
+  const data = { items: listStaffMerged() };
   const fx = loadFixtures();
   const owner: OwnerAssistant = fx.owner_assistant;
   return <MembersClient initial={data} owner={owner} />;
