@@ -6,6 +6,29 @@ import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
 
 type MessagingChannel = 'slack' | 'discord' | 'telegram';
 
+// ---------------------------------------------------------------------------
+// A2A types (subset of A2A 0.2.0 agent card + task result)
+// ---------------------------------------------------------------------------
+interface A2ASkill {
+  id: string;
+  name: string;
+}
+
+interface AgentCard {
+  name: string;
+  protocolVersion: string;
+  skills: A2ASkill[];
+}
+
+interface A2ATaskResult {
+  result?: {
+    artifacts?: Array<{
+      parts: Array<{ kind: string; text?: string }>;
+    }>;
+  };
+  error?: { message: string };
+}
+
 type SttEngine = 'off' | 'whisper_cpp' | 'sensevoice' | 'faster_whisper' | 'openai';
 type TtsEngine = 'off' | 'cosyvoice' | 'openai';
 
@@ -54,6 +77,15 @@ export default function ConnectorsPage() {
   const [ttsKey, setTtsKey] = useState('');
   const [ttsStatus, setTtsStatus] = useState<string | null>(null);
 
+  // A2A state
+  const [myCard, setMyCard] = useState<AgentCard | null>(null);
+  const [myCardError, setMyCardError] = useState<string | null>(null);
+  const [peerUrl, setPeerUrl] = useState('');
+  const [peerCard, setPeerCard] = useState<AgentCard | null>(null);
+  const [peerCardStatus, setPeerCardStatus] = useState<string | null>(null);
+  const [pingMsg, setPingMsg] = useState('Hello from this desk!');
+  const [pingStatus, setPingStatus] = useState<string | null>(null);
+
   // Messaging state
   const [slackUrl, setSlackUrl] = useState('');
   const [slackStatus, setSlackStatus] = useState<string | null>(null);
@@ -62,6 +94,25 @@ export default function ConnectorsPage() {
   const [telegramToken, setTelegramToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramStatus, setTelegramStatus] = useState<string | null>(null);
+
+  // Fetch this desk's own agent card on mount.
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setPeerUrl(window.location.origin);
+    }
+    fetch('/.well-known/agent-card.json')
+      .then(async (res) => {
+        if (!res.ok) {
+          setMyCardError(`HTTP ${res.status}: ${await res.text()}`);
+          return;
+        }
+        const data = await res.json() as AgentCard;
+        setMyCard(data);
+      })
+      .catch((err: unknown) => {
+        setMyCardError(err instanceof Error ? err.message : String(err));
+      });
+  }, []);
 
   useEffect(() => {
     if (!owner) return;
@@ -79,6 +130,63 @@ export default function ConnectorsPage() {
     setTelegramToken(typeof owner.telegram_bot_token === 'string' ? owner.telegram_bot_token : '');
     setTelegramChatId(typeof owner.telegram_chat_id === 'string' ? owner.telegram_chat_id : '');
   }, [owner]);
+
+  // ---------------------------------------------------------------------------
+  // A2A handlers
+  // ---------------------------------------------------------------------------
+
+  async function discoverPeer() {
+    const base = peerUrl.trim().replace(/\/$/, '');
+    if (!base) { setPeerCardStatus('Enter a peer base URL.'); return; }
+    setPeerCardStatus('Discovering…');
+    setPeerCard(null);
+    try {
+      const res = await fetch(`${base}/.well-known/agent-card.json`);
+      if (!res.ok) {
+        setPeerCardStatus(`HTTP ${res.status}: ${await res.text()}`);
+        return;
+      }
+      const data = await res.json() as AgentCard;
+      setPeerCard(data);
+      setPeerCardStatus(`Found: ${data.name} (A2A ${data.protocolVersion})`);
+    } catch (err: unknown) {
+      setPeerCardStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function sendPingMessage() {
+    const base = peerUrl.trim().replace(/\/$/, '');
+    if (!base) { setPingStatus('Enter a peer base URL.'); return; }
+    if (!pingMsg.trim()) { setPingStatus('Enter a message.'); return; }
+    setPingStatus('Sending…');
+    const rpcId = Math.floor(Math.random() * 1_000_000);
+    try {
+      const res = await fetch(`${base}/api/v1/a2a`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: rpcId,
+          method: 'message/send',
+          params: {
+            message: {
+              role: 'user',
+              parts: [{ kind: 'text', text: pingMsg.trim() }],
+            },
+          },
+        }),
+      });
+      const data = await res.json() as A2ATaskResult;
+      if (data.error) {
+        setPingStatus(`Error: ${data.error.message}`);
+        return;
+      }
+      const text = data.result?.artifacts?.[0]?.parts?.find((p) => p.kind === 'text')?.text;
+      setPingStatus(text ? `Reply: ${text}` : 'Task completed (no text artifact).');
+    } catch (err: unknown) {
+      setPingStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   async function saveVoiceConfig(kind: 'stt' | 'tts') {
     const isStt = kind === 'stt';
@@ -340,6 +448,122 @@ export default function ConnectorsPage() {
               <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Coming</span>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Agent peers (A2A)                                                   */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760, marginTop: 18 }}>
+        <div>
+          <p className="eyebrow">Agent peers (A2A)</p>
+          <h2 style={{ margin: 0, fontSize: 18 }}>Agent-to-Agent interconnect</h2>
+          <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
+            Discover and message other A2A-speaking desks. Uses the A2A 0.2.0 standard (agent card + JSON-RPC task protocol).
+          </p>
+        </div>
+
+        {/* This desk's card */}
+        <div style={{ display: 'grid', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>This desk&apos;s card</h3>
+          <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>
+            Other desks discover you at <code>/.well-known/agent-card.json</code>.
+          </p>
+          {myCardError && (
+            <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>Error loading card: {myCardError}</p>
+          )}
+          {myCard && (
+            <div
+              style={{
+                padding: '10px 12px',
+                border: '1px solid var(--line)',
+                borderRadius: 8,
+                display: 'grid',
+                gap: 6,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{myCard.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>A2A {myCard.protocolVersion}</span>
+              </div>
+              {myCard.skills.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+                  {myCard.skills.map((sk) => (
+                    <span
+                      key={sk.id}
+                      title={sk.id}
+                      style={{
+                        fontSize: 11,
+                        padding: '2px 7px',
+                        borderRadius: 99,
+                        background: 'var(--bg-subtle, rgba(128,128,128,0.12))',
+                        color: 'var(--ink-mute)',
+                      }}
+                    >
+                      {sk.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {myCard.skills.length === 0 && (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-mute)' }}>No skills/employees registered.</p>
+              )}
+            </div>
+          )}
+          {!myCard && !myCardError && (
+            <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>Loading…</p>
+          )}
+        </div>
+
+        {/* Ping a peer */}
+        <div style={{ display: 'grid', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Ping a peer</h3>
+          <input
+            className="input"
+            value={peerUrl}
+            onChange={(event) => { setPeerUrl(event.target.value); setPeerCard(null); setPeerCardStatus(null); }}
+            placeholder="http://host:port"
+            autoComplete="off"
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="btn" onClick={discoverPeer}>Discover</button>
+          </div>
+          {peerCardStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{peerCardStatus}</p>}
+          {peerCard && peerCard.skills.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {peerCard.skills.map((sk) => (
+                <span
+                  key={sk.id}
+                  title={sk.id}
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 7px',
+                    borderRadius: 99,
+                    background: 'var(--bg-subtle, rgba(128,128,128,0.12))',
+                    color: 'var(--ink-mute)',
+                  }}
+                >
+                  {sk.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Send test message */}
+        <div style={{ display: 'grid', gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Send test message</h3>
+          <input
+            className="input"
+            value={pingMsg}
+            onChange={(event) => setPingMsg(event.target.value)}
+            placeholder="Hello from this desk!"
+            autoComplete="off"
+          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="btn primary" onClick={sendPingMessage}>Send test message</button>
+          </div>
+          {pingStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{pingStatus}</p>}
         </div>
       </section>
     </main>
