@@ -67,32 +67,17 @@ interface NavItem {
  * concept (/ and /today share intent: "what's happening right now"). */
 const primaryItems: NavItem[] = [
   {
+    // Chat + Today are ONE surface (holon main: home '/' IS the chat-first
+    // shell; '/today' shares intent). Owner 2026-05-23: "chat 和 today 是
+    // 一个东西" — a single always-on home item, not two.
     key: 'chat',
     href: '/',
     label: 'Chat',
-    labelZh: '??',
-    activeWhen: (p) => p === '/',
+    labelZh: 'Chat',
+    activeWhen: (p) => p === '/' || p.startsWith('/today'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-      </svg>
-    ),
-  },
-  {
-    key: 'todo',
-    href: '/today',
-    label: 'Today',
-    labelZh: 'Today',
-    optionalFeature: 'todo',
-    activeWhen: (p) => p.startsWith('/today'),
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M8 6h13" />
-        <path d="M8 12h13" />
-        <path d="M8 18h13" />
-        <path d="M3 6h.01" />
-        <path d="M3 12h.01" />
-        <path d="M3 18h.01" />
       </svg>
     ),
   },

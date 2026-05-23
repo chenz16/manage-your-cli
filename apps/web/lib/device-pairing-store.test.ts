@@ -10,6 +10,8 @@ beforeEach(() => {
   vi.resetModules();
   tmpRoot = mkdtempSync(join(tmpdir(), 'holon-pairing-'));
   process.env.HOLON_DB_PATH = join(tmpRoot, 'owner.sqlite');
+  delete process.env.HOLON_LOCAL_SHARED_SECRET;
+  delete process.env.HOLON_PLUGIN_SHARED_SECRET;
 });
 
 afterEach(async () => {
@@ -27,7 +29,7 @@ describe('device pairing', () => {
 
     const startResp = await startRoute.POST(new Request('http://localhost:3000/api/v1/pair/start', {
       method: 'POST',
-      headers: { host: 'localhost:3000' },
+      headers: { host: 'localhost:3000', 'x-forwarded-for': '127.0.0.1' },
     }));
     expect(startResp.status).toBe(200);
     const started = await startResp.json() as { code: string; lan_url: string; lan_candidates: string[] };
