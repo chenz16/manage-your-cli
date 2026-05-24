@@ -10,6 +10,8 @@ import type {
 import { renderDeliverableBody } from './renderBody';
 import { DeliverablesEmptyState } from './DeliverablesEmptyState';
 import { useT } from '../../../lib/i18n/useT';
+import { ProjectSwitcher } from '../../_components/ProjectSwitcher';
+import { useProjects } from '../../../lib/hooks/useProjects';
 
 const STATUS_LABEL: Record<DeliverableStatus, string> = {
   draft: 'Draft', final: 'Final', accepted: 'Accepted', rejected: 'Rejected', revised: 'Revised',
@@ -37,7 +39,17 @@ function excerpt(d: Deliverable): string {
   return s.length > 120 ? s.slice(0, 117) + '…' : s;
 }
 
-function DeliverableCard({ d, onOpen }: { d: Deliverable; onOpen: (id: string) => void }) {
+function DeliverableCard({
+  d,
+  onOpen,
+  showProjectBadge,
+  projectName,
+}: {
+  d: Deliverable;
+  onOpen: (id: string) => void;
+  showProjectBadge?: boolean;
+  projectName?: string | undefined;
+}) {
   const ts = d.created_at ? d.created_at.slice(0, 10) : '';
   return (
     <button type="button" className="deliv-card" data-deliv-id={d.id} onClick={() => onOpen(d.id)}>
@@ -51,6 +63,23 @@ function DeliverableCard({ d, onOpen }: { d: Deliverable; onOpen: (id: string) =
         </span>
         {d.body_kind && <span className="deliv-kind-chip">{d.body_kind}</span>}
         {ts && <span className="deliv-ts">{ts}</span>}
+        {/* Phase 1: project badge — shown only in "All" view when 2+ projects exist */}
+        {showProjectBadge && projectName && (
+          <span
+            className="deliv-project-badge"
+            title={`Project: ${projectName}`}
+            style={{
+              fontSize: '0.7rem',
+              padding: '1px 6px',
+              borderRadius: 8,
+              background: 'var(--ink-bg-2, #f0f0f0)',
+              color: 'var(--ink-mute, #888)',
+              marginLeft: 'auto',
+            }}
+          >
+            {projectName}
+          </span>
+        )}
       </div>
       <div className="deliv-card-title">{d.title}</div>
       {excerpt(d) && <div className="deliv-card-excerpt">{excerpt(d)}</div>}
@@ -137,6 +166,9 @@ export function DeliverablesClient({ initial }: { initial: ListDeliverablesRespo
   const { t } = useT();
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<OriginKey>('all');
+  // Phase 1 — project switcher
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const { projects } = useProjects();
 
   // Localised origin labels — drives chip text + "Submitted upstream"
   // count suffix in the strip. Falls back to English keys via useT.
@@ -147,26 +179,39 @@ export function DeliverablesClient({ initial }: { initial: ListDeliverablesRespo
     submitted: t('deliverables.origin.submitted'),
   };
 
+  // Phase 1 — project-filtered item set (applied before origin filter)
+  const projectFiltered = useMemo(() => {
+    if (!activeProjectId) return initial.items;
+    return initial.items.filter((d) => d.project_id === activeProjectId);
+  }, [initial.items, activeProjectId]);
+
   // Counts per origin — computed once, drive the chip badges.
   const counts = useMemo(() => {
-    const c = { all: initial.items.length, local: 0, remote: 0, submitted: 0 };
-    for (const d of initial.items) c[d.origin_label] += 1;
+    const c = { all: projectFiltered.length, local: 0, remote: 0, submitted: 0 };
+    for (const d of projectFiltered) c[d.origin_label] += 1;
     return c;
-  }, [initial.items]);
+  }, [projectFiltered]);
 
   // Filtered + time-sorted (newest first). Both All and per-category
   // views use the same sort — per user 2026-05-17: "all 的情况是 全部
   // 是按照时间的排列； category的情况下 也是按照时间".
   const sorted = useMemo(() => {
     const items = filter === 'all'
-      ? initial.items
-      : initial.items.filter((d) => d.origin_label === filter);
+      ? projectFiltered
+      : projectFiltered.filter((d) => d.origin_label === filter);
     return [...items].sort((a, b) => {
       const aTs = a.created_at ?? '';
       const bTs = b.created_at ?? '';
       return bTs.localeCompare(aTs);
     });
-  }, [initial.items, filter]);
+  }, [projectFiltered, filter]);
+
+  // Build project name lookup for badges
+  const projectNameById = useMemo(
+    () => new Map(projects.map((p) => [p.id, p.name])),
+    [projects],
+  );
+  const showProjectBadge = !activeProjectId && projects.length >= 2;
 
   const chips: OriginKey[] = ['all', 'local', 'remote', 'submitted'];
 
@@ -180,6 +225,12 @@ export function DeliverablesClient({ initial }: { initial: ListDeliverablesRespo
     <>
       <div className="page-strip">
         <h1 className="page-strip-title">{t('deliverables.page_title')}</h1>
+        {/* Phase 1: project switcher — hidden when < 2 projects (component handles this) */}
+        <ProjectSwitcher
+          activeProjectId={activeProjectId}
+          onChange={setActiveProjectId}
+          className="page-strip-project-switcher"
+        />
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 12, color: 'var(--ink-mute)' }}>
           {sorted.length} {sorted.length === 1 ? t('deliverables.item_suffix') : t('deliverables.items_suffix')}
@@ -226,7 +277,18 @@ export function DeliverablesClient({ initial }: { initial: ListDeliverablesRespo
             </div>
           ) : (
             <div className="deliv-list-flat">
-              {sorted.map((d) => <DeliverableCard key={d.id} d={d} onOpen={setOpenId} />)}
+              {sorted.map((d) => {
+                const projName = d.project_id ? (projectNameById.get(d.project_id) ?? undefined) : undefined;
+                return (
+                  <DeliverableCard
+                    key={d.id}
+                    d={d}
+                    onOpen={setOpenId}
+                    showProjectBadge={showProjectBadge && !!d.project_id}
+                    projectName={projName}
+                  />
+                );
+              })}
             </div>
           )}
         </>

@@ -7,6 +7,7 @@ import { PersonaPicker } from './PersonaPicker';
 import { FolderPicker } from './FolderPicker';
 import { AuthorizationsSection } from './AuthorizationsSection';
 import { BugQueue } from './BugQueue';
+import { ProjectsSection } from './ProjectsSection';
 import { LanguageSwitcher } from '../../_components/LanguageSwitcher';
 import { primeOwner } from '../../../lib/hooks/useOwner';
 import { useT } from '../../../lib/i18n/useT';
@@ -179,6 +180,9 @@ export function MeClient({
             })}
           </div>
         </section>
+
+        {/* Phase 1: Projects management */}
+        <ProjectsSection />
 
         {/* Identity */}
         <section className="card" style={{ padding: 20 }}>

@@ -6,7 +6,10 @@
 // Deep-link CTA to desk /inbound for triage.
 
 import { useCallback, useState } from 'react';
-import type { ListMissionsResponse, Mission } from '@holon/api-contract';
+import type { Mission } from '@holon/api-contract';
+
+// ListMissionsResponse is not in api-contract — use an inline type
+type ListMissionsResponse = { items: Mission[] };
 import { PullToRefresh } from '../_components/PullToRefresh';
 import { deskOrigin } from '../_lib/desk-origin';
 import { fetchWithTimeout } from '../_lib/fetch-timeout';

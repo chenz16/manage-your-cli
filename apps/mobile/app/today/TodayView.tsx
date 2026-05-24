@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { JobCard } from './_components/JobCard';
 import { PullToRefresh } from '../_components/PullToRefresh';
+import { ProjectSwitcherMobile } from '../_components/ProjectSwitcherMobile';
 import type { JobRow, JobsApiResponse } from './_components/types';
 import { fetchWithTimeout } from '../_lib/fetch-timeout';
 
@@ -15,6 +16,8 @@ const ACTIVE_STATUSES: ReadonlyArray<JobRow['status']> = ['queued', 'running'];
 
 export function TodayView() {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  // Phase 1 — project filter (switcher only visible when 2+ projects)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -90,7 +93,15 @@ export function TodayView() {
     <PullToRefresh onRefresh={load}>
     <div className="mobile-shell">
       <header className="mobile-header">
-        <div className="mobile-brand">今日</div>
+        <div className="mobile-brand">
+          今日
+          {/* Phase 1: project switcher — hidden when < 2 projects */}
+          <ProjectSwitcherMobile
+            activeProjectId={activeProjectId}
+            onChange={setActiveProjectId}
+            className="mobile-header-project"
+          />
+        </div>
         <div className="mobile-subtitle">
           在跑任务 · {state.status === 'ok'
             ? `${state.jobs.length} 活跃 · 调度 ${state.dispatcher === null ? '?' : state.dispatcher ? '● 运行中' : '○ 已停'}`

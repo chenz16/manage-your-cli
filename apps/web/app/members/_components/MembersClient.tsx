@@ -13,6 +13,8 @@ import { MembersEmptyState } from './MembersEmptyState';
 import { useOwner } from '../../../lib/hooks/useOwner';
 import { useT } from '../../../lib/i18n/useT';
 import type { UseTReturn } from '../../../lib/i18n/useT';
+import { ProjectSwitcher } from '../../_components/ProjectSwitcher';
+import { useProjects } from '../../../lib/hooks/useProjects';
 
 // xterm.js references `self` at module top-level → crashes SSR. Load
 // CliTerminal client-only via `next/dynamic` so its xterm import chain
@@ -533,6 +535,9 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StaffKind>('all');
   const [hireOpen, setHireOpen] = useState(false);
+  // Phase 1 — project filter
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const { projects } = useProjects();
 
   // Localised chip labels — overlay over the static English KIND_LABEL
   // map so the chip strip respects the owner's language preference.
@@ -589,16 +594,24 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
     };
   }, []);
 
+  // Phase 1: project filter — cross-project staff (project_ids=[]) always visible
+  const projectFiltered = useMemo(() => {
+    if (!activeProjectId) return roster;
+    return roster.filter(
+      (s) => s.project_ids.length === 0 || s.project_ids.includes(activeProjectId),
+    );
+  }, [roster, activeProjectId]);
+
   const counts = useMemo(() => {
     const c: Record<Exclude<StaffKind, 'all'>, number> = { peer: 0, virtual: 0, linked: 0, cli: 0 };
-    for (const s of roster) c[staffKindOf(s)] += 1;
+    for (const s of projectFiltered) c[staffKindOf(s)] += 1;
     return c;
-  }, [roster]);
+  }, [projectFiltered]);
 
   const visible = useMemo(() => {
-    if (filter === 'all') return roster;
-    return roster.filter((s) => staffKindOf(s) === filter);
-  }, [roster, filter]);
+    if (filter === 'all') return projectFiltered;
+    return projectFiltered.filter((s) => staffKindOf(s) === filter);
+  }, [projectFiltered, filter]);
 
   const chipOrder: StaffKind[] = ['all', 'peer', 'virtual', 'linked', 'cli'];
 
@@ -609,8 +622,14 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
        * lands the user directly on the kind sub-categories. */}
       {!openId && (
         <div className="member-filter-chips" role="tablist" aria-label="Filter members by kind">
+          {/* Phase 1: project switcher — hidden when < 2 projects */}
+          <ProjectSwitcher
+            activeProjectId={activeProjectId}
+            onChange={setActiveProjectId}
+          />
+          {projects.length >= 2 && <div style={{ width: 8 }} />}
           {chipOrder.map((k) => {
-            const n = k === 'all' ? roster.length : counts[k];
+            const n = k === 'all' ? projectFiltered.length : counts[k];
             const active = filter === k;
             return (
               <button
@@ -639,9 +658,9 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
             {t('members.hire_button')}
           </button>
           <div style={{ fontSize: 12, color: 'var(--ink-mute)' }}>
-            {visible.length === roster.length
-              ? `${roster.length} ${t('members.total_suffix')}`
-              : `${visible.length} ${t('members.of_suffix')} ${roster.length}`}
+            {visible.length === projectFiltered.length
+              ? `${projectFiltered.length} ${t('members.total_suffix')}`
+              : `${visible.length} ${t('members.of_suffix')} ${projectFiltered.length}`}
           </div>
         </div>
       )}
@@ -651,7 +670,7 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
        * your assistant is here"). Uses the live roster so refreshes after
        * create/retire reflect immediately.
        * Persona-walk P0 #3 (Sarah Chen 2026-05-19). */}
-      {!openId && roster.length === 0 && owner && <MembersEmptyState />}
+      {!openId && roster.length === 0 && owner && !activeProjectId && <MembersEmptyState />}
 
       {openId ? (
         <MemberDetailInline id={openId} onClose={() => setOpenId(null)} />

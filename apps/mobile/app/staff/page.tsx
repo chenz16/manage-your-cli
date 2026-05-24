@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { PullToRefresh } from '../_components/PullToRefresh';
+import { ProjectSwitcherMobile } from '../_components/ProjectSwitcherMobile';
 import { deskOrigin } from '../_lib/desk-origin';
 import { fetchWithTimeout } from '../_lib/fetch-timeout';
 import { useVisiblePoll } from '../_lib/useVisiblePoll';
@@ -26,6 +27,7 @@ interface Staff {
   substrate?: { kind?: string };
   current_jobs?: number;
   max_concurrent_jobs?: number;
+  project_ids?: string[]; // Phase 1
 }
 
 interface StaffApi { items: Staff[] }
@@ -54,6 +56,8 @@ export default function StaffPage() {
   // interaction.
   const [builtInOpen, setBuiltInOpen] = useState(false);
   const [autoExpanded, setAutoExpanded] = useState(false);
+  // Phase 1 — project filter
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
   // M-L-026 — lift load out of useEffect so PullToRefresh can call it.
   const load = useCallback(async () => {
@@ -70,8 +74,17 @@ export default function StaffPage() {
   // M-L-065 — roster changes maybe daily; pause polling when off-screen.
   useVisiblePoll(load, 6000);
 
-  const mine = state.status === 'ok' ? state.staff.filter((s) => !isBuiltIn(s)) : [];
-  const builtIn = state.status === 'ok' ? state.staff.filter((s) => isBuiltIn(s)) : [];
+  const allMine = state.status === 'ok' ? state.staff.filter((s) => !isBuiltIn(s)) : [];
+  const allBuiltIn = state.status === 'ok' ? state.staff.filter((s) => isBuiltIn(s)) : [];
+  // Phase 1: project filter — cross-project staff (project_ids=[]) always visible
+  const filterByProject = (staff: Staff[]) => {
+    if (!activeProjectId) return staff;
+    return staff.filter(
+      (s) => !s.project_ids?.length || s.project_ids.includes(activeProjectId),
+    );
+  };
+  const mine = filterByProject(allMine);
+  const builtIn = filterByProject(allBuiltIn);
 
   // M-L-022 auto-expand once: if user has 0 hires and built-ins exist,
   // open the built-in section so the page isn't visually empty on first
@@ -91,7 +104,15 @@ export default function StaffPage() {
     <PullToRefresh onRefresh={load}>
     <div className="mobile-shell">
       <header className="mobile-header">
-        <div className="mobile-brand">成员</div>
+        <div className="mobile-brand">
+          成员
+          {/* Phase 1: project switcher — hidden when < 2 projects */}
+          <ProjectSwitcherMobile
+            activeProjectId={activeProjectId}
+            onChange={setActiveProjectId}
+            className="mobile-header-project"
+          />
+        </div>
         <div className="mobile-subtitle">桌面 staff · 点头像派活</div>
       </header>
       <section className="mobile-section">
