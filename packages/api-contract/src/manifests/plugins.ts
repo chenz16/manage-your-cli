@@ -140,18 +140,18 @@ export const MCP_PLUGIN_REGISTRY: McpPluginManifest[] = [
     id: 'gmail',
     name: 'Gmail MCP',
     description:
-      'Give the desk Secretary read/draft access to your Gmail inbox via MCP. Uses the official @gongrzhe/server-gmail-autoauth MCP server — OAuth is handled locally on first run; no credentials leave your machine.',
+      'Give the desk Secretary read/draft access to your Gmail inbox via MCP. Uses the official @gongrzhe/server-gmail-autoauth-mcp MCP server — OAuth is handled locally on first run; no credentials leave your machine.',
     transport: 'stdio',
     install: {
       type: 'stdio',
-      npmPackage: '@gongrzhe/server-gmail-autoauth',
+      npmPackage: '@gongrzhe/server-gmail-autoauth-mcp',
       command: 'npx',
-      args: ['-y', '@gongrzhe/server-gmail-autoauth'],
+      args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'],
     },
     needsConfig: [],
     setupSteps: [
       'Install Node.js 18+ and make sure `npx` is on your PATH.',
-      'Run the install step on this card — `npx -y @gongrzhe/server-gmail-autoauth` will download and start the server.',
+      'Run the install step on this card — `npx -y @gongrzhe/server-gmail-autoauth-mcp` will download and start the server.',
       'On first start, a browser window opens automatically asking you to sign in to Google and grant the requested Gmail scopes (read threads, manage labels, create drafts). Complete that OAuth flow.',
       'The server saves an OAuth token to `~/.gmail-mcp/` on your desk machine. No tokens are sent anywhere outside your machine.',
       'Return to this page and enable the plugin. The Secretary can now search, read, and draft Gmail messages on your behalf.',

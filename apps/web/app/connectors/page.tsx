@@ -425,9 +425,8 @@ export default function ConnectorsPage() {
     <main className="page conn-page">
       <header className="page-header">
         <div>
-          <p className="conn-eyebrow">Connectors</p>
-          <h1 className="page-title">Voice, Messaging &amp; Plugins</h1>
-          <p className="page-subtitle">Connect optional voice, messaging, and social services, and manage MCP plugins. CLI agents are created from chat or the Team page — not here.</p>
+          <h1 className="page-title">Connectors</h1>
+          <p className="page-subtitle">Optional services your Secretary and employees can use — each category is described below. CLI agents are created from chat or the Team page, not here.</p>
         </div>
       </header>
 

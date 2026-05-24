@@ -2008,12 +2008,12 @@ select:focus-visible,
 
 /* Eyebrow kicker above section/page titles (small-caps, muted). */
 .conn-eyebrow {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--ink-mute);
-  margin: 0 0 6px;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
 }
 
 /* Section card — one card per logical group; consistent inner padding +
