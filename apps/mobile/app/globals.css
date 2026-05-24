@@ -1394,3 +1394,34 @@ button, input, textarea, select { font: inherit; }
   padding: 10px 12px; color: var(--ink-3); font-size: 13px;
 }
 
+
+/* ── Desktop preview: frame the phone app to a centered phone-width column so the
+   fixed bottom nav doesn't span the full desktop window. No effect on a real
+   phone (viewport ≤ frame width). ── */
+@media (min-width: 480px) {
+  .mobile-app-shell {
+    max-width: 430px;
+    margin: 0 auto;
+    border-inline: 1px solid #d8d8d8;
+    box-shadow: 0 0 28px rgba(0, 0, 0, 0.10);
+  }
+  .mobile-bottom-nav {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+  }
+  .mobile-mention-menu { max-width: 410px; margin: 0 auto; }
+}
+
+/* Composer: make the 小秘/staff input fill the row (was sizing too small). */
+.mobile-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.mobile-chat-composer .chat-input {
+  flex: 1 1 auto;
+  width: 100%;
+}
