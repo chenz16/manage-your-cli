@@ -132,6 +132,8 @@ export default function ConnectorsPage() {
   const [wcQrId, setWcQrId] = useState<string | null>(null);
   const [wcStatusMsg, setWcStatusMsg] = useState<string | null>(null);
   const wcPollActive = useRef(false);
+  // Pre-loaded bound status — fetched on mount from /api/v1/connectors/wechat/status
+  const [wcPreloaded, setWcPreloaded] = useState<{ connected: boolean; accountId?: string } | null>(null);
 
   // Messaging state
   const [slackUrl, setSlackUrl] = useState('');
@@ -233,6 +235,22 @@ export default function ConnectorsPage() {
     if (typeof window !== 'undefined') {
       setPeerUrl(window.location.origin);
     }
+  }, []);
+
+  // Fetch WeChat bound status on page load so returning users see their state.
+  useEffect(() => {
+    fetch('/api/v1/connectors/wechat/status')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json() as { connected: boolean; accountId?: string };
+        setWcPreloaded(data);
+        // If already bound, surface it in the bind-flow status too
+        if (data.connected) {
+          setWcBindStatus('confirmed');
+          setWcStatusMsg(`Connected · WeChat account ${data.accountId ?? 'unknown'}`);
+        }
+      })
+      .catch(() => { /* non-fatal — just leave idle */ });
   }, []);
 
   useEffect(() => {
@@ -847,6 +865,20 @@ export default function ConnectorsPage() {
               </div>
             )}
 
+            {/* Bound account info — shown when already connected (pre-loaded from status endpoint) */}
+            {wcPreloaded?.connected && wcBindStatus === 'confirmed' && !wcQrUrl && (
+              <div className="conn-panel" style={{ marginTop: 10 }}>
+                <div className="conn-panel-row">
+                  <span className="conn-panel-name">
+                    Connected · WeChat account{' '}
+                    <code style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
+                      {wcPreloaded.accountId ?? 'unknown'}
+                    </code>
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="conn-actions" style={{ marginTop: 10 }}>
               {wcBindStatus !== 'confirmed' && (
                 <button
@@ -867,7 +899,7 @@ export default function ConnectorsPage() {
                   Re-bind
                 </button>
               )}
-              {wcStatusMsg && (
+              {wcStatusMsg && !wcPreloaded?.connected && (
                 <span className={`conn-status${wcBindStatus === 'error' ? ' is-error' : wcBindStatus === 'confirmed' ? ' is-ok' : ''}`}>
                   {wcStatusMsg}
                 </span>
