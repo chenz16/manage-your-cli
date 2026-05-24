@@ -10,6 +10,11 @@ interface PairStartResponse {
   lan_candidates?: string[];
 }
 
+/**
+ * Inner content for the "Connect Phone" card on /connectors.
+ * The surrounding card/eyebrow/title shell is provided by the parent page;
+ * this component renders only the pairing UI fields.
+ */
 export function ConnectPhoneSection(): React.ReactElement {
   const [pairing, setPairing] = useState<PairStartResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,25 +44,15 @@ export function ConnectPhoneSection(): React.ReactElement {
   const alternativeLanCandidates = pairing?.lan_candidates?.filter((ip) => !pairing.lan_url.includes(`//${ip}:`)) ?? [];
 
   return (
-    <section className="card" style={{ padding: 20 }}>
-      <h2 className="section-title" style={{ marginTop: 0 }}>Connect phone</h2>
-      <p style={{ fontSize: 13, color: 'var(--ink-mute)', marginTop: -4, marginBottom: 12 }}>
-        Pair a phone on the same LAN as a thin remote control for this desktop Holon.
-      </p>
-      <button type="button" className="btn" onClick={() => { void startPairing(); }} disabled={busy}>
-        {busy ? 'Starting...' : 'Start pairing'}
-      </button>
+    <div className="conn-field">
+      <div className="conn-actions">
+        <button type="button" className="btn btn-primary" onClick={() => { void startPairing(); }} disabled={busy}>
+          {busy ? 'Starting…' : 'Start pairing'}
+        </button>
+      </div>
 
       {error && (
-        <div role="alert" style={{
-          marginTop: 12,
-          padding: '8px 10px',
-          borderRadius: 6,
-          border: '1px solid rgba(192,57,43,0.35)',
-          background: 'rgba(192,57,43,0.10)',
-          color: 'var(--red, #c0392b)',
-          fontSize: 13,
-        }}>
+        <div role="alert" className="conn-error" style={{ marginTop: 12 }}>
           {error}
         </div>
       )}
@@ -142,6 +137,6 @@ export function ConnectPhoneSection(): React.ReactElement {
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }

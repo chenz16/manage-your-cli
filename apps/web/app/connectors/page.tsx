@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, DragEvent, ClipboardEvent } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
 import { MyAgentCardSection } from './_components/MyAgentCardSection';
+import { ConnectPhoneSection } from './_components/ConnectPhoneSection';
 
 type MessagingChannel = 'slack' | 'discord' | 'telegram';
 
@@ -754,6 +755,18 @@ export default function ConnectorsPage() {
       {/* ── My Agent Card — inbound A2A address (your QR code for peers) ─
            Renders as a peer card; component brings its own card shell. */}
       <MyAgentCardSection />
+
+      {/* ── Connect Phone — pair the 微作 mobile app via QR/LAN ──────── */}
+      <section className="card conn-card">
+        <div className="conn-card-head">
+          <p className="conn-eyebrow">Mobile</p>
+          <h2 className="conn-card-title">Connect Phone</h2>
+          <p className="conn-card-hint">
+            Pair the 微作 mobile app to this desk. When your phone and this desk are on the same LAN, scan the QR to pair automatically — no manual address needed.
+          </p>
+        </div>
+        <ConnectPhoneSection />
+      </section>
 
       {/* ── Agent network: Connect to Holon (A2A) ─────────────── */}
       <section className="card conn-card">
