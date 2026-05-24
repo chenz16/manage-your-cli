@@ -19,6 +19,7 @@
     "@capacitor/ios": "^6.2.0",
     "@holon/api-contract": "workspace:*",
     "@holon/core": "workspace:*",
+    "html2canvas": "^1.4.1",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.460.0",
     "next": "15.5.18",

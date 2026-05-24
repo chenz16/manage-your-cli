@@ -5,34 +5,34 @@
  *
  * Flow:
  *   1. User taps "语音报bug" button.
- *   2. Holds microphone button to record (tap-once-to-start / tap-again-to-stop
- *      model, matching the desk ComposerMicButton UX).
- *   3. Audio blob → base64 → POST /api/v1/connectors/voice/transcribe (reuses
- *      desk BFF via the next.config.ts rewrite / deskApi() in Capacitor).
- *   4. Keyword scan: if transcribed text contains screenshot intent
- *      (截图/截屏/带图/screenshot) we capture lightweight context
- *      (route + note) in lieu of a real DOM screenshot — html2canvas is NOT
- *      in the workspace so DOM capture is deferred. The intent keyword is
- *      preserved in the bug description so the Secretary / dev knows to ask
- *      for a manual screenshot if needed.
- *   5. POST /api/v1/admin/bugs (existing desk endpoint) with description
- *      = "[mobile-voice] <text>", route, viewport, ts.
- *   6. Confirm to user: "已记录：<short summary>" (+ "（含截图意图）" when
- *      screenshot keyword was detected).
+ *   2. BEFORE the modal opens, capture a screenshot of the current view
+ *      via html2canvas (dynamic import — SSR/static-export safe).
+ *   3. Holds microphone button to record.
+ *   4. Audio blob → base64 → POST /api/v1/connectors/voice/transcribe.
+ *   5. Keyword scan: if transcribed text contains screenshot intent
+ *      (截图/截屏/带图/screenshot), the captured PNG data-URI is included
+ *      in the bug payload as `screenshot_data_url`; otherwise null.
+ *   6. POST /api/v1/admin/bugs (existing desk endpoint) with description
+ *      = "[mobile-voice] <text>", route, viewport, ts, and the PNG.
+ *   7. Confirm to user: "已记录：<short summary>（含截图）" when screenshot
+ *      attached, else "已记录：<short summary>".
+ *
+ * Screenshot capture:
+ *   - html2canvas is dynamically imported inside captureScreenshot()
+ *     so it never runs at module load (SSR/static-export safe).
+ *   - Target element: document.body (full viewport). Capture is initiated
+ *     before setOpen(true) so the modal does NOT appear in the screenshot.
+ *   - Best-effort: if html2canvas throws, we proceed with screenshotDataUrl=null
+ *     and tag the description with "(截图失败)".
  *
  * Secretary visibility: the bug lands in the `bugs/<id>/` disk store that
  * `listBugsWithStatus()` already reads. No new integration needed — the desk
  * BugQueue on /me surfaces it, and the Secretary sees it the next time the
  * owner says "扫一下 bug" in chat.
  *
- * Screenshot note (deferred): html2canvas was checked — NOT in the workspace.
- * A native Capacitor screenshot plugin was explicitly ruled out (no new native
- * deps). DOM capture is therefore deferred. The bug description tags [有截图意图]
- * so it's reviewable. Tracked as: feat/voice-bugreport screenshot-v2.
- *
  * SSR-safe: all MediaRecorder / window / navigator access is gated behind
- * useEffect / event handlers (never at module load). No top-level Capacitor
- * plugin import. No API keys.
+ * useEffect / event handlers (never at module load). html2canvas is
+ * dynamic-import only. No top-level Capacitor plugin import. No API keys.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -42,6 +42,36 @@ import { deskApi } from '../_lib/desk-api';
 // Returns true when the user's words express screenshot intent.
 function hasScreenshotIntent(text: string): boolean {
   return /截图|截屏|带图|with.*screenshot|screenshot/i.test(text);
+}
+
+// ── DOM screenshot via html2canvas (dynamic import — SSR safe) ────────────
+/**
+ * Capture the current visible app UI as a PNG data-URI.
+ * Dynamic-imports html2canvas so it is never executed at module load time
+ * (SSR / static-export safe: html2canvas uses document/window internally
+ * and would crash in a server context if imported at the top level).
+ *
+ * @returns PNG data-URI string, or null on failure.
+ */
+async function captureScreenshot(): Promise<string | null> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return null; // server context — skip silently
+  }
+  try {
+    // Dynamic import keeps this module SSR-safe.
+    const html2canvas = (await import('html2canvas')).default;
+    const canvas = await html2canvas(document.body, {
+      // useCORS: allow cross-origin images in the capture (best-effort).
+      useCORS: true,
+      // scale: 1 keeps the PNG small enough for the bug payload.
+      scale: 1,
+      // logging: false suppresses noisy console output.
+      logging: false,
+    });
+    return canvas.toDataURL('image/png');
+  } catch {
+    return null;
+  }
 }
 
 // ── Audio helpers (mirrors desk ChatSurface recorderMimeType + blobToBase64) ──
@@ -79,7 +109,7 @@ type Phase =
 
 interface DoneState {
   summary: string;
-  screenshotIntent: boolean;
+  screenshotAttached: boolean;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -92,6 +122,9 @@ export function VoiceBugReport() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // Screenshot captured before the modal opens, held until bug is filed.
+  const screenshotRef = useRef<string | null>(null);
+  const screenshotFailedRef = useRef(false);
 
   // Cleanup media resources when sheet closes.
   const cleanup = useCallback(() => {
@@ -105,6 +138,8 @@ export function VoiceBugReport() {
       mediaStreamRef.current = null;
     }
     chunksRef.current = [];
+    screenshotRef.current = null;
+    screenshotFailedRef.current = false;
   }, []);
 
   function close() {
@@ -133,6 +168,20 @@ export function VoiceBugReport() {
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
+
+  // ── Open: capture screenshot BEFORE showing the modal ───────────────────
+  async function openModal() {
+    // Capture BEFORE setOpen(true) so the modal is not in the screenshot.
+    const dataUrl = await captureScreenshot();
+    if (dataUrl) {
+      screenshotRef.current = dataUrl;
+      screenshotFailedRef.current = false;
+    } else {
+      screenshotRef.current = null;
+      screenshotFailedRef.current = true;
+    }
+    setOpen(true);
+  }
 
   // ── Start recording ──────────────────────────────────────────────────────
   async function startRecording() {
@@ -231,10 +280,27 @@ export function VoiceBugReport() {
 
   // ── File the bug via /api/v1/admin/bugs ──────────────────────────────────
   async function fileBug(transcribedText: string, screenshotIntent: boolean) {
-    // Build description. Append a [有截图意图] tag when user said screenshot so
-    // the Secretary / dev knows to ask for the manual capture.
-    // html2canvas is not available → no DOM screenshot in v1.
-    const screenshotTag = screenshotIntent ? '\n\n[有截图意图] 用户在语音中提到截图，请在复现时手动截图。' : '';
+    // Determine the screenshot to attach:
+    //   - Only attach when the user expressed screenshot intent.
+    //   - If capture succeeded (screenshotRef is non-null), use it.
+    //   - If capture failed (screenshotFailedRef), note it in the description.
+    const capturedDataUrl = screenshotRef.current;
+    const captureFailed = screenshotFailedRef.current;
+
+    let screenshotDataUrl: string | null = null;
+    let screenshotTag = '';
+
+    if (screenshotIntent) {
+      if (capturedDataUrl) {
+        screenshotDataUrl = capturedDataUrl;
+        // No extra tag needed — screenshot is attached.
+      } else if (captureFailed) {
+        screenshotTag = '\n\n(截图失败) 用户在语音中提到截图，但 html2canvas 截图时出错。';
+      } else {
+        screenshotTag = '\n\n[有截图意图] 用户在语音中提到截图。';
+      }
+    }
+
     const description = `[mobile-voice] ${transcribedText.trim()}${screenshotTag}`;
 
     const payload = {
@@ -244,9 +310,11 @@ export function VoiceBugReport() {
       viewport: typeof window !== 'undefined' ? { w: window.innerWidth, h: window.innerHeight } : { w: 0, h: 0 },
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
       ts: new Date().toISOString(),
-      screenshot_data_url: null,
-      screenshot_filename: null,
-      screenshots: [],
+      screenshot_data_url: screenshotDataUrl,
+      screenshot_filename: screenshotDataUrl ? 'screenshot.png' : null,
+      screenshots: screenshotDataUrl
+        ? [{ data_url: screenshotDataUrl, filename: 'screenshot.png' }]
+        : [],
     };
 
     try {
@@ -265,7 +333,7 @@ export function VoiceBugReport() {
 
     // Short summary for confirmation — first 60 chars of the transcribed text.
     const summary = transcribedText.length > 60 ? transcribedText.slice(0, 60) + '…' : transcribedText;
-    setDone({ summary, screenshotIntent });
+    setDone({ summary, screenshotAttached: !!screenshotDataUrl });
     setPhase('done');
     setStatusMsg('');
   }
@@ -278,7 +346,7 @@ export function VoiceBugReport() {
       <button
         type="button"
         className="m-btn-secondary voice-bug-btn"
-        onClick={() => setOpen(true)}
+        onClick={() => void openModal()}
         aria-label="语音报bug"
       >
         <MicIcon />
@@ -305,7 +373,7 @@ export function VoiceBugReport() {
               {phase === 'idle' && (
                 <>
                   <p className="voice-bug-hint">按住麦克风，说出遇到的问题。</p>
-                  <p className="voice-bug-hint muted">说「截图」「截屏」可标记截图意图。</p>
+                  <p className="voice-bug-hint muted">说「截图」「截屏」可附上当前截图。</p>
                   <button
                     type="button"
                     className="voice-bug-mic-btn"
@@ -347,7 +415,10 @@ export function VoiceBugReport() {
                   <div className="voice-bug-done-icon">✓</div>
                   <div className="voice-bug-done-text">
                     已记录：{done.summary}
-                    {done.screenshotIntent && <span className="voice-bug-done-meta">（含截图意图）</span>}
+                    {done.screenshotAttached
+                      ? <span className="voice-bug-done-meta">（含截图）</span>
+                      : null
+                    }
                   </div>
                 </div>
               )}
