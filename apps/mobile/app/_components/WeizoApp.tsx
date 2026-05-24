@@ -45,6 +45,7 @@ import {
   readDesktopConnection,
   type MobileDesktopConnection,
 } from '../_lib/mobile-runtime';
+import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/device-tts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,33 +113,7 @@ interface TranscribeResponse {
   message?: string;
 }
 
-interface TtsResponse {
-  base64?: string;
-  mime?: string;
-  error?: string;
-  message?: string;
-}
-
 type RecordingState = 'idle' | 'recording' | 'transcribing';
-
-const mobileTtsState = {
-  activeId: null as string | null,
-  audio: null as HTMLAudioElement | null,
-  url: null as string | null,
-  stop() {
-    if (this.audio) {
-      this.audio.pause();
-      this.audio.currentTime = 0;
-      this.audio.src = '';
-      this.audio = null;
-    }
-    if (this.url) {
-      URL.revokeObjectURL(this.url);
-      this.url = null;
-    }
-    this.activeId = null;
-  },
-};
 
 function recorderMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined;
@@ -158,29 +133,6 @@ function blobToBase64(blob: Blob): Promise<string> {
     };
     reader.readAsDataURL(blob);
   });
-}
-
-function base64ToBlob(base64: string, mime: string): Blob {
-  const binary = window.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
-}
-
-function splitTtsText(text: string): string[] {
-  const chunks: string[] = [];
-  let current = '';
-  for (const char of text.replace(/\r\n/g, '\n')) {
-    current += char;
-    if ('。！？；.!?;\n'.includes(char)) {
-      const chunk = current.trim();
-      if (chunk) chunks.push(chunk);
-      current = '';
-    }
-  }
-  const tail = current.trim();
-  if (tail) chunks.push(tail);
-  return chunks.length > 0 ? chunks : [text.trim()].filter(Boolean);
 }
 
 function insertTranscriptIntoComposer(transcript: string): void {
@@ -333,67 +285,39 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   );
 }
 
-function MobileReadAloudButton({ id, text }: { id: string; text: string }) {
+// hybrid edge-tts deferred — read-aloud now uses on-device TTS only (no desk dependency).
+function MobileReadAloudButton({ id: _id, text }: { id: string; text: string }) {
   const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [hint, setHint] = useState('');
 
-  useEffect(() => () => {
-    if (mobileTtsState.activeId === id) mobileTtsState.stop();
-  }, [id]);
-
   async function play() {
-    const chunks = splitTtsText(text);
-    if (chunks.length === 0) {
+    if (!text.trim()) {
       setHint('没有可朗读的内容。');
       return;
     }
-    mobileTtsState.stop();
-    mobileTtsState.activeId = id;
-    setLoading(true);
     setHint('');
+    setPlaying(true);
     try {
-      for (const chunk of chunks) {
-        if (mobileTtsState.activeId !== id) return;
-        const res = await holonApiFetch('/api/v1/connectors/tts/synthesize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: chunk, language: 'zh' }),
-        });
-        const data = await res.json().catch(() => ({})) as TtsResponse;
-        if (!res.ok || !data.base64 || !data.mime) {
-          if (data.error === 'no_tts_provider') throw new Error('桌面端还没有配置语音朗读。');
-          throw new Error(data.message ?? data.error ?? `朗读失败 (${res.status})`);
-        }
-        const url = URL.createObjectURL(base64ToBlob(data.base64, data.mime));
-        const audio = new Audio(url);
-        mobileTtsState.audio = audio;
-        mobileTtsState.url = url;
-        setLoading(false);
-        setPlaying(true);
-        await audio.play();
-        await new Promise<void>((resolve, reject) => {
-          audio.onended = () => resolve();
-          audio.onpause = () => resolve();
-          audio.onerror = () => reject(new Error('播放失败。'));
-        });
-        URL.revokeObjectURL(url);
-        if (mobileTtsState.url === url) mobileTtsState.url = null;
-      }
+      await deviceTtsSpeak(text);
     } catch (error) {
       setHint(error instanceof Error ? error.message : '朗读失败。');
     } finally {
-      if (mobileTtsState.activeId === id) mobileTtsState.stop();
-      setLoading(false);
       setPlaying(false);
     }
   }
 
+  async function stopPlaying() {
+    try {
+      await deviceTtsStop();
+    } catch {
+      // best-effort stop
+    }
+    setPlaying(false);
+  }
+
   function toggle() {
-    if (playing || loading) {
-      mobileTtsState.stop();
-      setPlaying(false);
-      setLoading(false);
+    if (playing) {
+      void stopPlaying();
       return;
     }
     void play();
@@ -405,10 +329,10 @@ function MobileReadAloudButton({ id, text }: { id: string; text: string }) {
         type="button"
         className={`mobile-tts-button${playing ? ' is-playing' : ''}`}
         onClick={toggle}
-        aria-label={playing || loading ? '停止朗读' : '朗读'}
-        title={playing || loading ? '停止朗读' : '朗读'}
+        aria-label={playing ? '停止朗读' : '朗读'}
+        title={playing ? '停止朗读' : '朗读'}
       >
-        {loading ? '…' : playing ? '■' : '🔊'}
+        {playing ? '■' : '🔊'}
       </button>
       {hint && <span className="mobile-tts-hint" role="status">{hint}</span>}
     </span>
