@@ -36,11 +36,26 @@ function corsHeaders(origin: string): Record<string, string> {
   };
 }
 
+// Dev / LAN preview (e.g. the §6 browser preview: mobile on :3006 pairing with
+// the desktop BFF) — allow loopback + private-LAN origins with any port, but ONLY
+// in dev / LAN-access / open-demo mode. Locked to ALLOWED_ORIGINS in production.
+const DEV_LAN_ORIGIN =
+  /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|100\.\d+\.\d+\.\d+)(:\d+)?$/;
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  const devLan =
+    process.env.NODE_ENV === 'development' ||
+    process.env.HOLON_LAN_ACCESS === '1' ||
+    process.env.HOLON_OPEN_DEMO === '1';
+  return devLan && DEV_LAN_ORIGIN.test(origin);
+}
+
 export function middleware(req: NextRequest): NextResponse {
   const origin = req.headers.get('origin');
 
-  // No cross-origin Capacitor request → leave the response exactly as before.
-  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+  // No cross-origin request we recognize → leave the response exactly as before.
+  if (!origin || !isAllowedOrigin(origin)) {
     return NextResponse.next();
   }
 
