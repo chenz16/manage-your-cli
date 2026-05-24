@@ -28,7 +28,7 @@ function corsHeaders(origin: string): Record<string, string> {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-holon-device-token, x-holon-local-secret, x-holon-plugin-secret',
     // Expose the SSE content type so the WebView fetch can read the stream type.
     'Access-Control-Expose-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
