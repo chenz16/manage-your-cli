@@ -45,7 +45,7 @@ import {
   readDesktopConnection,
   type MobileDesktopConnection,
 } from '../_lib/mobile-runtime';
-import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/device-tts';
+import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/tts';
 import { deskOrigin } from '../_lib/desk-origin';
 
 // ─── Chat auto-scroll hook ────────────────────────────────────────────────────

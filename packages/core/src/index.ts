@@ -192,8 +192,10 @@ export {
 
 export {
   synthesizeSpeech,
+  synthesizeEdgeTts,
   type SynthesizeSpeechInput,
   type SynthesizeSpeechResult,
+  type EdgeTtsSynthesisInput,
 } from './voice-synthesis-service.js';
 
 export {
