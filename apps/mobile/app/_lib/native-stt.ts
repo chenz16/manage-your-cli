@@ -37,11 +37,11 @@ type SpeechRecognitionPlugin = {
     prompt?: string;
     partialResults?: boolean;
     popup?: boolean;
-  }): Promise<{ matches?: string[] }>;
+  }): Promise<{ matches?: string[] } | undefined>;
   stop(): Promise<void>;
   addListener(
     event: 'partialResults',
-    cb: (data: { matches: string[] }) => void,
+    cb: (data: { matches?: string[] } | undefined) => void,
   ): Promise<{ remove: () => void }>;
 };
 
@@ -128,6 +128,7 @@ export async function listen(opts: ListenOptions = {}): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let partialHandle: { remove: () => void } | null = null;
     let settled = false;
+    let lastPartial = '';
 
     function cleanup() {
       partialHandle?.remove();
@@ -144,9 +145,9 @@ export async function listen(opts: ListenOptions = {}): Promise<string> {
 
     // ── 监听部分结果 ─────────────────────────────────────────────────────────
     if (wantPartial && cb) {
-      void plugin.addListener('partialResults', (data: { matches: string[] }) => {
-        const partial = data.matches?.[0] ?? '';
-        if (partial) cb(partial);
+      void plugin.addListener('partialResults', (data) => {
+        const partial = data?.matches?.[0] ?? '';
+        if (partial) { lastPartial = partial; cb(partial); }
       }).then((h) => { partialHandle = h; });
     }
 
@@ -157,9 +158,10 @@ export async function listen(opts: ListenOptions = {}): Promise<string> {
       prompt: '请说话…',
       partialResults: wantPartial,
       popup: false,               // 保持紧凑按钮，不弹系统弹窗
-    }).then((result: { matches?: string[] }) => {
-      const text = result.matches?.[0] ?? '';
-      settle(text.trim());
+    }).then((result) => {
+      // popup:false 模式下 start() 可能 resolve 成 undefined,最终结果走 partialResults → 用 lastPartial 兜底
+      const text = (result?.matches?.[0] ?? lastPartial ?? '').trim();
+      settle(text);
     }).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       if (/permission|denied|not.*allow/i.test(msg)) {
