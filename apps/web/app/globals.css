@@ -2222,6 +2222,49 @@ select.conn-input { cursor: pointer; }
 .conn-loading { margin: 0; font-size: 13px; color: var(--ink-mute); }
 .conn-error { margin: 0; font-size: 13px; color: var(--red); }
 
+/* QR paste/drop/upload dropzone */
+.conn-qr-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1.5px dashed var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  outline: none;
+  margin-top: 6px;
+}
+.conn-qr-dropzone:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted, rgba(99,102,241,0.25));
+}
+.conn-qr-dropzone.is-active {
+  border-color: var(--accent);
+  background: var(--accent-muted, rgba(99,102,241,0.07));
+}
+.conn-qr-dropzone-hint {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink-mute);
+  min-width: 0;
+}
+.conn-qr-upload-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, #6366f1);
+  cursor: pointer;
+  padding: 5px 12px;
+  border: 1px solid var(--accent, #6366f1);
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.conn-qr-upload-label:hover {
+  background: var(--accent-muted, rgba(99,102,241,0.1));
+}
+
 @media (max-width: 560px) {
   .conn-plugin-head { flex-direction: column; }
   .conn-card { padding: 18px 16px; }

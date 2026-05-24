@@ -1,7 +1,7 @@
 'use client';
 
 import { redirect } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, DragEvent, ClipboardEvent } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
 import { MyAgentCardSection } from './_components/MyAgentCardSection';
 
@@ -125,6 +125,7 @@ export default function ConnectorsPage() {
   const [peerCardStatus, setPeerCardStatus] = useState<string | null>(null);
   const [pingMsg, setPingMsg] = useState('Hello from this desk!');
   const [pingStatus, setPingStatus] = useState<string | null>(null);
+  const [qrDropActive, setQrDropActive] = useState(false);
 
   // WeChat connect state
   type WechatBindStatus = 'idle' | 'loading' | 'waiting' | 'scanned' | 'confirmed' | 'error';
@@ -469,6 +470,42 @@ export default function ConnectorsPage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Shared QR image decode pipeline (used by file-upload, paste, and drag-drop)
+  // ---------------------------------------------------------------------------
+
+  function handleQrImageBlob(blob: Blob) {
+    if (!blob.type.startsWith('image/')) {
+      setPeerCardStatus('Not an image — paste or drop an image file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { setPeerCardStatus("Couldn't access canvas for QR decode."); return; }
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        import('jsqr').then(({ default: jsQR }) => {
+          const result = jsQR(imageData.data, imageData.width, imageData.height);
+          if (!result) {
+            setPeerCardStatus("No QR code found in that image.");
+            return;
+          }
+          handleQrDecode(result.data);
+        }).catch(() => { setPeerCardStatus("QR library failed to load."); });
+      };
+      img.onerror = () => { setPeerCardStatus("Couldn't load the image."); };
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => { setPeerCardStatus("Failed to read the image."); };
+    reader.readAsDataURL(blob);
+  }
+
+  // ---------------------------------------------------------------------------
   // WeChat connect handlers
   // ---------------------------------------------------------------------------
 
@@ -743,47 +780,55 @@ export default function ConnectorsPage() {
             placeholder="http://host:port  or  http://host:port/.well-known/agent-card.json"
             autoComplete="off"
           />
-          {/* Unified QR scan/upload — auto-detect + route */}
-          <p className="conn-field-hint" style={{ marginTop: 6 }}>
-            Or upload / scan a QR code (auto-detected):
-          </p>
-          <input
-            type="file"
-            accept="image/*"
-            className="conn-input"
-            style={{ paddingTop: 6, paddingBottom: 6 }}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (!file) return;
-              // Reset so the same file can be re-uploaded
-              event.target.value = '';
-              const reader = new FileReader();
-              reader.onload = () => {
-                const img = new window.Image();
-                img.onload = () => {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = img.width;
-                  canvas.height = img.height;
-                  const ctx = canvas.getContext('2d');
-                  if (!ctx) { setPeerCardStatus("Couldn't access canvas for QR decode."); return; }
-                  ctx.drawImage(img, 0, 0);
-                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                  import('jsqr').then(({ default: jsQR }) => {
-                    const result = jsQR(imageData.data, imageData.width, imageData.height);
-                    if (!result) {
-                      setPeerCardStatus("Couldn't read a QR code in that image.");
-                      return;
-                    }
-                    handleQrDecode(result.data);
-                  }).catch(() => { setPeerCardStatus("QR library failed to load."); });
-                };
-                img.onerror = () => { setPeerCardStatus("Couldn't load the selected image."); };
-                img.src = reader.result as string;
-              };
-              reader.onerror = () => { setPeerCardStatus("Failed to read the file."); };
-              reader.readAsDataURL(file);
+          {/* Unified QR: paste, drag-drop, or file-upload — auto-detect + route */}
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+          <div
+            className={`conn-qr-dropzone${qrDropActive ? ' is-active' : ''}`}
+            onPaste={(event: ClipboardEvent<HTMLDivElement>) => {
+              const items = Array.from(event.clipboardData.items);
+              const imgItem = items.find((it) => it.type.startsWith('image/'));
+              if (!imgItem) { setPeerCardStatus('No image found in clipboard.'); return; }
+              const blob = imgItem.getAsFile();
+              if (!blob) { setPeerCardStatus('Could not read clipboard image.'); return; }
+              setPeerCardStatus('Reading pasted image…');
+              handleQrImageBlob(blob);
             }}
-          />
+            onDragOver={(event: DragEvent<HTMLDivElement>) => {
+              event.preventDefault();
+              setQrDropActive(true);
+            }}
+            onDragLeave={() => setQrDropActive(false)}
+            onDrop={(event: DragEvent<HTMLDivElement>) => {
+              event.preventDefault();
+              setQrDropActive(false);
+              const file = event.dataTransfer.files?.[0];
+              if (!file) return;
+              setPeerCardStatus('Reading dropped image…');
+              handleQrImageBlob(file);
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label="Paste, drop, or upload a QR image"
+          >
+            <span className="conn-qr-dropzone-hint">
+              Paste, drop, or upload a QR image (auto-detected)
+            </span>
+            <label className="conn-qr-upload-label">
+              Choose file
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  event.target.value = '';
+                  setPeerCardStatus('Reading uploaded image…');
+                  handleQrImageBlob(file);
+                }}
+              />
+            </label>
+          </div>
           <div className="conn-actions">
             <button type="button" className="btn btn-primary" onClick={discoverPeer}>Connect</button>
             {peerCardStatus && <span className="conn-status">{peerCardStatus}</span>}
