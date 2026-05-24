@@ -250,7 +250,7 @@ export default function ConnectorsPage() {
 
   async function discoverPeer() {
     const base = peerUrl.trim().replace(/\/$/, '');
-    if (!base) { setPeerCardStatus('Enter a peer base URL.'); return; }
+    if (!base) { setPeerCardStatus('Enter the other agent\'s URL.'); return; }
     setPeerCardStatus('Discovering…');
     setPeerCard(null);
     try {
@@ -269,7 +269,7 @@ export default function ConnectorsPage() {
 
   async function sendPingMessage() {
     const base = peerUrl.trim().replace(/\/$/, '');
-    if (!base) { setPingStatus('Enter a peer base URL.'); return; }
+    if (!base) { setPingStatus('Enter the other agent\'s URL.'); return; }
     if (!pingMsg.trim()) { setPingStatus('Enter a message.'); return; }
     setPingStatus('Sending…');
     const rpcId = Math.floor(Math.random() * 1_000_000);
@@ -565,11 +565,11 @@ export default function ConnectorsPage() {
           </p>
         </div>
 
-        {/* ── Primary action: Add peer by agent-card URL ── */}
+        {/* ── Primary action: Connect another desk / agent ── */}
         <div className="conn-field">
-          <span className="conn-field-label">Add a peer agent</span>
+          <span className="conn-field-label">Connect another desk / agent</span>
           <p className="conn-field-hint">
-            Paste another agent&apos;s base URL or its full{' '}
+            Paste the other desk&apos;s base URL or its full{' '}
             <code>…/.well-known/agent-card.json</code> URL, then click Connect to discover and connect.
           </p>
           <input
@@ -578,6 +578,65 @@ export default function ConnectorsPage() {
             onChange={(event) => { setPeerUrl(event.target.value); setPeerCard(null); setPeerCardStatus(null); }}
             placeholder="http://host:port  or  http://host:port/.well-known/agent-card.json"
             autoComplete="off"
+          />
+          {/* QR-code upload: decode with jsQR client-side (canvas, no SSR) */}
+          <p className="conn-field-hint" style={{ marginTop: 6 }}>
+            Or upload their QR code (e.g. screenshot of their{' '}
+            <strong>/me</strong> page):
+          </p>
+          <input
+            type="file"
+            accept="image/*"
+            className="conn-input"
+            style={{ paddingTop: 6, paddingBottom: 6 }}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
+              // Reset input value so the same file can be re-uploaded
+              event.target.value = '';
+              const reader = new FileReader();
+              reader.onload = () => {
+                const img = new window.Image();
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  canvas.width = img.width;
+                  canvas.height = img.height;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) { setPeerCardStatus("Couldn't access canvas for QR decode."); return; }
+                  ctx.drawImage(img, 0, 0);
+                  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                  import('jsqr').then(({ default: jsQR }) => {
+                    const result = jsQR(imageData.data, imageData.width, imageData.height);
+                    if (!result) {
+                      setPeerCardStatus("Couldn't read a QR code in that image.");
+                      return;
+                    }
+                    const decoded = result.data.trim();
+                    setPeerUrl(decoded);
+                    setPeerCard(null);
+                    setPeerCardStatus(null);
+                    // Auto-discover after setting URL
+                    const base = decoded.replace(/\/$/, '');
+                    if (!base) return;
+                    setPeerCardStatus('Discovering…');
+                    fetch(`${base}/.well-known/agent-card.json`)
+                      .then(async (res) => {
+                        if (!res.ok) { setPeerCardStatus(`HTTP ${res.status}: ${await res.text()}`); return; }
+                        const data = await res.json() as AgentCard;
+                        setPeerCard(data);
+                        setPeerCardStatus(`Found: ${data.name} (A2A ${data.protocolVersion})`);
+                      })
+                      .catch((err: unknown) => {
+                        setPeerCardStatus(err instanceof Error ? err.message : String(err));
+                      });
+                  }).catch(() => { setPeerCardStatus("QR library failed to load."); });
+                };
+                img.onerror = () => { setPeerCardStatus("Couldn't load the selected image."); };
+                img.src = reader.result as string;
+              };
+              reader.onerror = () => { setPeerCardStatus("Failed to read the file."); };
+              reader.readAsDataURL(file);
+            }}
           />
           <div className="conn-actions">
             <button type="button" className="btn btn-primary" onClick={discoverPeer}>Connect</button>
