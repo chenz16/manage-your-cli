@@ -1471,3 +1471,24 @@ button, input, textarea, select { font: inherit; }
   color: #fff; border: none; padding: 0;
   font-size: 16px;
 }
+
+/* ── Phone-frame v2 (robust): make .mobile-app-shell a `transform` containing
+   block so the position:fixed bottom nav is pinned to the FRAME, not the
+   viewport. The base left:0;right:0;bottom:0 now means "the 430px frame edges",
+   so the 4 tabs sit exactly across the phone column. No centering math. ── */
+@media (min-width: 480px) {
+  .mobile-app-shell {
+    max-width: 430px;
+    margin: 0 auto;
+    height: 100vh;
+    transform: translateZ(0);
+    overflow: hidden;
+  }
+  .mobile-bottom-nav {
+    left: 0;
+    right: 0;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+}
