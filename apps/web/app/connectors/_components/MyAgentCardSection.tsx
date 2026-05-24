@@ -35,9 +35,9 @@ export function MyAgentCardSection(): React.ReactElement {
     <section className="card" style={{ padding: 20 }}>
       <h2 className="section-title" style={{ marginTop: 0 }}>My Agent Card</h2>
       <p style={{ fontSize: 13, color: 'var(--ink-mute)', marginTop: -4, marginBottom: 16 }}>
-        Other agents connect to this desk using this address — A2A peers.
+        Other Holon desks connect to this desk using this address — A2A peers.
         Share it the same way you would share a QR code: paste the URL into their{' '}
-        <strong>Connectors → Connect to other agents</strong> panel.
+        <strong>Connectors → Connect to Holon</strong> panel.
       </p>
 
       {agentCardUrl ? (

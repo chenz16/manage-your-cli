@@ -718,11 +718,11 @@ export default function ConnectorsPage() {
            Renders as a peer card; component brings its own card shell. */}
       <MyAgentCardSection />
 
-      {/* ── Agent network: Connect to other agents (A2A) ─────────────── */}
+      {/* ── Agent network: Connect to Holon (A2A) ─────────────── */}
       <section className="card conn-card">
         <div className="conn-card-head">
           <p className="conn-eyebrow">Agent network</p>
-          <h2 className="conn-card-title">Connect to other agents</h2>
+          <h2 className="conn-card-title">Connect to Holon</h2>
           <p className="conn-card-hint">
             Actively connect to external agents. Uses the A2A 0.2.0 standard (agent card + JSON-RPC) — works with any desk or service that implements the protocol.
           </p>
