@@ -1235,14 +1235,12 @@ button, input, textarea, select { font: inherit; }
 .mobile-chat-composer .chat-send {
   width: 36px; height: 36px; background: #1f7a44;
 }
-.mobile-voice-control,
-.mobile-tts {
+.mobile-voice-control {
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
 }
-.mobile-voice-button,
-.mobile-tts-button {
+.mobile-voice-button {
   width: 38px; height: 38px;
   border-radius: 50%;
   border: 1px solid #d9d9d9;
@@ -1258,19 +1256,7 @@ button, input, textarea, select { font: inherit; }
   border-color: #e33a32;
   color: #fff;
 }
-.mobile-tts-button {
-  width: 28px; height: 28px;
-  font-size: 13px;
-  margin-left: 6px;
-  align-self: flex-end;
-}
-.mobile-tts-button.is-playing {
-  background: #1f7a44;
-  border-color: #1f7a44;
-  color: #fff;
-}
-.mobile-voice-hint,
-.mobile-tts-hint {
+.mobile-voice-hint {
   position: absolute;
   left: 0;
   bottom: calc(100% + 8px);
@@ -1286,10 +1272,220 @@ button, input, textarea, select { font: inherit; }
   white-space: normal;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
 }
-.mobile-tts-hint {
-  left: auto;
-  right: 0;
+
+/* ── Item 1: Chat bubble alignment (WeChat style) ──────────────────────────
+   .chatmsg       = row container in the message list
+   .chatmsg-user  = right-aligned green bubble (WeChat style)
+   .chatmsg-assistant = left-aligned white bubble + avatar
+   Both owner (assistant-ui ThreadPrimitive) and staff chat use these classes.
+────────────────────────────────────────────────────────────────────────── */
+.chatmsg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
 }
+
+/* User: no avatar, bubble floats right */
+.chatmsg-user {
+  flex-direction: row-reverse;
+  align-self: flex-end;
+  justify-content: flex-start;
+}
+
+/* Assistant: avatar on left, bubble + actions stacked right */
+.chatmsg-assistant {
+  flex-direction: row;
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+
+/* Small circular avatar for assistant (小秘 / staff) */
+.chatmsg-avatar {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: #2e7d52;
+  color: #fff;
+  font-size: 13px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-top: 2px;
+  user-select: none;
+}
+
+/* Stack bubble + action strip vertically */
+.chatmsg-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: calc(78% - 42px); /* 78% minus avatar+gap */
+  min-width: 0;
+}
+
+/* Actual bubble shapes */
+.chatmsg-bubble {
+  padding: 9px 13px;
+  border-radius: 14px;
+  font-size: 14.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chatmsg-bubble-user {
+  background: #95ec69; /* WeChat green */
+  color: #111;
+  border-bottom-right-radius: 4px;
+  max-width: 78vw;
+}
+
+.chatmsg-bubble-assistant {
+  background: #fff;
+  color: #111;
+  border: 1px solid #e0e0e0;
+  border-bottom-left-radius: 4px;
+}
+
+/* ── Item 2: Message action strip (tap-bubble → 朗读 + 复制) ───────────────
+   Appears below the assistant bubble, left-aligned, pill-shaped.
+   Auto-dismiss 3s unless playing.
+────────────────────────────────────────────────────────────────────────── */
+.msg-bubble-wrap {
+  /* Transparent wrapper so tap target covers just the bubble+strip area */
+  display: contents;
+}
+
+.msg-action-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 18px;
+  padding: 4px 10px;
+  margin-top: 4px;
+  animation: msg-strip-fadein 120ms ease-out;
+  /* Left-align with the bubble */
+  align-self: flex-start;
+}
+
+@keyframes msg-strip-fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.msg-action-strip.is-playing {
+  border-color: rgba(31, 122, 68, 0.45);
+}
+
+.msg-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  min-height: 44px; /* iOS HIG tap target */
+  border: none;
+  background: transparent;
+  color: #8e8e93;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.msg-action-btn:active { background: rgba(0,0,0,0.05); }
+
+.msg-action-btn.is-active {
+  color: #1f7a44;
+}
+
+.msg-action-btn.is-error {
+  color: #c0392b;
+}
+
+.msg-action-divider {
+  width: 1px;
+  height: 18px;
+  background: #e5e5ea;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+/* WeChat-style context menu (long-press) */
+.msg-context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 calc(var(--mobile-nav-height, 64px) + env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+.msg-context-menu {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  overflow: hidden;
+  min-width: 160px;
+}
+
+.msg-context-menu-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 18px;
+  border: none;
+  border-right: 1px solid #f0f0f0;
+  background: transparent;
+  color: #111;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.msg-context-menu-item:last-child { border-right: 0; }
+.msg-context-menu-item:active { background: #f5f5f5; }
+
+/* ── Item 3: Contacts refresh bar ─────────────────────────────────────── */
+.contacts-scroll {
+  display: flex;
+  flex-direction: column;
+}
+
+.contacts-refresh-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 14px 2px;
+  background: #f7f7f7;
+  border-bottom: 1px solid #ececec;
+}
+
+.contacts-refresh-btn {
+  border: 1px solid #d8d8d8;
+  border-radius: 999px;
+  background: #fff;
+  color: #1f7a44;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  min-height: 30px;
+  cursor: pointer;
+}
+
+.contacts-refresh-btn:active { background: #edf6f0; }
+.contacts-refresh-btn:disabled { opacity: 0.55; cursor: default; }
 .mobile-mention-menu {
   position: absolute; left: 10px; right: 10px;
   bottom: calc(54px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset));

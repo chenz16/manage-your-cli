@@ -363,57 +363,217 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   );
 }
 
-// hybrid edge-tts deferred — read-aloud now uses on-device TTS only (no desk dependency).
-function MobileReadAloudButton({ id: _id, text }: { id: string; text: string }) {
-  const [playing, setPlaying] = useState(false);
-  const [hint, setHint] = useState('');
+// ─── Global TTS state — one message playing at a time ────────────────────────
+// playingId is tracked in module scope (not React state) so all MessageActionStrip
+// instances can coordinate without prop-drilling.
+const ttsGlobal = { playingId: null as string | null };
 
-  async function play() {
-    if (!text.trim()) {
-      setHint('没有可朗读的内容。');
-      return;
+// SVG icon primitives (single-color, 16×16, currentColor). No emoji.
+function IconSpeaker() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+    </svg>
+  );
+}
+function IconStop() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="2"/>
+    </svg>
+  );
+}
+function IconCopy() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </svg>
+  );
+}
+
+// Tap-bubble → action strip (朗读 + 复制) with 3s auto-dismiss.
+// Long-press → WeChat-style context menu.
+function MessageActionStrip({ id, text }: { id: string; text: string }) {
+  const [showStrip, setShowStrip] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [ttsState, setTtsState] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
+  const [copied, setCopied] = useState(false);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isThisPlaying = ttsState === 'playing' || ttsState === 'loading';
+
+  // Auto-dismiss the strip after 3s (not while playing).
+  function armDismiss() {
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    if (isThisPlaying) return;
+    dismissTimerRef.current = setTimeout(() => {
+      setShowStrip(false);
+    }, 3000);
+  }
+
+  function disarmDismiss() {
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = null;
     }
-    setHint('');
-    setPlaying(true);
+  }
+
+  // Keep dismiss armed based on playing state.
+  useEffect(() => {
+    if (isThisPlaying) {
+      disarmDismiss();
+    } else if (showStrip) {
+      armDismiss();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isThisPlaying, showStrip]);
+
+  // Clean up on unmount.
+  useEffect(() => {
+    return () => {
+      disarmDismiss();
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    };
+  }, []);
+
+  async function startSpeak() {
+    if (!text.trim()) return;
+    // Stop whatever is currently playing (global mutex).
+    if (ttsGlobal.playingId && ttsGlobal.playingId !== id) {
+      try { await deviceTtsStop(); } catch { /* best-effort */ }
+    }
+    ttsGlobal.playingId = id;
+    setTtsState('loading');
+    disarmDismiss();
     try {
       await deviceTtsSpeak(text);
-    } catch (error) {
-      setHint(error instanceof Error ? error.message : '朗读失败。');
-    } finally {
-      setPlaying(false);
-    }
-  }
-
-  async function stopPlaying() {
-    try {
-      await deviceTtsStop();
+      setTtsState('idle');
     } catch {
-      // best-effort stop
+      setTtsState('error');
+      setTimeout(() => setTtsState('idle'), 1000);
+    } finally {
+      if (ttsGlobal.playingId === id) ttsGlobal.playingId = null;
     }
-    setPlaying(false);
   }
 
-  function toggle() {
-    if (playing) {
-      void stopPlaying();
-      return;
-    }
-    void play();
+  async function stopSpeak() {
+    try { await deviceTtsStop(); } catch { /* best-effort */ }
+    if (ttsGlobal.playingId === id) ttsGlobal.playingId = null;
+    setTtsState('idle');
+    armDismiss();
   }
+
+  function handleTtsClick() {
+    if (ttsState === 'playing' || ttsState === 'loading') {
+      void stopSpeak();
+    } else {
+      void startSpeak();
+    }
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1000);
+    } catch { /* clipboard not available */ }
+    armDismiss();
+  }
+
+  // Tap bubble: show strip.
+  function onBubbleTap() {
+    if (showMenu) { setShowMenu(false); return; }
+    setShowStrip(true);
+    armDismiss();
+  }
+
+  // Long press: show context menu instead.
+  function onPointerDown() {
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      setShowMenu(true);
+      setShowStrip(false);
+      disarmDismiss();
+    }, 500);
+  }
+
+  function onPointerUp() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  const ttsLabel =
+    ttsState === 'loading' ? '加载中' :
+    ttsState === 'playing' ? '停止' :
+    ttsState === 'error' ? '失败' :
+    '朗读';
+  const ttsIcon = (ttsState === 'playing' || ttsState === 'loading') ? <IconStop /> : <IconSpeaker />;
 
   return (
-    <span className="mobile-tts">
-      <button
-        type="button"
-        className={`mobile-tts-button${playing ? ' is-playing' : ''}`}
-        onClick={toggle}
-        aria-label={playing ? '停止朗读' : '朗读'}
-        title={playing ? '停止朗读' : '朗读'}
-      >
-        {playing ? '■' : '🔊'}
-      </button>
-      {hint && <span className="mobile-tts-hint" role="status">{hint}</span>}
-    </span>
+    <div
+      className="msg-bubble-wrap"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onClick={onBubbleTap}
+      onContextMenu={(ev) => ev.preventDefault()}
+    >
+      {showStrip && (
+        <div
+          className={`msg-action-strip${isThisPlaying ? ' is-playing' : ''}`}
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          <button
+            type="button"
+            className={`msg-action-btn${ttsState !== 'idle' ? ' is-active' : ''}${ttsState === 'error' ? ' is-error' : ''}`}
+            onClick={handleTtsClick}
+            aria-label={ttsLabel}
+          >
+            {ttsIcon}
+            <span>{ttsLabel}</span>
+          </button>
+          <span className="msg-action-divider" aria-hidden="true" />
+          <button
+            type="button"
+            className={`msg-action-btn${copied ? ' is-active' : ''}`}
+            onClick={() => void handleCopy()}
+            aria-label={copied ? '已复制' : '复制'}
+          >
+            <IconCopy />
+            <span>{copied ? '已复制' : '复制'}</span>
+          </button>
+        </div>
+      )}
+      {showMenu && (
+        <div className="msg-context-menu-backdrop" onClick={() => setShowMenu(false)}>
+          <div className="msg-context-menu" onClick={(ev) => ev.stopPropagation()}>
+            <button
+              type="button"
+              className="msg-context-menu-item"
+              onClick={() => { void handleCopy(); setShowMenu(false); }}
+            >
+              <IconCopy /><span>复制</span>
+            </button>
+            <button
+              type="button"
+              className="msg-context-menu-item"
+              onClick={() => {
+                setShowMenu(false);
+                setShowStrip(true);
+                void startSpeak();
+              }}
+            >
+              <IconSpeaker /><span>朗读</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -431,7 +591,7 @@ function makeMobileOwnerAdapter(): ChatModelAdapter {
         const response = await holonApiFetch('/api/v1/chat/owner/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: payload }),
+          body: JSON.stringify({ messages: payload, client: 'mobile' }),
           signal: abortSignal,
         });
 
@@ -491,7 +651,9 @@ function makeMobileOwnerAdapter(): ChatModelAdapter {
 function UserMsg() {
   return (
     <MessagePrimitive.Root className="chatmsg chatmsg-user">
-      <MessagePrimitive.Parts />
+      <div className="chatmsg-bubble chatmsg-bubble-user">
+        <MessagePrimitive.Parts />
+      </div>
     </MessagePrimitive.Root>
   );
 }
@@ -501,10 +663,13 @@ function AssistantMsg() {
   const text = flattenText(message.content);
   return (
     <MessagePrimitive.Root className="chatmsg chatmsg-assistant">
-      <div className="chatmsg-content">
-        <MessagePrimitive.Parts />
+      <div className="chatmsg-avatar" aria-hidden="true">秘</div>
+      <div className="chatmsg-body">
+        <div className="chatmsg-bubble chatmsg-bubble-assistant">
+          <MessagePrimitive.Parts />
+        </div>
+        <MessageActionStrip id={message.id} text={text} />
       </div>
-      <MobileReadAloudButton id={message.id} text={text} />
     </MessagePrimitive.Root>
   );
 }
@@ -943,14 +1108,26 @@ function StaffChat({ staff }: { staff: Staff }) {
             <div className="chat-empty-sub">{staff.role_label}</div>
           </div>
         ) : messages.map((m, i) => (
-          <div key={i} className={`chatmsg ${m.role === 'user' ? 'chatmsg-user' : 'chatmsg-assistant'}`}>
-            <div className="chatmsg-content">{m.content}</div>
-            {m.role === 'assistant' && <MobileReadAloudButton id={`${staff.id}-${i}`} text={m.content} />}
-          </div>
+          m.role === 'user' ? (
+            <div key={i} className="chatmsg chatmsg-user">
+              <div className="chatmsg-bubble chatmsg-bubble-user">{m.content}</div>
+            </div>
+          ) : (
+            <div key={i} className="chatmsg chatmsg-assistant">
+              <div className="chatmsg-avatar" aria-hidden="true">{staff.name.slice(0, 1)}</div>
+              <div className="chatmsg-body">
+                <div className="chatmsg-bubble chatmsg-bubble-assistant">{m.content}</div>
+                <MessageActionStrip id={`${staff.id}-${i}`} text={m.content} />
+              </div>
+            </div>
+          )
         ))}
         {sending && (
           <div className="chatmsg chatmsg-assistant">
-            <div className="chatmsg-content">正在回复…</div>
+            <div className="chatmsg-avatar" aria-hidden="true">{staff.name.slice(0, 1)}</div>
+            <div className="chatmsg-body">
+              <div className="chatmsg-bubble chatmsg-bubble-assistant">正在回复…</div>
+            </div>
           </div>
         )}
         {error && <div className="mobile-error">发送失败：{error}</div>}
@@ -1099,12 +1276,74 @@ function MobileChatPanel({
 function Contacts({
   staff,
   onOpen,
+  onRefresh,
+  refreshing,
 }: {
   staff: readonly Staff[];
   onOpen: (s: Staff) => void;
+  onRefresh: () => void;
+  refreshing: boolean;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const startY = useRef<number | null>(null);
+  const armedRef = useRef(false);
+  const [pullY, setPullY] = useState(0);
+
+  const TRIGGER_PX = 64;
+  const MAX_PULL_PX = 96;
+  const DAMPING = 0.55;
+
+  function onTouchStart(e: TouchEvent<HTMLDivElement>) {
+    if (refreshing) return;
+    const el = scrollRef.current;
+    if (el && el.scrollTop > 0) { armedRef.current = false; return; }
+    armedRef.current = true;
+    startY.current = e.touches[0]?.clientY ?? null;
+  }
+
+  function onTouchMove(e: TouchEvent<HTMLDivElement>) {
+    if (!armedRef.current || refreshing || startY.current === null) return;
+    const dy = (e.touches[0]?.clientY ?? startY.current) - startY.current;
+    if (dy <= 0) { setPullY(0); return; }
+    setPullY(Math.min(MAX_PULL_PX, dy * DAMPING));
+  }
+
+  function onTouchEnd() {
+    if (!armedRef.current) return;
+    armedRef.current = false;
+    const shouldFire = pullY >= TRIGGER_PX;
+    startY.current = null;
+    setPullY(0);
+    if (shouldFire) onRefresh();
+  }
+
+  const progress = Math.min(1, pullY / TRIGGER_PX);
+
   return (
-    <div className="mobile-list">
+    <div
+      ref={scrollRef}
+      className="mobile-list contacts-scroll"
+      style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    >
+      {/* Pull-to-refresh indicator */}
+      <div
+        className="ptr-indicator"
+        style={{ height: refreshing ? 48 : pullY > 0 ? pullY : undefined, opacity: refreshing ? 1 : progress, overflow: 'hidden' }}
+        aria-hidden={!refreshing && pullY === 0}
+      >
+        <div className={`ptr-spinner${refreshing ? ' ptr-spinner-spin' : ''}`}
+          style={{ transform: refreshing ? undefined : `rotate(${progress * 270}deg)` }} />
+      </div>
+      {/* Refresh bar */}
+      <div className="contacts-refresh-bar">
+        <button type="button" className="contacts-refresh-btn" onClick={onRefresh} disabled={refreshing} aria-label="刷新通讯录">
+          {refreshing ? '刷新中…' : '刷新'}
+        </button>
+      </div>
       {staff.length === 0 ? (
         <div className="mobile-empty-panel">还没有员工。</div>
       ) : staff.map((s) => (
@@ -3367,6 +3606,7 @@ export function WeizoApp() {
   const [desktopOffline, setDesktopOffline] = useState(false);
   const [checkingConnection, setCheckingConnection] = useState(false);
   const [badges] = useState<Record<BadgedTabKey, number>>({ chats: 0, work: 0 });
+  const [staffRefreshing, setStaffRefreshing] = useState(false);
 
   useEffect(() => {
     const conn = readDesktopConnection();
@@ -3377,23 +3617,36 @@ export function WeizoApp() {
     setBooted(true);
   }, []);
 
+  const fetchStaff = useCallback(async () => {
+    setStaffRefreshing(true);
+    try {
+      const r = await holonApiFetch('/api/v1/staff', { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json() as ListStaffResponse;
+      setStaff(Array.isArray(j.items) ? j.items : []);
+      setStaffError('');
+    } catch (err) {
+      setStaffError(err instanceof Error ? err.message : String(err));
+      setDesktopOffline(true);
+    } finally {
+      setStaffRefreshing(false);
+    }
+  }, []);
+
+  // Initial staff load when connection is established.
   useEffect(() => {
     if (!connection) return;
-    let cancelled = false;
-    holonApiFetch('/api/v1/staff', { cache: 'no-store' })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const j = await r.json() as ListStaffResponse;
-        if (!cancelled) setStaff(Array.isArray(j.items) ? j.items : []);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setStaffError(err instanceof Error ? err.message : String(err));
-          setDesktopOffline(true);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [connection]);
+    void fetchStaff();
+  }, [connection, fetchStaff]);
+
+  // Re-fetch staff when the contacts tab becomes active (visibility-gated).
+  const prevTabRef = useRef<TabKey>('chats');
+  useEffect(() => {
+    if (tab === 'contacts' && prevTabRef.current !== 'contacts' && connection) {
+      void fetchStaff();
+    }
+    prevTabRef.current = tab;
+  }, [tab, connection, fetchStaff]);
 
   useEffect(() => {
     if (!connection) return;
@@ -3505,7 +3758,7 @@ export function WeizoApp() {
               }}
             />
           ) : (
-            <Contacts staff={staff} onOpen={setSelectedStaff} />
+            <Contacts staff={staff} onOpen={setSelectedStaff} onRefresh={() => void fetchStaff()} refreshing={staffRefreshing} />
           )
         )}
         {tab === 'work' && (

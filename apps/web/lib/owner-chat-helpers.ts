@@ -81,10 +81,27 @@ export function buildOwnerPrompt(
   userText: string,
   messages: ChatMessage[],
   activeProjectContext?: { name: string; memoryText: string } | null,
+  client?: string | null,
 ): string {
   const wechatContexts = extractWeChatContextBlocks(messages);
+  const isMobile = client === 'mobile';
 
   const parts: string[] = [];
+
+  // Client-awareness directives — injected first so the Secretary can calibrate
+  // verbosity before reading any context.
+  // Mobile: concise, scannable, conclusion-first. Desktop: mild brevity nudge.
+  if (isMobile) {
+    parts.push(
+      '[系统指示] 用户在手机上，请保持回答精简可扫读，控制长度，先给结论再展开。避免不必要的长篇大论。',
+      '',
+    );
+  } else {
+    parts.push(
+      '[System directive] Keep your answer focused and avoid unnecessarily long responses.',
+      '',
+    );
+  }
 
   // Phase 1 — active project context injected at the top of the prompt
   // when the boss has a project selected. One conditional readBossMemory
@@ -107,7 +124,6 @@ export function buildOwnerPrompt(
     return parts.join('\n');
   }
 
-  if (parts.length === 0) return userText;
   parts.push(userText);
   return parts.join('\n');
 }

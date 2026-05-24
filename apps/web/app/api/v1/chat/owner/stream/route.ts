@@ -81,11 +81,18 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
+  // Extract optional client flag (e.g. 'mobile') for verbosity calibration.
+  const clientId =
+    typeof body === 'object' && body !== null && 'client' in body
+      ? (body as { client?: unknown }).client
+      : undefined;
+  const client = typeof clientId === 'string' ? clientId : null;
+
   const secretary = getOrCreateSecretaryStaff();
   const substrate = secretary.substrate;
   const cwd = substrate.kind === 'cli_agent' ? substrate.cwd : undefined;
   const binary = substrate.kind === 'cli_agent' && substrate.binary ? substrate.binary : 'claude';
-  const ownerPrompt = buildOwnerPrompt(userText, messages, activeProjectContext);
+  const ownerPrompt = buildOwnerPrompt(userText, messages, activeProjectContext, client);
 
   // Headless: drive the OFFICIAL CLI non-interactively (claude -p / codex exec) and
   // stream its clean stdout. No TUI screen-scrape. Subscription-only; NO API key.
