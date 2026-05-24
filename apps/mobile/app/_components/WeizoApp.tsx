@@ -1306,6 +1306,152 @@ function tabTitle(tab: TabKey, selectedStaff: Staff | null): string {
   }
 }
 
+// ─── QR scanner (jsqr + getUserMedia video) ───────────────────────────────────
+
+type ScannerState = 'idle' | 'requesting' | 'scanning' | 'denied' | 'error';
+
+function QrScanner({
+  onResult,
+  onClose,
+}: {
+  onResult: (text: string) => void;
+  onClose: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [state, setState] = useState<ScannerState>('requesting');
+  const [hint, setHint] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function start() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+        });
+        if (cancelled) { for (const t of stream.getTracks()) t.stop(); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        setState('scanning');
+        scheduleFrame();
+      } catch (e) {
+        if (cancelled) return;
+        const name = e instanceof DOMException ? e.name : '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setState('denied');
+          setHint('摄像头权限被拒绝，请在浏览器设置中允许。');
+        } else {
+          setState('error');
+          setHint(`摄像头无法启动：${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+    }
+
+    function scheduleFrame() {
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    function tick() {
+      if (cancelled) return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas || video.readyState < 2) {
+        scheduleFrame();
+        return;
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { scheduleFrame(); return; }
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      // Dynamic import jsqr to keep initial bundle small.
+      import('jsqr').then(({ default: jsQR }) => {
+        if (cancelled) return;
+        const result = jsQR(imageData.data, imageData.width, imageData.height);
+        if (result?.data) {
+          onResult(result.data);
+        } else {
+          scheduleFrame();
+        }
+      }).catch(() => { scheduleFrame(); });
+    }
+
+    void start();
+
+    return () => {
+      cancelled = true;
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      if (streamRef.current) {
+        for (const t of streamRef.current.getTracks()) t.stop();
+        streamRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: '#000',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100,
+    }}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
+        {state === 'scanning' && (
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            style={{ width: '100%', display: 'block', borderRadius: 8 }}
+          />
+        )}
+        {/* hidden canvas for frame capture */}
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+        {state === 'requesting' && (
+          <div style={{ color: '#fff', textAlign: 'center', padding: 24 }}>正在请求摄像头…</div>
+        )}
+        {(state === 'denied' || state === 'error') && (
+          <div style={{ color: '#f88', textAlign: 'center', padding: 24 }}>{hint}</div>
+        )}
+        {state === 'scanning' && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            <div style={{
+              width: 200, height: 200,
+              border: '2px solid rgba(255,255,255,0.7)',
+              borderRadius: 12,
+              boxShadow: '0 0 0 4000px rgba(0,0,0,0.45)',
+            }} />
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: 20, fontSize: 13, color: 'rgba(255,255,255,0.7)', textAlign: 'center', padding: '0 16px' }}>
+        {state === 'scanning' ? '将桌面端二维码对准框内' : hint || ''}
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        style={{
+          marginTop: 24, padding: '10px 32px', borderRadius: 8,
+          background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none',
+          fontSize: 15, cursor: 'pointer',
+        }}
+      >
+        取消
+      </button>
+    </div>
+  );
+}
+
 // ─── Pairing screen (inline — avoids the old multi-route redirect) ────────────
 
 function PairingPrompt({ onPaired }: { onPaired: () => void }) {
@@ -1313,6 +1459,45 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [scanning, setScanning] = useState(false);
+
+  async function claimWithUrl(claimUrl: string): Promise<void> {
+    setBusy(true);
+    setErr('');
+    try {
+      // Parse the claim URL: extract baseUrl (origin) and code query param.
+      let parsed: URL;
+      try {
+        parsed = new URL(claimUrl);
+      } catch {
+        throw new Error('二维码内容无法解析为有效 URL。');
+      }
+      const scannedCode = parsed.searchParams.get('code');
+      if (!scannedCode) throw new Error('二维码中未找到配对码。');
+      const scannedBase = parsed.origin;
+
+      const { normalizeBaseUrl, writeDesktopConnection } = await import('../_lib/mobile-runtime');
+      const normalizedUrl = normalizeBaseUrl(scannedBase);
+      const r = await fetch(`${normalizedUrl}/api/v1/pair/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: scannedCode }),
+      });
+      const body = await r.json().catch(() => ({})) as {
+        ok?: boolean; device_token?: string; device_id?: string; error?: string;
+      };
+      if (!r.ok || !body.ok || !body.device_token) {
+        throw new Error(body.error ?? `HTTP ${r.status}`);
+      }
+      writeDesktopConnection({ baseUrl: normalizedUrl, deviceToken: body.device_token });
+      installMobileApiFetchProxy();
+      onPaired();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit() {
     const url = baseUrl.trim();
@@ -1344,11 +1529,46 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
     }
   }
 
+  function handleQrResult(text: string) {
+    setScanning(false);
+    // Only proceed if it looks like a pair/claim URL.
+    if (text.includes('/api/v1/pair/claim')) {
+      void claimWithUrl(text);
+    } else {
+      setErr('扫描结果不是配对二维码，请使用桌面端 /me 页面显示的二维码。');
+    }
+  }
+
+  if (scanning) {
+    return (
+      <QrScanner
+        onResult={handleQrResult}
+        onClose={() => setScanning(false)}
+      />
+    );
+  }
+
   return (
     <div className="mobile-pairing-shell">
       <div className="mobile-pairing-panel">
         <div className="mobile-pairing-kicker">微作 · Weizo</div>
         <h1 className="mobile-pairing-title">连接桌面</h1>
+
+        {/* QR scan button */}
+        <button
+          type="button"
+          className="mobile-pairing-submit"
+          style={{ marginBottom: 12, background: 'var(--accent, #1a73e8)' }}
+          onClick={() => { setErr(''); setScanning(true); }}
+          disabled={busy}
+        >
+          📷 扫码配对
+        </button>
+
+        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-mute)', margin: '4px 0 12px' }}>
+          — 或手动输入 —
+        </div>
+
         <div className="mobile-pairing-field">
           <label htmlFor="weizo-pair-url">桌面端地址</label>
           <input
@@ -1358,7 +1578,6 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
             onChange={(ev) => setBaseUrl(ev.target.value)}
             placeholder="http://192.168.x.x:3000"
             autoComplete="url"
-            autoFocus
           />
         </div>
         <div className="mobile-pairing-field">
