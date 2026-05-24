@@ -45,11 +45,16 @@ type SpeechRecognitionPlugin = {
   ): Promise<{ remove: () => void }>;
 };
 
-async function getSpeechRecognitionPlugin(): Promise<SpeechRecognitionPlugin | null> {
+// 关键:必须把插件**包在普通对象里**返回 —— 绝不能让 Capacitor 插件 proxy
+// 直接穿过 async/await 边界返回。proxy 是 "thenable"(带 .then 陷阱),
+// `await getSpeechRecognitionPlugin()` 会触发 `SpeechRecognition.then()` →
+// Capacitor 抛 `"SpeechRecognition.then()" is not implemented on android`。
+// 包一层后 await 到的是普通对象(非 thenable),就不会触发 .then。
+async function getSpeechRecognitionPlugin(): Promise<{ plugin: SpeechRecognitionPlugin } | null> {
   if (typeof window === 'undefined') return null;
   try {
     const mod = await import('@capacitor-community/speech-recognition');
-    return mod.SpeechRecognition as unknown as SpeechRecognitionPlugin;
+    return { plugin: mod.SpeechRecognition as unknown as SpeechRecognitionPlugin };
   } catch {
     return null;
   }
@@ -62,8 +67,9 @@ async function getSpeechRecognitionPlugin(): Promise<SpeechRecognitionPlugin | n
  * 在浏览器预览环境（Capacitor 插件不可用）下返回 false。
  */
 export async function isAvailable(): Promise<boolean> {
-  const plugin = await getSpeechRecognitionPlugin();
-  if (!plugin) return false;
+  const wrapped = await getSpeechRecognitionPlugin();
+  if (!wrapped) return false;
+  const plugin = wrapped.plugin;
   try {
     const result = await plugin.available();
     return result.available === true;
@@ -77,8 +83,9 @@ export async function isAvailable(): Promise<boolean> {
  * 返回 'granted' 表示已授权，'denied' 表示被拒绝。
  */
 export async function requestPermission(): Promise<'granted' | 'denied'> {
-  const plugin = await getSpeechRecognitionPlugin();
-  if (!plugin) return 'denied';
+  const wrapped = await getSpeechRecognitionPlugin();
+  if (!wrapped) return 'denied';
+  const plugin = wrapped.plugin;
   try {
     const result = await plugin.requestPermissions();
     return result.speechRecognition === 'granted' ? 'granted' : 'denied';
@@ -110,8 +117,9 @@ export interface ListenOptions {
  * @throws Error  其他原生错误（message = 实际错误信息）
  */
 export async function listen(opts: ListenOptions = {}): Promise<string> {
-  const plugin = await getSpeechRecognitionPlugin();
-  if (!plugin) throw new Error('NO_RECOGNIZER');
+  const wrapped = await getSpeechRecognitionPlugin();
+  if (!wrapped) throw new Error('NO_RECOGNIZER');
+  const plugin = wrapped.plugin;
 
   const lang = opts.language ?? 'zh-CN';
   const wantPartial = typeof opts.onPartial === 'function';
@@ -171,8 +179,9 @@ export async function listen(opts: ListenOptions = {}): Promise<string> {
  * best-effort：不抛出异常。
  */
 export async function stop(): Promise<void> {
-  const plugin = await getSpeechRecognitionPlugin();
-  if (!plugin) return;
+  const wrapped = await getSpeechRecognitionPlugin();
+  if (!wrapped) return;
+  const plugin = wrapped.plugin;
   try {
     await plugin.stop();
   } catch {
