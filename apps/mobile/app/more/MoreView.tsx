@@ -126,7 +126,7 @@ export function MoreView() {
     <div className="mobile-shell">
       <header className="mobile-header">
         <div className="mobile-brand">更多</div>
-        <div className="mobile-subtitle">read-only views · 在桌面端配置</div>
+        <div className="mobile-subtitle">只读视图 · 在桌面端配置</div>
       </header>
 
       {state.status === 'error' ? (
@@ -141,7 +141,7 @@ export function MoreView() {
       <section className="mobile-section">
         <MoreSection
           title="我的"
-          summary={s?.meRole ?? 'persona + budget'}
+          summary={s?.meRole ?? '人设 + 预算'}
           deskHref="/me"
         >
           <div className="m-card-body">{s?.meName ?? (s ? '未设置' : '…')}</div>
@@ -149,7 +149,7 @@ export function MoreView() {
 
         <MoreSection
           title="今日"
-          summary="job board · 全屏 jobs-in-flight + deliverables 视图"
+          summary="全屏任务看板 · 进行中 + 交付视图"
           mobileHref="/today"
         >
           <p className="m-empty-hint">M-L-017 后从 tab 移到此处 · 短列表已合并进工作台顶栏</p>
@@ -157,7 +157,7 @@ export function MoreView() {
 
         <MoreSection
           title="团队"
-          summary="staff 名册 · 在 成员 tab 浏览 / 在桌面端 hire-dismiss"
+          summary="员工名册 · 在成员列表浏览 / 在桌面端招募或解散"
           badge={s ? String(s.staffCount) : undefined}
           mobileHref="/staff"
         >
@@ -175,7 +175,7 @@ export function MoreView() {
 
         <MoreSection
           title="技能"
-          summary="skills catalog · yours · examples"
+          summary="技能目录 · 我的 · 示例"
           badge={s ? badge(s.skills) : undefined}
           deskHref="/skills"
         >
@@ -186,7 +186,7 @@ export function MoreView() {
 
         <MoreSection
           title="模板"
-          summary="templates catalog · yours · examples"
+          summary="模板目录 · 我的 · 示例"
           badge={s ? badge(s.templates) : undefined}
           deskHref="/templates"
         >
@@ -197,7 +197,7 @@ export function MoreView() {
 
         <MoreSection
           title="引用"
-          summary="references catalog · yours · examples"
+          summary="引用目录 · 我的 · 示例"
           badge={s ? badge(s.references) : undefined}
           deskHref="/references"
         >
@@ -208,7 +208,7 @@ export function MoreView() {
 
         <MoreSection
           title="连接"
-          summary="peer connections (V2) · cross-desk handoffs"
+          summary="跨桌面连接 (V2) · 同伴协作传递"
           badge={s ? String(s.connectionCount) : undefined}
           deskHref="/connections"
         >

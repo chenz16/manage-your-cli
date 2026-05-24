@@ -72,9 +72,9 @@ export async function POST(req: Request): Promise<Response> {
   const substrate = secretary.substrate;
   const cwd = substrate.kind === 'cli_agent' ? substrate.cwd : undefined;
   const binary = substrate.kind === 'cli_agent' && substrate.binary ? substrate.binary : 'claude';
-  // Pass raw WeChat text as user message; no prior history context for this
-  // stateless adapter call (each WeChat message is a fresh turn).
-  const prompt = buildOwnerPrompt(text.trim(), []);
+  // WeChat users are always Chinese-speaking. Force zh-CN regardless of owner
+  // language_preference so the bot NEVER replies in English (fixes 'o7 Ready.' bug).
+  const prompt = buildOwnerPrompt(text.trim(), [], null, null, 'zh-CN');
 
   console.log(JSON.stringify({
     audit: 'wechat.reply.start',

@@ -82,18 +82,40 @@ export function buildOwnerPrompt(
   messages: ChatMessage[],
   activeProjectContext?: { name: string; memoryText: string } | null,
   client?: string | null,
+  language?: 'en' | 'zh-CN' | null,
 ): string {
   const wechatContexts = extractWeChatContextBlocks(messages);
   const isMobile = client === 'mobile';
+  // Default language is zh-CN (product default per ADR; WeChat path always zh-CN).
+  const effectiveLang: 'en' | 'zh-CN' = language === 'en' ? 'en' : 'zh-CN';
 
   const parts: string[] = [];
 
-  // Client-awareness directives — injected first so the Secretary can calibrate
-  // verbosity before reading any context.
+  // ── Language directive — injected FIRST, forceful, non-negotiable ────────
+  // The Secretary must reply primarily in the owner's chosen language.
+  // Default is zh-CN. Only falls back to English when owner explicitly set 'en'.
+  if (effectiveLang === 'zh-CN') {
+    parts.push(
+      '[语言要求] 必须以中文为主回答。除非用户明确要求用其他语言，否则一律用简体中文回复。不得用英文开口，不得夹杂无必要的英文短语。',
+      '',
+    );
+  } else {
+    parts.push(
+      '[Language] Reply in English. Use English for all responses unless the user explicitly asks for another language.',
+      '',
+    );
+  }
+
+  // Client-awareness directives — injected after language directive.
   // Mobile: concise, scannable, conclusion-first. Desktop: mild brevity nudge.
   if (isMobile) {
     parts.push(
       '[系统指示] 用户在手机上，请保持回答精简可扫读，控制长度，先给结论再展开。避免不必要的长篇大论。',
+      '',
+    );
+  } else if (effectiveLang === 'zh-CN') {
+    parts.push(
+      '[系统指示] 保持回答聚焦，避免冗长。',
       '',
     );
   } else {

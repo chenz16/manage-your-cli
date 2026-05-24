@@ -21,5 +21,7 @@ export function getEffectiveLanguage(
   if (owner.language_preference === 'en') return 'en';
   if (owner.language_preference === 'zh-CN') return 'zh-CN';
   if (navigatorLanguage?.startsWith('zh')) return 'zh-CN';
-  return 'en';
+  // Product default is zh-CN (WeChat/mobile-first product for Chinese users).
+  // Only 'en' explicit preference overrides to English; auto + browser-zh → zh-CN.
+  return 'zh-CN';
 }

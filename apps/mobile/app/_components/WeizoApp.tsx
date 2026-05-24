@@ -144,6 +144,7 @@ interface OwnerProfile {
   owner_name?: string;
   owner_role?: string;
   owner_intro?: string;
+  language_preference?: 'en' | 'zh-CN' | 'auto';
 }
 interface OwnerSnapshot {
   owner?: { name?: string; role?: string; intro?: string };
@@ -3087,6 +3088,8 @@ function MeTab({
   const [personaApplied, setPersonaApplied] = useState('');
   const [error, setError] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [langPref, setLangPref] = useState<'zh-CN' | 'en'>('zh-CN');
+  const [savingLang, setSavingLang] = useState(false);
   const [cliUsage, setCliUsage] = useState<CliUsageResponse | null>(null);
   const [usageOpen, setUsageOpen] = useState(false);
 
@@ -3110,6 +3113,8 @@ function MeTab({
       setMeData(meJson);
       setSnapshot(snapJson);
       setPersonas(Array.isArray(pJson.items) ? pJson.items : []);
+      // Seed language preference from owner config (default zh-CN).
+      setLangPref(meJson.language_preference === 'en' ? 'en' : 'zh-CN');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -3125,6 +3130,22 @@ function MeTab({
       .then((data) => { if (data) setCliUsage(data); })
       .catch(() => undefined);
   }, []);
+
+  async function saveLangPref(next: 'zh-CN' | 'en') {
+    setLangPref(next);
+    setSavingLang(true);
+    try {
+      await holonApiFetch('/api/v1/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language_preference: next }),
+      });
+    } catch {
+      // best-effort; local state already updated
+    } finally {
+      setSavingLang(false);
+    }
+  }
 
   async function applyPersona(persona: PersonaPreset) {
     setSavingId(persona.id);
@@ -3200,6 +3221,28 @@ function MeTab({
         </div>
         {personaApplied && <div className="mobile-me-note">{personaApplied}</div>}
         {loading && <div className="mobile-me-note">加载人设…</div>}
+      </div>
+      <div className="mobile-me-section">
+        <div className="mobile-me-label">语言{savingLang ? ' …' : ''}</div>
+        <div className="mobile-me-lang-row">
+          <button
+            type="button"
+            className={`mobile-me-lang-btn${langPref === 'zh-CN' ? ' is-active' : ''}`}
+            onClick={() => { void saveLangPref('zh-CN'); }}
+            disabled={savingLang}
+          >
+            中文
+          </button>
+          <button
+            type="button"
+            className={`mobile-me-lang-btn${langPref === 'en' ? ' is-active' : ''}`}
+            onClick={() => { void saveLangPref('en'); }}
+            disabled={savingLang}
+          >
+            English
+          </button>
+        </div>
+        <div className="mobile-me-note">小秘回复语言（默认中文）</div>
       </div>
       <IntegrationsSection meData={meData} deskBaseUrl={connection.baseUrl} onRefresh={() => void load()} />
       <button type="button" className="mobile-feedback-button" onClick={() => setUsageOpen(true)}>

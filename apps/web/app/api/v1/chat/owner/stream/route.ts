@@ -1,6 +1,7 @@
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 import { spawn } from 'node:child_process';
-import { getOrCreateSecretaryStaff, readBossMemory, getProject, appendChatMessage } from '@holon/core';
+import { getOrCreateSecretaryStaff, readBossMemory, getProject, appendChatMessage, getOwner } from '@holon/core';
+import { getEffectiveLanguage } from '@/lib/i18n/get-effective-language';
 import { sendWarmTurn } from '@/lib/warm-agent';
 import { parseJsonRequestBody, extractChatMessages, extractLatestUserText, buildOwnerPrompt } from '@/lib/owner-chat-helpers';
 
@@ -88,11 +89,17 @@ export async function POST(req: Request): Promise<Response> {
       : undefined;
   const client = typeof clientId === 'string' ? clientId : null;
 
+  // Resolve language preference server-side from the owner config so the
+  // Secretary directive is authoritative even before the client sends the pref.
+  // Default is zh-CN (product default); only 'en' overrides to English.
+  const owner = getOwner();
+  const language = getEffectiveLanguage(owner);
+
   const secretary = getOrCreateSecretaryStaff();
   const substrate = secretary.substrate;
   const cwd = substrate.kind === 'cli_agent' ? substrate.cwd : undefined;
   const binary = substrate.kind === 'cli_agent' && substrate.binary ? substrate.binary : 'claude';
-  const ownerPrompt = buildOwnerPrompt(userText, messages, activeProjectContext, client);
+  const ownerPrompt = buildOwnerPrompt(userText, messages, activeProjectContext, client, language);
 
   // Headless: drive the OFFICIAL CLI non-interactively (claude -p / codex exec) and
   // stream its clean stdout. No TUI screen-scrape. Subscription-only; NO API key.
