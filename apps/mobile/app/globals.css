@@ -892,6 +892,28 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-connection-banner:disabled { color: #b86b6b; }
 
+/* Not-paired banner: amber tint, flex row, action link on the right */
+.mobile-not-paired-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  background: #fffbeb;
+  border-bottom-color: #e6c96b;
+  color: #7a5a00;
+}
+.mobile-not-paired-action {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--gold-ink);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
 .mobile-header-left,
 .mobile-header-right {
   position: absolute;

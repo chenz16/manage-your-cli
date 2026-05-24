@@ -46,6 +46,7 @@ import {
   type MobileDesktopConnection,
 } from '../_lib/mobile-runtime';
 import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/device-tts';
+import { deskOrigin } from '../_lib/desk-origin';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -2651,6 +2652,24 @@ function MeTab({
 
 // ─── Header & bottom nav ──────────────────────────────────────────────────────
 
+// Thin top-strip shown only when no desktop connection is stored.
+// Hides automatically once `paired` becomes true (holon:mobile-paired fires → WeizoApp
+// calls readDesktopConnection + setConnection → the paired prop flips to true).
+function NotPairedBanner({ paired }: { paired: boolean }) {
+  if (paired) return null;
+  return (
+    <div className="mobile-connection-banner mobile-not-paired-banner">
+      未连接桌面
+      <a
+        href="/pairing"
+        className="mobile-not-paired-action"
+      >
+        去配对
+      </a>
+    </div>
+  );
+}
+
 function ConnectionBanner({
   offline,
   checking,
@@ -2882,7 +2901,7 @@ function QrScanner({
 // ─── Pairing screen (inline — avoids the old multi-route redirect) ────────────
 
 function PairingPrompt({ onPaired }: { onPaired: () => void }) {
-  const [baseUrl, setBaseUrl] = useState('');
+  const [baseUrl, setBaseUrl] = useState(deskOrigin);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -3118,12 +3137,12 @@ export function WeizoApp() {
     setSelectedStaff(null);
   }
 
-  // Don't flash pairing screen on SSR — wait until client boot
+  // Don't flash anything on SSR — wait until client boot
   if (!booted) return null;
-  if (!connection) return <PairingPrompt onPaired={handlePaired} />;
 
   return (
     <main className="mobile-app-shell mobile-static-shell mobile-wechat-shell">
+      <NotPairedBanner paired={!!connection} />
       <ConnectionBanner
         offline={desktopOffline}
         checking={checkingConnection}
@@ -3193,7 +3212,9 @@ export function WeizoApp() {
           />
         )}
         {tab === 'me' && (
-          <MeTab connection={connection} onDisconnect={disconnect} />
+          connection
+            ? <MeTab connection={connection} onDisconnect={disconnect} />
+            : <PairingPrompt onPaired={handlePaired} />
         )}
       </section>
       <BottomNav active={tab} badges={badges} onTab={openTab} />

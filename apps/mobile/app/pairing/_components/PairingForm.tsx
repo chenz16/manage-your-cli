@@ -6,6 +6,7 @@ import {
   normalizeBaseUrl,
   writeDesktopConnection,
 } from '../../_lib/mobile-runtime';
+import { deskOrigin } from '../../_lib/desk-origin';
 
 // Matches apps/web/app/api/v1/pair/claim/route.ts success shape:
 //   { ok: true; device_token: string; device_id: string; paired_at: string }
@@ -24,7 +25,7 @@ interface PairClaimErr {
 }
 
 export function PairingForm() {
-  const [baseUrl, setBaseUrl] = useState('');
+  const [baseUrl, setBaseUrl] = useState(deskOrigin);
   const [pairingCode, setPairingCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
