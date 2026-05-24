@@ -56,20 +56,30 @@ export async function GET(req: Request): Promise<Response> {
     return jsonResp({ error: `iLink error ${String(r['errcode'])}: ${String(r['errmsg'] ?? '')}` }, 502);
   }
 
+  // iLink response shape (confirmed by nightsailer/wechat-clawbot, x1ah/wechat-ilink-demo,
+  // epiral/weixin-bot protocol spec):
+  //   qrcode            → the polling token / id (used for get_qrcode_status; NOT the scan payload)
+  //   qrcode_img_content → a weixin.qq.com URL that WeChat recognises when scanned
+  //                        (e.g. "https://weixin.qq.com/x/cAbCdEfGhIj")
+  //                        This is the CORRECT value to encode as the QR image data.
+  //
+  // BUG that was here: the code was encoding qrcode_id as the QR data, but qrcode_id is
+  // only a poll token — WeChat cannot bind from it.  We must encode qrcode_img_content.
   const qrcode_id = r['qrcode'] as string | undefined;
-  // qrcode_img_content is a WeChat QR scan page URL (not renderable as img src).
-  // We render it via qrserver.com so the browser can display it as a scannable image.
-  const qrcode_img_content = r['qrcode_img_content'] as string | undefined;
+  const qrcode_scan_url = r['qrcode_img_content'] as string | undefined;
 
   if (!qrcode_id) {
     return jsonResp({ error: 'iLink response missing qrcode field', raw: r }, 502);
   }
+  if (!qrcode_scan_url) {
+    return jsonResp({ error: 'iLink response missing qrcode_img_content (scan URL)', raw: r }, 502);
+  }
 
   // qrcode_url: a QR image the browser can render (<img src=...>).
-  // We encode the iLink qrcode_id (the scan payload) as a QR via qrserver.com.
-  const qrcode_url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrcode_id)}`;
+  // We encode the SCAN URL (qrcode_img_content) as the QR data so WeChat can bind.
+  const qrcode_url = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrcode_scan_url)}`;
 
-  return jsonResp({ qrcode_id, qrcode_url, qrcode_scan_url: qrcode_img_content ?? null }, 200);
+  return jsonResp({ qrcode_id, qrcode_url, qrcode_scan_url }, 200);
 }
 
 export const dynamic = 'force-dynamic';
