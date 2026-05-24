@@ -18,6 +18,7 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
   useLocalRuntime,
   type ChatModelAdapter,
 } from '@assistant-ui/react';
@@ -318,7 +319,27 @@ function MobileMentionTypeahead({ staff }: { staff: readonly Staff[] }) {
 
 // ─── 小秘 chat (owner SSE) ────────────────────────────────────────────────────
 
-function MobileOwnerChat({ staff }: { staff: readonly Staff[] }) {
+/** Rendered inside AssistantRuntimeProvider — seeds the composer then clears. */
+function ComposerSeeder({ seed, onSeedConsumed }: { seed: string | null; onSeedConsumed: () => void }) {
+  const aui = useAui();
+  useEffect(() => {
+    if (!seed) return;
+    aui.composer().setText(seed);
+    onSeedConsumed();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
+  return null;
+}
+
+function MobileOwnerChat({
+  staff,
+  seed,
+  onSeedConsumed,
+}: {
+  staff: readonly Staff[];
+  seed: string | null;
+  onSeedConsumed: () => void;
+}) {
   const adapter = useMemo(() => makeMobileOwnerAdapter(), []);
   const runtime = useLocalRuntime(adapter);
   const [mounted, setMounted] = useState(false);
@@ -330,6 +351,7 @@ function MobileOwnerChat({ staff }: { staff: readonly Staff[] }) {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <ComposerSeeder seed={seed} onSeedConsumed={onSeedConsumed} />
       <ThreadPrimitive.Root className="chat-thread mobile-chat-thread">
         <ThreadPrimitive.Viewport className="chat-viewport mobile-chat-viewport">
           <ThreadPrimitive.Empty>
@@ -522,11 +544,15 @@ function MobileChatPanel({
   staff,
   staffError,
   onPick,
+  seed,
+  onSeedConsumed,
 }: {
   activeChat: ActiveChat;
   staff: readonly Staff[];
   staffError: string;
   onPick: (chat: Exclude<ActiveChat, null>) => void;
+  seed: string | null;
+  onSeedConsumed: () => void;
 }) {
   const chat = activeChat ?? { kind: 'owner' as const };
   return (
@@ -536,7 +562,7 @@ function MobileChatPanel({
         <div className="mobile-error mobile-chat-error">员工列表加载失败：{staffError}</div>
       )}
       {chat.kind === 'owner' ? (
-        <MobileOwnerChat staff={staff} />
+        <MobileOwnerChat staff={staff} seed={seed} onSeedConsumed={onSeedConsumed} />
       ) : (
         <StaffChat key={chat.staff.id} staff={chat.staff} />
       )}
@@ -635,7 +661,7 @@ function StaffProfile({
 
 // ─── 看板 — work tracker (待分配 LEAD) ───────────────────────────────────────
 
-function TodoBacklog() {
+function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
   const [items, setItems] = useState<Todo[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -741,10 +767,10 @@ function TodoBacklog() {
               <button
                 type="button"
                 className="weizo-todo-action"
-                onClick={() => void updateTodo(todo.id, 'delegated')}
-                title="派给小秘"
+                onClick={() => onTalkToSecretary(todo.text)}
+                title="对话小秘"
               >
-                派给小秘
+                对话小秘
               </button>
               <button
                 type="button"
@@ -920,10 +946,10 @@ function DelivSection() {
   );
 }
 
-function WorkTracker() {
+function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
   return (
     <div className="mobile-work">
-      <TodoBacklog />
+      <TodoBacklog onTalkToSecretary={onTalkToSecretary} />
       <ActiveJobs />
       <DelivSection />
     </div>
@@ -1616,6 +1642,7 @@ export function WeizoApp() {
   const [tab, setTab] = useState<TabKey>('chats');
   const [staff, setStaff] = useState<Staff[]>([]);
   const [activeChat, setActiveChat] = useState<ActiveChat>({ kind: 'owner' });
+  const [chatSeed, setChatSeed] = useState<string | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [staffError, setStaffError] = useState('');
   const [desktopOffline, setDesktopOffline] = useState(false);
@@ -1724,6 +1751,8 @@ export function WeizoApp() {
             staff={staff}
             staffError={staffError}
             onPick={setActiveChat}
+            seed={chatSeed}
+            onSeedConsumed={() => setChatSeed(null)}
           />
         )}
         {tab === 'contacts' && (
@@ -1741,7 +1770,15 @@ export function WeizoApp() {
             <Contacts staff={staff} onOpen={setSelectedStaff} />
           )
         )}
-        {tab === 'work' && <WorkTracker />}
+        {tab === 'work' && (
+          <WorkTracker
+            onTalkToSecretary={(text) => {
+              setChatSeed(text);
+              setTab('chats');
+              setActiveChat({ kind: 'owner' });
+            }}
+          />
+        )}
         {tab === 'me' && (
           <MeTab connection={connection} onDisconnect={disconnect} />
         )}
