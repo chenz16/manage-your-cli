@@ -153,10 +153,11 @@ fi
 # Idempotent: only patches if windowSoftInputMode is not already set.
 log "2.5/6 patching AndroidManifest.xml — windowSoftInputMode=adjustResize"
 if ! grep -q 'windowSoftInputMode' "$MANIFEST"; then
-  # Capacitor scaffolds a single <activity line for MainActivity; insert the
-  # attribute on that same line. The sed pattern anchors to the activity element
-  # that contains android:name= to avoid matching other <activity> tags.
-  sed -i 's/\(<activity[^>]*android:name="[^"]*MainActivity[^"]*"\)/\1\n            android:windowSoftInputMode="adjustResize"/' "$MANIFEST" \
+  # Capacitor scaffolds the <activity> tag MULTI-LINE (tag name on its own line,
+  # each attribute on a following line), so a single-line `<activity ...name=...`
+  # match fails. Instead append the attribute as a new line right AFTER the
+  # MainActivity android:name= line (which is unique to MainActivity).
+  sed -i '/android:name="[^"]*MainActivity"/a\            android:windowSoftInputMode="adjustResize"' "$MANIFEST" \
     || fail "windowSoftInputMode sed failed"
   grep -q 'windowSoftInputMode' "$MANIFEST" \
     || fail "windowSoftInputMode patch did not take — check sed invocation"
