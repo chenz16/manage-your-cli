@@ -1991,3 +1991,15 @@ select:focus-visible,
   margin-top: 4px;
 }
 .bug-modal-textarea:focus { border-color: var(--ink); }
+
+/* Feedback button when surfaced inside /me config (moved out of the left
+ * nav — owner: "bug report 放到 config 里面"). Give it a clear bordered
+ * button look instead of the transparent nav-rail treatment. */
+.me-feedback-action { margin-bottom: 14px; }
+.me-feedback-action .bug-fab-inline {
+  border: 1px solid var(--line);
+  background: var(--bg-alt);
+  color: var(--ink);
+  width: 100%;
+}
+.me-feedback-action .bug-fab-inline:hover { background: var(--bg-dark); color: #fff; }
