@@ -2054,3 +2054,28 @@ button, input, textarea, select { font: inherit; }
 .mobile-connector-plugin-dot { flex: 0 0 auto; font-size: 10px; }
 .mobile-connector-plugin-name { flex: 1 1 auto; font-size: 13.5px; color: #111; }
 .mobile-connector-plugin-status { flex: 0 0 auto; font-size: 11px; color: #777; }
+
+/* 扫码连接 */
+.mobile-scan-connect-btn {
+  width: 100%; min-height: 44px; border: 1px solid var(--line, #e2e2df);
+  border-radius: 8px; background: #fff; color: #111; padding: 0 14px;
+  font: inherit; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+}
+.mobile-scan-connect-btn:active { background: #f5f5f3; }
+.mobile-scan-connect-icon { font-size: 18px; line-height: 1; }
+.mobile-scan-connect-result {
+  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  background: #f5f5f3; font-size: 13px; color: #444;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mobile-scan-connect-hint { line-height: 1.5; }
+.mobile-scan-connect-url {
+  word-break: break-all; color: #1a56db; font-size: 12px;
+}
+.mobile-scan-connect-reset {
+  align-self: flex-start; border: 0; border-radius: 6px;
+  background: #e2e2df; color: #555; padding: 4px 10px;
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.mobile-scan-connect-reset:active { background: #d4d4d0; }

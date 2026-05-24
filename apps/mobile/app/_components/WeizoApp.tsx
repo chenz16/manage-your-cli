@@ -1903,6 +1903,94 @@ function PluginsBlock() {
   );
 }
 
+// ─── 扫一扫 / 扫码连接 ───────────────────────────────────────────────────────
+
+type ScanConnectResult =
+  | { kind: 'wechat' }
+  | { kind: 'a2a'; url: string }
+  | { kind: 'unknown'; raw: string };
+
+function classifyQrText(text: string): ScanConnectResult {
+  const t = text.trim();
+  if (/weixin\.qq\.com/i.test(t)) return { kind: 'wechat' };
+  if (t.includes('/.well-known/agent-card') || /^https?:\/\//i.test(t)) {
+    const base = t.replace(/\/$/, '').replace(/\/\.well-known\/agent-card(\.json)?$/, '');
+    return { kind: 'a2a', url: base };
+  }
+  return { kind: 'unknown', raw: t };
+}
+
+function ScanConnectSection() {
+  const [scanOpen, setScanOpen] = useState(false);
+  const [result, setResult] = useState<ScanConnectResult | null>(null);
+
+  function handleResult(text: string) {
+    setScanOpen(false);
+    setResult(classifyQrText(text));
+  }
+
+  function handleClose() {
+    setScanOpen(false);
+  }
+
+  function reset() {
+    setResult(null);
+  }
+
+  if (scanOpen) {
+    return (
+      <QrScanner onResult={handleResult} onClose={handleClose} />
+    );
+  }
+
+  return (
+    <div className="mobile-me-section">
+      <div className="mobile-me-label">扫码连接</div>
+      <div className="mobile-me-note" style={{ marginBottom: 8 }}>
+        用摄像头扫另一个 Agent 的二维码，直接完成连接。
+      </div>
+      <button
+        type="button"
+        className="mobile-scan-connect-btn"
+        onClick={() => { setResult(null); setScanOpen(true); }}
+      >
+        <span className="mobile-scan-connect-icon">📷</span>
+        <span>扫一扫 / 扫码连接</span>
+      </button>
+
+      {result && (
+        <div className="mobile-scan-connect-result">
+          {result.kind === 'wechat' && (
+            <span className="mobile-scan-connect-hint">
+              这是微信码，微信连接请在桌面操作。
+            </span>
+          )}
+          {result.kind === 'a2a' && (
+            <span className="mobile-scan-connect-hint">
+              扫到 A2A 地址：<span className="mobile-scan-connect-url">{result.url}</span>
+              {' '}— 在桌面 /connectors 完成连接。
+            </span>
+          )}
+          {result.kind === 'unknown' && (
+            <span className="mobile-scan-connect-hint">
+              无法识别的二维码。
+            </span>
+          )}
+          <button
+            type="button"
+            className="mobile-scan-connect-reset"
+            onClick={reset}
+          >
+            清除
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 集成列表 ─────────────────────────────────────────────────────────────────
+
 function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
   meData: MeOwnerData | null;
   deskBaseUrl: string;
@@ -2024,6 +2112,9 @@ function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
     <>
       {/* ── Agent Card QR ── */}
       <AgentCardSection deskBaseUrl={deskBaseUrl} />
+
+      {/* ── 扫一扫 / 扫码连接 ── */}
+      <ScanConnectSection />
 
       {/* ── 集成 / 连接服务 ── */}
       <div className="mobile-me-section">
