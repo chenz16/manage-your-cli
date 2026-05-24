@@ -1910,6 +1910,18 @@ type ScanConnectResult =
   | { kind: 'a2a'; url: string }
   | { kind: 'unknown'; raw: string };
 
+type A2aConnectState =
+  | { phase: 'idle' }
+  | { phase: 'connecting' }
+  | { phase: 'success'; peerName: string }
+  | { phase: 'error'; message: string };
+
+interface A2aConnectResponse {
+  ok: boolean;
+  peer?: { id?: string; name?: string };
+  error?: string;
+}
+
 function classifyQrText(text: string): ScanConnectResult {
   const t = text.trim();
   if (/weixin\.qq\.com/i.test(t)) return { kind: 'wechat' };
@@ -1923,10 +1935,40 @@ function classifyQrText(text: string): ScanConnectResult {
 function ScanConnectSection() {
   const [scanOpen, setScanOpen] = useState(false);
   const [result, setResult] = useState<ScanConnectResult | null>(null);
+  const [a2aState, setA2aState] = useState<A2aConnectState>({ phase: 'idle' });
 
   function handleResult(text: string) {
     setScanOpen(false);
-    setResult(classifyQrText(text));
+    const classified = classifyQrText(text);
+    setResult(classified);
+    setA2aState({ phase: 'idle' });
+    if (classified.kind === 'a2a') {
+      void connectA2a(classified.url);
+    }
+  }
+
+  async function connectA2a(url: string) {
+    setA2aState({ phase: 'connecting' });
+    try {
+      const res = await holonApiFetch('/api/v1/a2a/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json().catch(() => ({})) as A2aConnectResponse;
+      if (res.status === 401 || res.status === 403) {
+        setA2aState({ phase: 'error', message: '请先在「我」里配对桌面端' });
+        return;
+      }
+      if (!res.ok || !data.ok) {
+        setA2aState({ phase: 'error', message: data.error ?? `连接失败 (${res.status})` });
+        return;
+      }
+      const peerName = data.peer?.name ?? url;
+      setA2aState({ phase: 'success', peerName });
+    } catch (err) {
+      setA2aState({ phase: 'error', message: err instanceof Error ? err.message : '网络错误，请重试' });
+    }
   }
 
   function handleClose() {
@@ -1935,6 +1977,7 @@ function ScanConnectSection() {
 
   function reset() {
     setResult(null);
+    setA2aState({ phase: 'idle' });
   }
 
   if (scanOpen) {
@@ -1952,7 +1995,7 @@ function ScanConnectSection() {
       <button
         type="button"
         className="mobile-scan-connect-btn"
-        onClick={() => { setResult(null); setScanOpen(true); }}
+        onClick={() => { setResult(null); setA2aState({ phase: 'idle' }); setScanOpen(true); }}
       >
         <span className="mobile-scan-connect-icon">📷</span>
         <span>扫一扫 / 扫码连接</span>
@@ -1966,10 +2009,28 @@ function ScanConnectSection() {
             </span>
           )}
           {result.kind === 'a2a' && (
-            <span className="mobile-scan-connect-hint">
-              扫到 A2A 地址：<span className="mobile-scan-connect-url">{result.url}</span>
-              {' '}— 在桌面 /connectors 完成连接。
-            </span>
+            <>
+              {a2aState.phase === 'connecting' && (
+                <span className="mobile-scan-connect-hint">
+                  连接中…
+                </span>
+              )}
+              {a2aState.phase === 'success' && (
+                <span className="mobile-scan-connect-hint mobile-scan-connect-hint-ok">
+                  已连接智能体「{a2aState.peerName}」
+                </span>
+              )}
+              {a2aState.phase === 'error' && (
+                <span className="mobile-scan-connect-hint mobile-scan-connect-hint-err">
+                  连接失败：{a2aState.message}
+                </span>
+              )}
+              {a2aState.phase === 'idle' && (
+                <span className="mobile-scan-connect-hint">
+                  扫到 A2A 地址：<span className="mobile-scan-connect-url">{result.url}</span>
+                </span>
+              )}
+            </>
           )}
           {result.kind === 'unknown' && (
             <span className="mobile-scan-connect-hint">
