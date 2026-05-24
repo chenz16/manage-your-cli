@@ -2243,11 +2243,12 @@ button, input, textarea, select { font: inherit; }
   .mobile-mention-menu { max-width: 410px; margin: 0 auto; }
 }
 
-/* Composer: make the 小秘/staff input fill the row (was sizing too small). */
+/* Composer: column layout so the attachment preview sits above the input row. */
 .mobile-chat-composer {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
 }
 .mobile-chat-composer .chat-input {
   flex: 1 1 auto;
@@ -2279,6 +2280,91 @@ button, input, textarea, select { font: inherit; }
   color: #fff; border: none; padding: 0;
   font-size: 16px;
 }
+
+/* ── Attachment button ── */
+.mobile-attach-button {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #202124;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.mobile-attach-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── composer-input-row: voice + attach + textarea + send on one row ── */
+.composer-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+.composer-input-row .chat-input {
+  flex: 1 1 auto;
+}
+
+/* ── attachment preview bar (above the input row) ── */
+.attachment-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #eef6f1;
+  border: 1px solid #c8e6d2;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.attachment-preview-image {
+  width: 44px; height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: 0 0 44px;
+  border: 1px solid #ccc;
+}
+.attachment-file-icon {
+  font-size: 24px;
+  flex: 0 0 auto;
+}
+.attachment-preview-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.attachment-preview-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a3a28;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-preview-meta {
+  font-size: 11px;
+  color: #5a7a68;
+}
+.attachment-remove-btn {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.10);
+  color: #444;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.attachment-remove-btn:hover { background: rgba(0,0,0,0.18); }
 
 /* ── Phone-frame v2 (robust): make .mobile-app-shell a `transform` containing
    block so the position:fixed bottom nav is pinned to the FRAME, not the
