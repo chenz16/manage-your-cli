@@ -18,12 +18,21 @@ const config: CapacitorConfig = {
     cleartext: true,
   },
   plugins: {
-    // M-L-FIX1: enable CapacitorHttp so the native bridge patches window.fetch
-    // and XMLHttpRequest at startup. This routes all fetch calls through the
-    // native HTTP stack, bypassing WebView CORS restrictions and Android's
-    // cleartext-traffic block for http:// LAN desk addresses.
+    // SSE-FIX: CapacitorHttp is DISABLED. When enabled it patches window.fetch
+    // to the native HTTP stack, which buffers the entire response body before
+    // resolving — this killed SSE streaming (chat reply appeared all-at-once).
+    //
+    // Cross-origin + cleartext access is now solved correctly:
+    //   1. apps/web/middleware.ts adds CORS headers (Access-Control-Allow-Origin,
+    //      Allow-Headers: x-holon-device-token, OPTIONS preflight) for all
+    //      /api/v1/* routes, covering the Capacitor origin (http://localhost on
+    //      Android, capacitor://localhost on iOS).
+    //   2. server.cleartext:true + usesCleartextTraffic (patched in the build
+    //      script) allow http:// LAN addresses at the OS level.
+    // The real WebView fetch (now unpatched) supports ReadableStream + SSE,
+    // so chunks arrive incrementally and the chat UI updates token-by-token.
     CapacitorHttp: {
-      enabled: true,
+      enabled: false,
     },
   },
 };

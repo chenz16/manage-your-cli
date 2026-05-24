@@ -136,12 +136,10 @@ export function installMobileApiFetchProxy(): void {
     __holonOriginalFetch?: FetchLike;
   };
   if (w[FETCH_PROXY_MARK]) return;
-  // M-L-FIX1: CapacitorHttp patches window.fetch during bridge init, which
-  // happens before React mounts (and before this function is ever called).
-  // We capture the already-native-patched fetch here, then store it on the
-  // window so the proxy closure resolves it at call time rather than relying
-  // solely on the closed-over variable. This guarantees correct composition
-  // regardless of any future ordering change between bridge init and app mount.
+  // Capture the real WebView fetch at install time. CapacitorHttp is now
+  // disabled (see capacitor.config.ts), so window.fetch is the true streaming-
+  // capable fetch — no native-bridge buffering. We store it on the window so
+  // the proxy closure always resolves the right reference at call time.
   const nativeFetch = window.fetch.bind(window);
   w.__holonOriginalFetch = nativeFetch;
   w[FETCH_PROXY_MARK] = true;
