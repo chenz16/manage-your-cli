@@ -1312,7 +1312,7 @@ function BottomNav({
   onTab: (tab: TabKey) => void;
 }) {
   const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
-    { key: 'chats', label: '微信', icon: '💬' },
+    { key: 'chats', label: '对话', icon: '💬' },
     { key: 'contacts', label: '通讯录', icon: '👥' },
     { key: 'work', label: '看板', icon: '📋' },
     { key: 'me', label: '我', icon: '⚙️' },
@@ -1348,7 +1348,7 @@ function tabTitle(tab: TabKey, selectedStaff: Staff | null): string {
     case 'contacts': return '通讯录';
     case 'work': return '看板';
     case 'me': return '我';
-    default: return '微信';
+    default: return '对话';
   }
 }
 
