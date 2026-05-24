@@ -5,7 +5,7 @@ interface Context { params: Promise<{ id: string }> }
 
 /**
  * GET /api/v1/staff/:id/cli/output?lines=N — read-only snapshot of a CLI staff's
- * terminal (screen + scrollback) so the Sr Manager (Hermes) can summarise what
+ * terminal (screen + scrollback) so the Secretary can summarise what
  * the worker did. Does NOT send any input.
  *
  * Response: { ok, output?, reason? }

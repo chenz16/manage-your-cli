@@ -78,7 +78,7 @@
       role_label: 'Researcher',
       substrate: {
         kind: 'local_ai',
-        agent_profile_id: 'hermes_profile_research_v2',
+        agent_profile_id: 'local_ai_research_v2',
         tool_scope: ['web_search', 'read_file', 'summarize'],
         budget: { max_tokens: 50000, max_cost_millicents: 1500 },
         // ADR-016: mentor peer array — V1 demo: 1 AI (Aria) + 1 mentor (Wang, also direct peer)
@@ -127,7 +127,7 @@
       role_label: 'Outbound Drafter',
       substrate: {
         kind: 'local_ai',
-        agent_profile_id: 'hermes_profile_writing_v1',
+        agent_profile_id: 'local_ai_writing_v1',
         tool_scope: ['read_file', 'write_file'],
         budget: { max_tokens: 30000, max_cost_millicents: 800 },
       },
@@ -191,7 +191,7 @@
       role_label: '文秘',
       substrate: {
         kind: 'local_ai',
-        agent_profile_id: 'hermes_profile_writing_v1',
+        agent_profile_id: 'local_ai_writing_v1',
         tool_scope: ['read_file', 'write_file', 'summarize'],
         budget: { max_tokens: 30000, max_cost_millicents: 500 },
       },
@@ -796,7 +796,7 @@
     role_label: 'Owner Assistant',
     substrate: {
       kind: 'local_ai',
-      agent_profile_id: 'hermes_profile_owner_v1',
+      agent_profile_id: 'local_ai_owner_v1',
       tool_scope: ['create_assignment', 'list_missions', 'ping_member', 'read_desk_context'],
     },
   };

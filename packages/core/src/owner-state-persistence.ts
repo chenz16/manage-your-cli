@@ -432,8 +432,8 @@ export function writeDynamicMissions(missions: Mission[]): void {
 /* ── ADR-040 slice 1 — per-CLI-staff manager-managed memory ────────────
  * A cli_agent staff is stateless muscle; Holon (the manager) owns its
  * persistent memory and injects it as context on each dispatch. Stored as a
- * single JSON object { [staffId]: memoryMarkdown } under one owner_state key —
- * NOT routed through Hermes. Read returns '' on miss/parse-failure (audited). */
+ * single JSON object { [staffId]: memoryMarkdown } under one owner_state key.
+ * Read returns '' on miss/parse-failure (audited). */
 export function readCliStaffMemory(staffId: string): string {
   const db = ensureDb();
   if (!db) return '';

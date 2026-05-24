@@ -3,7 +3,7 @@
  * from chat. iter-007 step 7.
  *
  * Engineering rules (CLAUDE.md):
- *   - Rule 1: Holon owns the roster — Hermes is just an executor.
+ *   - Rule 1: Holon owns the roster — CLI agents are executors.
  *   - Rule 5: flat-roster invariant — these tools create staff on the
  *     OWNER's desk, never under another staff record. Enforced by
  *     parsing `desk_id = primary_desk_id`.
@@ -131,7 +131,7 @@ export interface CreateStaffInput {
   role_name?: string;            // snake_case; auto-derived from role_label if absent
   system_prompt?: string;
   max_concurrent_jobs?: number;  // default 1
-  agent_profile_id?: string;     // default 'hermes_profile_generic_v1'
+  agent_profile_id?: string;     // default 'local_ai_generic_v1'
   tool_scope?: string[];          // default ['web_search', 'read_file']
   /** Explicit substrate override — used by the connectors flow to create
    *  cli_agent staff for Claude Code / Codex without going through chat.
@@ -152,7 +152,7 @@ export function createStaff(input: CreateStaffInput): Staff {
 
   const substrate: Staff['substrate'] = input.substrate ?? {
     kind: 'local_ai',
-    agent_profile_id: input.agent_profile_id ?? 'hermes_profile_generic_v1',
+    agent_profile_id: input.agent_profile_id ?? 'local_ai_generic_v1',
     tool_scope: input.tool_scope ?? ['web_search', 'read_file'],
   };
 

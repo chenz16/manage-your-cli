@@ -32,8 +32,8 @@
  *
  * Test scope today: only the structural happy-path (chat surface mounts,
  * input accepts text, send button posts and a user-message bubble appears).
- * The LLM round-trip + brevity assertion is gated behind a real Hermes
- * runtime, so we assert only the structural change, not the LLM output.
+ * The LLM round-trip + brevity assertion is gated behind a real Secretary
+ * CLI session, so we assert only the structural change, not the LLM output.
  */
 import { test, expect } from '@playwright/test';
 
@@ -83,12 +83,11 @@ test.describe('Flow 1 — Morning catchup', () => {
   });
 
   test.fixme('list_recent_jobs names staff + ETA for NVIDIA report query', async ({ page }) => {
-    // FIXME (iter-010 Pass #5 — kept): `list_recent_jobs` is implemented
-    // in packages/hermes-plugin-holon-owner, BUT the fixture set is
-    // intentionally empty (per user directive — see TECH-DEBT D9). No
-    // seeded NVIDIA-report job exists, so the assertion would always
-    // fail. Two unblocks needed: (1) deterministic fixture bundle, (2)
-    // real-Hermes round-trip in CI (currently flaky w/o DEEPSEEK_API_KEY).
+    // FIXME (iter-010 Pass #5 — kept): `list_recent_jobs` tool is not yet
+    // implemented in the MCP server, AND the fixture set is intentionally
+    // empty (per user directive — see TECH-DEBT D9). No seeded NVIDIA-report
+    // job exists, so the assertion would always fail. Unblocks needed:
+    // (1) deterministic fixture bundle, (2) real Secretary round-trip in CI.
     await page.goto('http://localhost:3000/');
   });
 });

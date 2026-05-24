@@ -470,10 +470,10 @@
 
     if (s.substrate.kind === 'local_ai') {
       addPanelRow(panel, 'Profile ID', s.substrate.agent_profile_id || '—');
-      addPanelRow(panel, 'Substrate', 'Hermes local AI runtime');
+      addPanelRow(panel, 'Substrate', 'Local AI runtime');
       addPanelRow(panel, 'Tool count', String((s.substrate.tool_scope || []).length) + ' tools');
       var linkBtn = el('button', { class: 'backing-panel-link', type: 'button' });
-      linkBtn.innerHTML = EXTERN_SVG + ' View Hermes profile →';
+      linkBtn.innerHTML = EXTERN_SVG + ' View AI profile →';
       linkBtn.addEventListener('click', function (ev) {
         ev.stopPropagation();
         openL2(function (l2) { buildL2LocalAI(l2, s); });
@@ -530,7 +530,7 @@
     panel.appendChild(row);
   }
 
-  // ─── Layer 2: local_ai Hermes profile ─────────────────────────────────────
+  // ─── Layer 2: local_ai AI profile ─────────────────────────────────────────
 
   function buildL2LocalAI(l2, s) {
     var sub = s.substrate;
@@ -539,7 +539,7 @@
     var header = el('div', { class: 'drawer-l2-header' });
     header.appendChild(makeBackBtn('Back to member detail', closeL2));
     var headerText = el('div');
-    headerText.appendChild(el('div', { class: 'drawer-l2-title' }, 'Hermes Profile'));
+    headerText.appendChild(el('div', { class: 'drawer-l2-title' }, 'AI Profile'));
     headerText.appendChild(el('div', { class: 'drawer-l2-subtitle' }, sub.agent_profile_id || 'local_ai'));
     header.appendChild(headerText);
     l2.appendChild(header);
@@ -548,7 +548,7 @@
 
     body.appendChild(buildL2Section('Model', [
       buildL2Row('Profile ID', sub.agent_profile_id || '—'),
-      buildL2Row('Runtime', 'Hermes local AI adapter'),
+      buildL2Row('Runtime', 'Local AI adapter'),
       buildL2Row('Max tokens', sub.budget ? sub.budget.max_tokens.toLocaleString() : '—'),
       buildL2Row('Cost cap', sub.budget ? '$' + (sub.budget.max_cost_millicents / 100000).toFixed(2) + ' / call' : '—'),
     ]));

@@ -200,7 +200,7 @@ export const Staff = z.object({
   cultivation_maturity: zCultivationMaturity,
   cultivation_profile: CultivationProfile.optional(),
   /** Per-staff persona / work style. Injected into the worker's system
-   *  prompt when the dispatcher spawns a Hermes loop for this staff.
+   *  prompt when the dispatcher sends a task to this staff's CLI session.
    *  Added iter-007 step 7 (create/update/dismiss staff from chat).
    *  Optional → backward-compatible with existing fixture rows. */
   system_prompt: z.string().optional(),

@@ -40,8 +40,8 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('holon:reset', onReset);
 
-    // Warm up Hermes ACP bridge on mount — spawns Hermes + creates ACP
-    // session so the first user message doesn't pay the ~6s cold-start.
+    // Pre-warm the Secretary on mount — spawns the warm-agent process so
+    // the first user message doesn't pay the cold-start latency.
     fetch('/api/v1/chat/warm').catch(() => {/* best effort */});
 
     return () => window.removeEventListener('holon:reset', onReset);

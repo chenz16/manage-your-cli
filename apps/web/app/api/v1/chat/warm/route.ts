@@ -6,7 +6,7 @@ import { prewarmAgent } from '@/lib/warm-agent';
  * owner's FIRST message does not pay the ~4s cold-start. Called by
  * ChatRuntimeProvider on chat mount → pre-warms automatically, no typing needed.
  *
- * Idempotent: if already warm, resolves immediately. Subscription-only; no Hermes.
+ * Idempotent: if already warm, resolves immediately. Subscription-only.
  */
 function warmSecretary() {
   const s = getOrCreateSecretaryStaff();

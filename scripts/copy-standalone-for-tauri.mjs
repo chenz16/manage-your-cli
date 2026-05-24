@@ -65,7 +65,7 @@ if (existsSync(DEST)) {
 mkdirSync(DEST, { recursive: true });
 
 // Recursive copy. Node 20+ has `fs.cp` but we keep this loop explicit for
-// clarity + portability across Node 18 (Hermes-sidecar build hosts) and
+// clarity + portability across Node 18 (sidecar build hosts) and
 // Node 22 (dev).
 let fileCount = 0;
 let byteCount = 0;

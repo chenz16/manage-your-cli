@@ -2,7 +2,7 @@
  *
  * Per ADR-013 / iter-001a step-7.
  *
- * Chat IS a Hermes agent loop instance (no new data primitive).
+ * Chat IS a Secretary CLI session (no new data primitive).
  * Two scopes:
  *   1. Per-member: each member card has a chat icon → opens panel pre-filtered.
  *   2. Myself dialog: special owner_assistant member; default tab.

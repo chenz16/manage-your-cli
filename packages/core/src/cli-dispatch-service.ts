@@ -1,8 +1,8 @@
 /**
  * CLI-staff task dispatch. Holon assembles a lean context preamble from the
  * staff role, boss-side memory pointers, and task brief, then injects it into
- * the real CLI session. The CLI does the work; Holon does not route this
- * through Hermes or add a secondary intelligence layer.
+ * the real CLI session. The CLI does the work; Holon adds only context +
+ * memory (no secondary intelligence layer).
  */
 
 import type { Staff } from '@holon/api-contract';

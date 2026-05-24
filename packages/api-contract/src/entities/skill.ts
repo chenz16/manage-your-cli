@@ -202,7 +202,7 @@ export const TaskSkill = z.object({
   calls: z.array(z.string()).optional(),
   /** Reference ids this skill consults for output format / content. */
   consults: z.array(z.string()).optional(),
-  /** True if the Hermes plugin tool backing this skill is wired. */
+  /** True if the tool backing this skill is wired. */
   implemented: z.boolean().default(false),
 });
 export type TaskSkill = z.infer<typeof TaskSkill>;
@@ -244,7 +244,7 @@ export const TriageSkill = z.object({
   enabled: z.boolean().default(true),
   /**
    * Optional LLM system prompt for rule invocation. If provided, the
-   * TriageDispatcher calls Hermes with this system prompt to determine
+   * TriageDispatcher calls the LLM with this system prompt to determine
    * the TriageDecision. Expected response: TriageDecision JSON.
    * If absent, the `pre_filter` alone determines the decision (if matched,
    * the skill emits `surface_to_owner` as a safe default — no LLM call).

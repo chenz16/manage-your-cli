@@ -9,7 +9,7 @@
  * NOTE: fixtures.snapshot.json is the read-only mock baseline and is
  * never mutated by the app. Jobs + handoffs from chat tools are
  * log-only in v1 (no DB rows). The only thing that survives across
- * requests right now is the Hermes agent's session history — that's
+ * requests right now is the warm-agent session history — that's
  * what this script wipes.
  */
 

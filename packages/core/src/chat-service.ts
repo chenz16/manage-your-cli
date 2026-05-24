@@ -1,8 +1,8 @@
 /**
  * Chat service — reads chat thread fixtures.
  *
- * iter-006 ships read-only. Real send-message + Hermes loop integration
- * lands in iter-008+ when `packages/runtime-hermes` arrives.
+ * iter-006 ships read-only. Real send-message lands in iter-008+ via the
+ * warm Secretary (cli_agent) path.
  */
 
 import type { ChatThread, ListChatThreadsResponse } from '@holon/api-contract';

@@ -38,7 +38,7 @@
       "role_label": "Researcher",
       "substrate": {
         "kind": "local_ai",
-        "agent_profile_id": "hermes_profile_research_v2",
+        "agent_profile_id": "local_ai_research_v2",
         "tool_scope": [
           "web_search",
           "read_file",
@@ -152,7 +152,7 @@
     "role_label": "Owner's Secretary",
     "substrate": {
       "kind": "local_ai",
-      "agent_profile_id": "hermes_profile_owner_v1",
+      "agent_profile_id": "local_ai_owner_v1",
       "tool_scope": [
         "list_staff",
         "query_staff",

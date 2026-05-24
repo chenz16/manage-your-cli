@@ -45,8 +45,8 @@ const ALLOWED_FIELDS: Array<keyof OwnerAssistantPatch> = [
 
 export async function GET(): Promise<NextResponse> {
   // P0 ship-blocker from 2026-05-19 persona walkthrough v2: /me's Authorizations
-  // panel rendered "No connectors" while CEO chat happily read real Gmail via
-  // the Hermes plugin. Two stores disagreed: owner-config-service.integrations
+  // panel rendered "No connectors" while CEO chat happily read real Gmail.
+  // Two stores disagreed: owner-config-service.integrations
   // (TD-011-persisted, mutated by the /integrations UI) vs the NextAuth
   // `account` table (drizzle DB at <repoRoot>/.holon/auth.db â€” populated by
   // the OAuth callback, source of truth for the plugin token-fetch path at

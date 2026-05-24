@@ -258,7 +258,7 @@ export function paneCurrentCommand(staffId: string): string {
 }
 
 /** Capture the session's current screen + scrollback (read-only, no input) so
- *  the Sr Manager (Hermes) can read what a worker did and summarise it. */
+ *  the Secretary can read what a worker did and summarise it. */
 export function captureCliOutput(staffId: string, lines = 200): { ok: boolean; output?: string; reason?: string } {
   const name = sessionNameForStaff(staffId);
   if (!tmuxHasSession(name)) return { ok: false, reason: 'no_session' };

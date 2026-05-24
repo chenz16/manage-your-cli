@@ -13,11 +13,10 @@ import { dirname, join } from 'node:path';
 import { getOwner, loadFixtures } from '@holon/core';
 import { MeClient } from './_components/MeClient';
 
-// Match findRepoRoot() in apps/web/lib/hermes-acp-client.ts and
-// packages/core/src/worker-dispatcher.ts — see ADR-018 Engineering
-// Rule 11 (PII-free, machine-portable defaults). The /me page surfaces
-// this as the suggested Sandbox directory so owners on a fresh install
-// have a usable default to one-click into.
+// Match findRepoRoot() in packages/core/src/worker-dispatcher.ts — see
+// ADR-018 Engineering Rule 11 (PII-free, machine-portable defaults).
+// The /me page surfaces this as the suggested Sandbox directory so
+// owners on a fresh install have a usable default to one-click into.
 function findRepoRoot(): string {
   if (process.env.HOLON_REPO_ROOT) return process.env.HOLON_REPO_ROOT;
   let dir = process.cwd();
