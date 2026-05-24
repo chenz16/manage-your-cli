@@ -1748,24 +1748,20 @@ export function WeizoApp() {
         checking={checkingConnection}
         onRetry={() => void checkDesktop()}
       />
-      {/* 看板 has its own 3 sub-tabs as the top bar — skip the redundant
-          "看板" header there (owner: 看板进去就不要看板了). */}
-      {tab !== 'work' && (
-        <AppHeader
-          title={tabTitle(tab, selectedStaff)}
-          left={
-            selectedStaff ? (
-              <button
-                type="button"
-                className="mobile-back-button"
-                onClick={() => setSelectedStaff(null)}
-              >
-                ‹ 通讯录
-              </button>
-            ) : undefined
-          }
-        />
-      )}
+      <AppHeader
+        title={tabTitle(tab, selectedStaff)}
+        left={
+          selectedStaff ? (
+            <button
+              type="button"
+              className="mobile-back-button"
+              onClick={() => setSelectedStaff(null)}
+            >
+              ‹ 通讯录
+            </button>
+          ) : undefined
+        }
+      />
       <section
         className={`mobile-tab-content${tab === 'chats' ? ' mobile-tab-content-chat' : ''}`}
       >
