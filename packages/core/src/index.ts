@@ -200,5 +200,6 @@ export {
 // Claude token-usage stats (local log parser)
 export {
   readClaudeUsage,
+  readClaudeUsageByAgent,
   type ClaudeUsage,
 } from './usage-stats.js';

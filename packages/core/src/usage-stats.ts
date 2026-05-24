@@ -85,6 +85,102 @@ function extractUsage(line: Record<string, unknown>): { tokens: number; ts: stri
   return null;
 }
 
+// ── per-agent cache ──────────────────────────────────────────────────────────
+interface AgentUsageEntry {
+  id: string;
+  name: string;
+  total_tokens: number;
+  today_tokens: number;
+}
+let _agentCache: AgentUsageEntry[] | null = null;
+let _agentCacheAt = 0;
+
+/**
+ * Encode a cwd path to a Claude Code project-dir name.
+ *
+ * Claude Code derives the project dir by replacing every `/` and `_` in the
+ * absolute path with `-`.  E.g.
+ *   /home/chenz/holon-agents/staff_ABC → -home-chenz-holon-agents-staff-ABC
+ */
+function cwdToProjectDirName(cwd: string): string {
+  return cwd.replace(/[/_]/g, '-');
+}
+
+/**
+ * Sum all usage tokens in a single project dir (all JSONL files, all lines).
+ * Sub-agent (Task tool) tokens are logged in the SAME project JSONL as the
+ * parent, so summing the whole dir automatically includes implicit sub-agents.
+ */
+function sumProjectDir(dirPath: string, today: string): { total: number; todayTokens: number } {
+  const files = collectJsonlFiles(dirPath);
+  let total = 0;
+  let todayTokens = 0;
+  for (const filePath of files) {
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, 'utf8');
+    } catch {
+      continue;
+    }
+    for (const raw of content.split('\n')) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const u = extractUsage(parsed);
+      if (!u) continue;
+      total += u.tokens;
+      const day = u.ts ? toLocalDateStr(u.ts) : '';
+      if (day === today) todayTokens += u.tokens;
+    }
+  }
+  return { total, todayTokens };
+}
+
+/**
+ * Return per-agent token usage by mapping each agent's cwd to its Claude Code
+ * project dir and summing all JSONL usage lines (including implicit sub-agents
+ * whose tokens land in the same JSONL as the parent).
+ *
+ * Agents with no cwd or no matching project dir are silently skipped.
+ * Results sorted by total_tokens descending.
+ */
+export function readClaudeUsageByAgent(
+  agents: { id: string; name: string; cwd: string }[],
+): AgentUsageEntry[] {
+  const now = Date.now();
+  if (_agentCache && now - _agentCacheAt < CACHE_TTL_MS) {
+    return _agentCache;
+  }
+
+  const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+  const today = todayStr();
+  const results: AgentUsageEntry[] = [];
+
+  for (const agent of agents) {
+    if (!agent.cwd) continue;
+    const dirName = cwdToProjectDirName(agent.cwd);
+    const dirPath = path.join(projectsDir, dirName);
+    if (!fs.existsSync(dirPath)) continue;
+    const { total, todayTokens } = sumProjectDir(dirPath, today);
+    results.push({
+      id: agent.id,
+      name: agent.name,
+      total_tokens: total,
+      today_tokens: todayTokens,
+    });
+  }
+
+  results.sort((a, b) => b.total_tokens - a.total_tokens);
+  _agentCache = results;
+  _agentCacheAt = now;
+  return results;
+}
+
 export function readClaudeUsage(): ClaudeUsage {
   const now = Date.now();
   if (_cache && now - _cacheAt < CACHE_TTL_MS) {

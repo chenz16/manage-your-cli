@@ -1690,8 +1690,16 @@ interface CliUsageEntry {
   };
 }
 
+interface AgentUsageEntry {
+  id: string;
+  name: string;
+  total_tokens: number;
+  today_tokens: number;
+}
+
 interface CliUsageResponse {
   clis: CliUsageEntry[];
+  agents?: AgentUsageEntry[];
   note: string;
 }
 
@@ -1703,6 +1711,7 @@ function fmtTokens(n: number): string {
 
 function CliUsageSection({ data }: { data: CliUsageResponse | null }) {
   if (!data) return null;
+  const agents = Array.isArray(data.agents) ? data.agents : [];
   return (
     <div className="mobile-me-section">
       <div className="mobile-me-label">使用中的 CLI</div>
@@ -1719,6 +1728,19 @@ function CliUsageSection({ data }: { data: CliUsageResponse | null }) {
           </div>
         ))}
       </div>
+      {agents.length > 0 && (
+        <div className="weizo-clilist weizo-clilist-agents">
+          <div className="weizo-clilist-agents-title">各 agent 用量(含 sub-agent)</div>
+          {agents.map((a) => (
+            <div key={a.id} className="weizo-clilist-row weizo-clilist-row-muted">
+              <span className="weizo-clilist-label weizo-clilist-label-muted">{a.name}</span>
+              <span className="weizo-clilist-tokens weizo-clilist-tokens-muted">
+                总计 ~{fmtTokens(a.total_tokens)} · 今日 ~{fmtTokens(a.today_tokens)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="weizo-clilist-note">{data.note}</div>
     </div>
   );
