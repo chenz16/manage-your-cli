@@ -100,6 +100,53 @@ else
   npx cap sync android 2>&1 | tail -5 || fail "cap sync android"
 fi
 
+# ---------- 2.5/6 · patch AndroidManifest.xml (CAMERA + RECORD_AUDIO) ----------
+# Idempotent: each permission is inserted only if not already present.
+# Insert right before the first <application line so the XML remains valid.
+MANIFEST="$APP_DIR/android/app/src/main/AndroidManifest.xml"
+[ -f "$MANIFEST" ] || fail "AndroidManifest.xml not found at $MANIFEST (cap add/sync must have failed)"
+
+log "2.5/6 patching AndroidManifest.xml — camera + audio permissions"
+
+patch_manifest_line() {
+  local line="$1"
+  if ! grep -qF "$line" "$MANIFEST"; then
+    # Insert the line immediately before the first <application line.
+    sed -i "/<application/i\\    $line" "$MANIFEST"
+    log "  inserted: $line"
+  else
+    log "  already present: $line"
+  fi
+}
+
+patch_manifest_line '<uses-permission android:name="android.permission.CAMERA" />'
+patch_manifest_line '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
+patch_manifest_line '<uses-feature android:name="android.hardware.camera" android:required="false" />'
+
+# Hard verification — build must not proceed without the permission.
+grep -q 'android.permission.CAMERA' "$MANIFEST" \
+  || fail "CAMERA permission still absent in $MANIFEST after patching — check sed invocation"
+log "  manifest verified: CAMERA present"
+
+# ---------- 2.6/6 · bump Gradle wrapper to 8.9 (JDK-21 / BouncyCastle 1.79 compat) ----------
+# Capacitor scaffolds gradle-8.2.1 which fails with "Unsupported class file major
+# version 65" when BouncyCastle 1.79 (pulled by the TTS plugin) is on the classpath
+# under JDK 21. Gradle 8.9 resolves this. Patch is idempotent: only rewrite if the
+# version is not already 8.9.
+GRADLE_WRAPPER="$APP_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+[ -f "$GRADLE_WRAPPER" ] || fail "gradle-wrapper.properties not found at $GRADLE_WRAPPER"
+
+if grep -q 'gradle-8\.9-' "$GRADLE_WRAPPER"; then
+  log "2.6/6 Gradle wrapper already at 8.9 — no change needed"
+else
+  log "2.6/6 bumping Gradle wrapper to 8.9"
+  sed -i 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip|' \
+    "$GRADLE_WRAPPER"
+  grep -q 'gradle-8\.9-' "$GRADLE_WRAPPER" \
+    || fail "Gradle wrapper bump to 8.9 did not take — check sed invocation"
+  log "  gradle-wrapper.properties distributionUrl → gradle-8.9-all.zip"
+fi
+
 # ---------- 3/6 · assets (icon + splash from resources/) ----------
 if [ -f "$APP_DIR/resources/icon.svg" ]; then
   log "3/6 @capacitor/assets generate (icon + splash from resources/)"
