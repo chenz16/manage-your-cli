@@ -30,6 +30,7 @@ import type {
   ListStaffResponse,
   Staff,
   Todo,
+  TodoPriority,
   ListTodosResponse,
 } from '@holon/api-contract';
 import type { PersonaPreset } from '@holon/core';
@@ -659,6 +660,17 @@ function StaffProfile({
   );
 }
 
+// ─── Priority helpers ──────────────────────────────────────────────────────────
+
+const PRIORITY_LABEL: Record<TodoPriority, string> = { high: '高', medium: '中', low: '低' };
+const PRIORITY_COLOR: Record<TodoPriority, string> = {
+  high: '#e0533a',
+  medium: '#d4952a',
+  low: '#9a9a9a',
+};
+const PRIORITY_CYCLE: Record<TodoPriority, TodoPriority> = { high: 'medium', medium: 'low', low: 'high' };
+const PRIORITY_ORDER: Record<TodoPriority, number> = { high: 0, medium: 1, low: 2 };
+
 // ─── 看板 — work tracker (待办 LEAD) ───────────────────────────────────────
 
 function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
@@ -675,7 +687,14 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
       const r = await holonApiFetch('/api/v1/todos?status=pending', { cache: 'no-store' });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json() as ListTodosResponse;
-      setItems(Array.isArray(j.items) ? j.items : []);
+      const todos = Array.isArray(j.items) ? j.items : [];
+      // Client-side sort: high→medium→low, then newest first (server already orders by created_at DESC)
+      todos.sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority ?? 'medium'] ?? 1;
+        const pb = PRIORITY_ORDER[b.priority ?? 'medium'] ?? 1;
+        return pa - pb;
+      });
+      setItems(todos);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -693,7 +712,7 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
       const r = await holonApiFetch('/api/v1/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text }),  // priority defaults to 'medium' on server
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setInput('');
@@ -715,6 +734,30 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
       await load();
     } catch {
       // best-effort
+    }
+  }
+
+  async function cyclePriority(id: string, current: TodoPriority) {
+    const next = PRIORITY_CYCLE[current];
+    // Optimistic update for snappy feel
+    setItems((prev) => {
+      const updated = prev.map((t) => t.id === id ? { ...t, priority: next } : t);
+      updated.sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority ?? 'medium'] ?? 1;
+        const pb = PRIORITY_ORDER[b.priority ?? 'medium'] ?? 1;
+        return pa - pb;
+      });
+      return updated;
+    });
+    try {
+      await holonApiFetch(`/api/v1/todos/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority: next }),
+      });
+    } catch {
+      // revert on failure
+      await load();
     }
   }
 
@@ -759,38 +802,50 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
         <div className="mobile-empty-panel">暂无待办任务。</div>
       )}
       <div className="mobile-job-list">
-        {items.map((todo) => (
-          <div key={todo.id} className="mobile-job-row weizo-todo-row">
-            <span className="mobile-job-status mobile-job-status-queued weizo-todo-status">待办</span>
-            <span className="mobile-job-title">{todo.text}</span>
-            <span className="mobile-job-sub weizo-todo-actions">
+        {items.map((todo) => {
+          const priority = todo.priority ?? 'medium';
+          return (
+            <div key={todo.id} className="mobile-job-row weizo-todo-row">
               <button
                 type="button"
-                className="weizo-todo-action"
-                onClick={() => onTalkToSecretary(todo.text)}
-                title="对话小秘"
+                className="weizo-priority-tag"
+                style={{ background: PRIORITY_COLOR[priority] }}
+                onClick={() => void cyclePriority(todo.id, priority)}
+                title={`优先级：${PRIORITY_LABEL[priority]}（点击切换）`}
+                aria-label={`优先级 ${PRIORITY_LABEL[priority]}，点击切换`}
               >
-                对话小秘
+                {PRIORITY_LABEL[priority]}
               </button>
-              <button
-                type="button"
-                className="weizo-todo-action"
-                onClick={() => void updateTodo(todo.id, 'done')}
-                title="完成"
-              >
-                完成
-              </button>
-              <button
-                type="button"
-                className="weizo-todo-action weizo-todo-del"
-                onClick={() => void deleteTodo(todo.id)}
-                title="删除"
-              >
-                删除
-              </button>
-            </span>
-          </div>
-        ))}
+              <span className="mobile-job-title">{todo.text}</span>
+              <span className="mobile-job-sub weizo-todo-actions">
+                <button
+                  type="button"
+                  className="weizo-todo-action"
+                  onClick={() => onTalkToSecretary(todo.text)}
+                  title="对话小秘"
+                >
+                  对话小秘
+                </button>
+                <button
+                  type="button"
+                  className="weizo-todo-action"
+                  onClick={() => void updateTodo(todo.id, 'done')}
+                  title="完成"
+                >
+                  完成
+                </button>
+                <button
+                  type="button"
+                  className="weizo-todo-action weizo-todo-del"
+                  onClick={() => void deleteTodo(todo.id)}
+                  title="删除"
+                >
+                  删除
+                </button>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

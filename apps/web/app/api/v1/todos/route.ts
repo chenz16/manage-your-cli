@@ -21,6 +21,6 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!parsed.success) {
     return NextResponse.json({ error: 'text (string, min 1) required', issues: parsed.error.issues }, { status: 400 });
   }
-  const todo = addTodo(parsed.data.text);
+  const todo = addTodo(parsed.data.text, parsed.data.priority);
   return NextResponse.json(todo, { status: 201 });
 }

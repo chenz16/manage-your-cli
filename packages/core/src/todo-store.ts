@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 import { homedir, platform } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import type { Todo } from '@holon/api-contract';
+import type { Todo, TodoPriority } from '@holon/api-contract';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = any;
@@ -44,10 +44,17 @@ function ensureDb(): DB | null {
         id TEXT PRIMARY KEY,
         text TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
+        priority TEXT NOT NULL DEFAULT 'medium',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
     `);
+    // Graceful migration: add priority column if it doesn't exist yet (existing DB).
+    try {
+      db.exec(`ALTER TABLE todos ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'`);
+    } catch {
+      // Column already exists — ignore.
+    }
     _db = db;
     console.log(JSON.stringify({
       audit: 'todo_store.opened',
@@ -77,13 +84,40 @@ function mintId(): string {
   return `todo_${ts}${rand}`;
 }
 
-/** List all todos, newest first. */
+// Priority sort order: high=0, medium=1, low=2
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+function normalizePriority(p: unknown): TodoPriority {
+  if (p === 'high' || p === 'low') return p;
+  return 'medium';
+}
+
+function normalizeRow(row: Record<string, unknown>): Todo {
+  return {
+    id: row.id as string,
+    text: row.text as string,
+    status: row.status as Todo['status'],
+    priority: normalizePriority(row.priority),
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+/** List all todos, sorted by priority (high→low) then newest first. */
 export function listTodos(): Todo[] {
   const db = ensureDb();
   if (!db) return [];
   try {
-    const rows = db.prepare('SELECT * FROM todos ORDER BY created_at DESC').all() as Todo[];
-    return rows;
+    const rows = db.prepare('SELECT * FROM todos ORDER BY created_at DESC').all() as Record<string, unknown>[];
+    const todos = rows.map(normalizeRow);
+    todos.sort((a, b) => {
+      const pa = PRIORITY_ORDER[a.priority] ?? 1;
+      const pb = PRIORITY_ORDER[b.priority] ?? 1;
+      if (pa !== pb) return pa - pb;
+      // same priority: newest first (already sorted by created_at DESC from DB)
+      return 0;
+    });
+    return todos;
   } catch (err) {
     console.error(JSON.stringify({
       audit: 'todo_store.list_failed',
@@ -95,21 +129,22 @@ export function listTodos(): Todo[] {
 }
 
 /** Add a new todo with status='pending'. Returns the created todo. */
-export function addTodo(text: string): Todo {
+export function addTodo(text: string, priority: TodoPriority = 'medium'): Todo {
   const db = ensureDb();
   const now = nowIso();
   const todo: Todo = {
     id: mintId(),
     text,
     status: 'pending',
+    priority,
     created_at: now,
     updated_at: now,
   };
   if (!db) return todo; // in-memory fallback: return but don't persist
   try {
     db.prepare(
-      'INSERT INTO todos (id, text, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(todo.id, todo.text, todo.status, todo.created_at, todo.updated_at);
+      'INSERT INTO todos (id, text, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(todo.id, todo.text, todo.status, todo.priority, todo.created_at, todo.updated_at);
     console.log(JSON.stringify({
       audit: 'todo_store.add',
       id: todo.id,
@@ -125,25 +160,27 @@ export function addTodo(text: string): Todo {
   return todo;
 }
 
-/** Update status and/or text. Returns updated todo, or null if not found. */
+/** Update status, text, and/or priority. Returns updated todo, or null if not found. */
 export function updateTodo(
   id: string,
-  patch: { status?: Todo['status']; text?: string },
+  patch: { status?: Todo['status']; text?: string; priority?: TodoPriority },
 ): Todo | null {
   const db = ensureDb();
   if (!db) return null;
   try {
-    const row = db.prepare('SELECT * FROM todos WHERE id = ?').get(id) as Todo | undefined;
-    if (!row) return null;
+    const rawRow = db.prepare('SELECT * FROM todos WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    if (!rawRow) return null;
+    const row = normalizeRow(rawRow);
     const updated: Todo = {
       ...row,
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.text !== undefined ? { text: patch.text } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       updated_at: nowIso(),
     };
     db.prepare(
-      'UPDATE todos SET text = ?, status = ?, updated_at = ? WHERE id = ?',
-    ).run(updated.text, updated.status, updated.updated_at, id);
+      'UPDATE todos SET text = ?, status = ?, priority = ?, updated_at = ? WHERE id = ?',
+    ).run(updated.text, updated.status, updated.priority, updated.updated_at, id);
     console.log(JSON.stringify({
       audit: 'todo_store.update',
       id,

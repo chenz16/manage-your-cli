@@ -1241,6 +1241,15 @@ button, input, textarea, select { font: inherit; }
 .weizo-todo-action:active { background: #edf6f0; }
 .weizo-todo-del { color: #9a2f2f; border-color: #f0d0d0; }
 .weizo-todo-del:active { background: #fff4f4; }
+.weizo-priority-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 22px; padding: 0 6px;
+  border-radius: 4px; border: none;
+  color: #fff; font: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; user-select: none; flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+.weizo-priority-tag:active { opacity: 0.75; }
 
 /* Deliverables (de-emphasized) */
 .weizo-deliverables-section { opacity: 0.82; }
