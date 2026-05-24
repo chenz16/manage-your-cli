@@ -1791,8 +1791,121 @@ function IntegrationNeutralPill({ label }: { label: string }) {
   return <span className="mobile-intg-pill mobile-intg-pill-neutral">{label}</span>;
 }
 
-function IntegrationsSection({ meData, onRefresh }: {
+// ─── 我的 Agent Card — QR block ───────────────────────────────────────────────
+
+function AgentCardSection({ deskBaseUrl }: { deskBaseUrl: string }) {
+  const agentCardUrl = `${deskBaseUrl}/.well-known/agent-card.json`;
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(agentCardUrl)}`;
+
+  function copyUrl() {
+    navigator.clipboard?.writeText(agentCardUrl).catch(() => undefined);
+  }
+
+  return (
+    <div className="mobile-me-section">
+      <div className="mobile-me-label">我的 Agent Card</div>
+      <div className="mobile-me-note" style={{ marginBottom: 8 }}>别人扫这个连你(A2A)</div>
+      <div className="mobile-connector-qr-wrap">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={qrSrc}
+          alt="Agent Card QR"
+          width={180}
+          height={180}
+          className="mobile-connector-qr-img"
+        />
+      </div>
+      <button
+        type="button"
+        className="mobile-connector-url-copy"
+        onClick={copyUrl}
+        title="复制地址"
+      >
+        <span className="mobile-connector-url-text">{agentCardUrl}</span>
+        <span className="mobile-connector-url-copy-icon">⎘</span>
+      </button>
+    </div>
+  );
+}
+
+// ─── 微信连接状态 ─────────────────────────────────────────────────────────────
+
+interface WechatStatusData {
+  connected: boolean;
+  accountId?: string;
+}
+
+function WechatStatusBlock() {
+  const [data, setData] = useState<WechatStatusData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    holonApiFetch('/api/v1/connectors/wechat/status', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<WechatStatusData> : Promise.resolve(null))
+      .then((d) => { setData(d); })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="mobile-me-note">加载微信状态…</div>;
+
+  return data?.connected && data.accountId
+    ? <IntegrationConnectedPill label={`已连接 · ${data.accountId}`} />
+    : <span className="mobile-me-note">未连接(在桌面连接)</span>;
+}
+
+// ─── 插件列表 ─────────────────────────────────────────────────────────────────
+
+interface PluginEntry {
+  id: string;
+  name: string;
+  enabled?: boolean;
+}
+
+interface PluginsResponse {
+  installed?: PluginEntry[];
+  registry?: PluginEntry[];
+}
+
+function PluginsBlock() {
+  const [installed, setInstalled] = useState<PluginEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    holonApiFetch('/api/v1/plugins', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<PluginsResponse> : Promise.resolve(null))
+      .then((d) => {
+        if (d && Array.isArray(d.installed)) setInstalled(d.installed);
+      })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="mobile-me-note">加载插件…</div>;
+  if (installed.length === 0) return <div className="mobile-me-note">暂无已安装插件</div>;
+
+  return (
+    <div className="mobile-connector-plugin-list">
+      {installed.map((p) => (
+        <div key={p.id} className="mobile-connector-plugin-row">
+          <span
+            className="mobile-connector-plugin-dot"
+            style={{ color: p.enabled !== false ? '#34a853' : '#9a9a9a' }}
+            aria-hidden="true"
+          >●</span>
+          <span className="mobile-connector-plugin-name">{p.name ?? p.id}</span>
+          <span className="mobile-connector-plugin-status">
+            {p.enabled !== false ? '已启用' : '已停用'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
   meData: MeOwnerData | null;
+  deskBaseUrl: string;
   onRefresh: () => void;
 }) {
   const [modal, setModal] = useState<IntegrationModal | null>(null);
@@ -1877,13 +1990,6 @@ function IntegrationsSection({ meData, onRefresh }: {
       action: () => openModal({ kind: 'gmail_hint' }),
     },
     {
-      key: 'wechat',
-      icon: '💬',
-      name: '微信',
-      pill: <IntegrationNeutralPill label="桌面管理" />,
-      action: () => openModal({ kind: 'wechat_hint' }),
-    },
-    {
       key: 'slack',
       icon: '🔔',
       name: 'Slack',
@@ -1916,8 +2022,29 @@ function IntegrationsSection({ meData, onRefresh }: {
 
   return (
     <>
+      {/* ── Agent Card QR ── */}
+      <AgentCardSection deskBaseUrl={deskBaseUrl} />
+
+      {/* ── 集成 / 连接服务 ── */}
       <div className="mobile-me-section">
         <div className="mobile-me-label">集成 / 连接服务</div>
+        <div className="mobile-me-note" style={{ marginBottom: 8 }}>这些连接在桌面设置，这里只看状态。</div>
+
+        {/* 微信 live status */}
+        <div className="mobile-connector-channel-row">
+          <span className="mobile-intg-icon">💬</span>
+          <span className="mobile-intg-name">微信</span>
+          <span className="mobile-intg-pill-wrap">
+            <WechatStatusBlock />
+          </span>
+        </div>
+
+        {/* 插件 */}
+        <div className="mobile-me-label" style={{ marginTop: 12 }}>插件</div>
+        <PluginsBlock />
+
+        {/* Gmail / 消息渠道 */}
+        <div className="mobile-me-label" style={{ marginTop: 12 }}>Gmail / 消息渠道</div>
         <div className="mobile-intg-list">
           {ROWS.map((row) => (
             <button
@@ -2294,7 +2421,7 @@ function MeTab({
         {personaApplied && <div className="mobile-me-note">{personaApplied}</div>}
         {loading && <div className="mobile-me-note">加载人设…</div>}
       </div>
-      <IntegrationsSection meData={meData} onRefresh={() => void load()} />
+      <IntegrationsSection meData={meData} deskBaseUrl={connection.baseUrl} onRefresh={() => void load()} />
       <button type="button" className="mobile-feedback-button" onClick={() => setUsageOpen(true)}>
         <span>Token 用量</span>
         {todaySummary && <span className="weizo-clilist-tokens" style={{ marginRight: 4 }}>{todaySummary}</span>}

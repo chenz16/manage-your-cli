@@ -2013,3 +2013,44 @@ button, input, textarea, select { font: inherit; }
   overflow: hidden;
   pointer-events: none;
 }
+
+/* ─── Connection mirror — Agent Card QR + channel rows + plugins ─────────── */
+.mobile-connector-qr-wrap {
+  display: flex; justify-content: center; padding: 8px 0 6px;
+}
+.mobile-connector-qr-img {
+  border-radius: 10px; border: 1px solid #e8e8e8;
+  display: block; max-width: 180px; height: auto;
+}
+.mobile-connector-url-copy {
+  width: 100%; min-height: 36px;
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid #e8e8e8; border-radius: 8px;
+  background: #fafafa; padding: 6px 10px;
+  font: inherit; cursor: pointer; color: #555;
+  margin-top: 6px; text-align: left;
+}
+.mobile-connector-url-copy:active { background: #f0f0f0; }
+.mobile-connector-url-text {
+  flex: 1 1 auto; font-size: 11px; color: #555;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-connector-url-copy-icon { flex: 0 0 auto; font-size: 14px; color: #999; }
+.mobile-connector-channel-row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 36px; padding: 4px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 4px;
+}
+.mobile-connector-plugin-list {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 4px;
+}
+.mobile-connector-plugin-row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 30px; border-top: 1px solid #f0f0f0; padding: 4px 0;
+}
+.mobile-connector-plugin-row:first-child { border-top: 0; }
+.mobile-connector-plugin-dot { flex: 0 0 auto; font-size: 10px; }
+.mobile-connector-plugin-name { flex: 1 1 auto; font-size: 13.5px; color: #111; }
+.mobile-connector-plugin-status { flex: 0 0 auto; font-size: 11px; color: #777; }
