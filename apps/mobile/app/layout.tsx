@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './components.css';
 import { BugFab } from './_components/BugFab';
+import { MobileBootstrap } from './_components/MobileBootstrap';
 import { MobileTabBar } from './_components/MobileTabBar';
 import { PhoneStatus } from './_components/PhoneStatus';
 import { ServiceWorkerRegister } from './_components/ServiceWorkerRegister';
@@ -70,6 +71,7 @@ export default function RootLayout({
             <BugFab />
           </div>
         </div>
+        <MobileBootstrap />
         <ServiceWorkerRegister />
       </body>
     </html>
