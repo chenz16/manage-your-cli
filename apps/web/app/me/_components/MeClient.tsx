@@ -454,7 +454,7 @@ export function MeClient({
          * (ported from holon-engineering main). */}
         <section className="card" style={{ padding: 20 }}>
           <h2 className="section-title" style={{ marginTop: 0 }}>{t('me.section.bug_queue', zh ? '🐞 缺陷队列' : '🐞 Bug queue')}</h2>
-          <div className="me-feedback-action"><BugReportButton /></div>
+          <div style={{ marginBottom: 16 }}><BugReportButton /></div>
           <BugQueue />
         </section>
 
