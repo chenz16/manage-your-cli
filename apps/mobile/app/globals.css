@@ -150,6 +150,16 @@ button, input, textarea, select { font: inherit; }
   padding-bottom: 0;
 }
 
+/* M-L-FIX2: WeChat 4-tab shell owns all scrolling internally (.mobile-tab-content
+   is the scroll container). The outer .main must NOT scroll — if it does, Android
+   WebView can move the position:fixed bottom nav with the page, making the tab bar
+   appear to scroll instead of staying pinned. Lock .main to its flex-allocated
+   height and remove its own scroll + bottom-padding. */
+.main:has(.mobile-wechat-shell) {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
 .bottom-tabs {
   position: absolute;
   right: 0;
@@ -843,8 +853,13 @@ button, input, textarea, select { font: inherit; }
   --mobile-keyboard-inset: env(keyboard-inset-height, 0px);
   color: var(--ink);
   background: #ededed;
+  /* M-L-FIX2: fill the height allocated by the parent flex container and prevent
+     any overflow from escaping (which would cause the viewport/body to scroll and
+     drag the position:fixed tab bar on Android WebView). */
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .mobile-static-header {

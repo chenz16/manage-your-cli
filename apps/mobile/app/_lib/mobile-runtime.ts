@@ -136,11 +136,20 @@ export function installMobileApiFetchProxy(): void {
     __holonOriginalFetch?: FetchLike;
   };
   if (w[FETCH_PROXY_MARK]) return;
-  const originalFetch = window.fetch.bind(window);
-  w.__holonOriginalFetch = originalFetch;
+  // M-L-FIX1: CapacitorHttp patches window.fetch during bridge init, which
+  // happens before React mounts (and before this function is ever called).
+  // We capture the already-native-patched fetch here, then store it on the
+  // window so the proxy closure resolves it at call time rather than relying
+  // solely on the closed-over variable. This guarantees correct composition
+  // regardless of any future ordering change between bridge init and app mount.
+  const nativeFetch = window.fetch.bind(window);
+  w.__holonOriginalFetch = nativeFetch;
   w[FETCH_PROXY_MARK] = true;
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    // Resolve at call time: prefer the stored native reference so even a
+    // late CapacitorHttp patch (hypothetical) would still be picked up.
+    const underlying = w.__holonOriginalFetch ?? nativeFetch;
     const rewritten = rewriteMobileApiRequest(input, init);
-    return originalFetch(rewritten.input, rewritten.init);
+    return underlying(rewritten.input, rewritten.init);
   }) as FetchLike;
 }

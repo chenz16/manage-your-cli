@@ -17,6 +17,15 @@ const config: CapacitorConfig = {
     iosScheme: 'http',
     cleartext: true,
   },
+  plugins: {
+    // M-L-FIX1: enable CapacitorHttp so the native bridge patches window.fetch
+    // and XMLHttpRequest at startup. This routes all fetch calls through the
+    // native HTTP stack, bypassing WebView CORS restrictions and Android's
+    // cleartext-traffic block for http:// LAN desk addresses.
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
 };
 
 export default config;

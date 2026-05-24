@@ -123,6 +123,20 @@ patch_manifest_line '<uses-permission android:name="android.permission.CAMERA" /
 patch_manifest_line '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
 patch_manifest_line '<uses-feature android:name="android.hardware.camera" android:required="false" />'
 
+# Patch android:usesCleartextTraffic="true" into the <application> tag so
+# CapacitorHttp native requests to http:// (LAN desk) are not blocked by
+# Android's cleartext-traffic policy. Idempotent: only adds if not present.
+log "2.5/6 patching AndroidManifest.xml — usesCleartextTraffic"
+if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
+  # Insert the attribute into the opening <application ...> tag on the same line.
+  sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
+  grep -q 'usesCleartextTraffic' "$MANIFEST" \
+    || fail "usesCleartextTraffic patch did not take — check sed invocation"
+  log "  inserted: android:usesCleartextTraffic=\"true\""
+else
+  log "  already present: android:usesCleartextTraffic"
+fi
+
 # Hard verification — build must not proceed without the permission.
 grep -q 'android.permission.CAMERA' "$MANIFEST" \
   || fail "CAMERA permission still absent in $MANIFEST after patching — check sed invocation"

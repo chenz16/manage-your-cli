@@ -3161,9 +3161,16 @@ export function WeizoApp() {
   // Don't flash anything on SSR — wait until client boot
   if (!booted) return null;
 
+  // M-L-FIX3: pair-first. First-run (no stored connection) renders the pairing
+  // screen as the sole UI. Once PairingPrompt calls onPaired(), handlePaired()
+  // reads the just-written connection from localStorage and sets it in state,
+  // which transitions into the normal shell without a full-page reload.
+  if (!connection) {
+    return <PairingPrompt onPaired={handlePaired} />;
+  }
+
   return (
     <main className="mobile-app-shell mobile-static-shell mobile-wechat-shell">
-      <NotPairedBanner paired={!!connection} />
       <ConnectionBanner
         offline={desktopOffline}
         checking={checkingConnection}
@@ -3233,9 +3240,8 @@ export function WeizoApp() {
           />
         )}
         {tab === 'me' && (
-          connection
-            ? <MeTab connection={connection} onDisconnect={disconnect} />
-            : <PairingPrompt onPaired={handlePaired} />
+          // connection is always non-null here: unpaired path returns PairingPrompt above
+          <MeTab connection={connection!} onDisconnect={disconnect} />
         )}
       </section>
       <BottomNav active={tab} badges={badges} onTab={openTab} />
