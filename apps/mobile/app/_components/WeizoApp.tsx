@@ -2,7 +2,7 @@
 
 // Weizo 微作 — WeChat-style 4-tab mobile shell.
 // Tabs: 微信 (chat-first, 小秘 + staff 1:1) | 通讯录 (staff list + profile) |
-//        看板 (待分配 LEAD → 进行中 → 交付) | 我 (owner identity + persona + disconnect).
+//        看板 (待办 LEAD → 进行中 → 交付) | 我 (owner identity + persona + disconnect).
 // All API calls go through holonApiFetch (proxied to paired desktop).
 
 import {
@@ -659,7 +659,7 @@ function StaffProfile({
   );
 }
 
-// ─── 看板 — work tracker (待分配 LEAD) ───────────────────────────────────────
+// ─── 看板 — work tracker (待办 LEAD) ───────────────────────────────────────
 
 function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
   const [items, setItems] = useState<Todo[]>([]);
@@ -728,9 +728,9 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
   }
 
   return (
-    <section className="mobile-work-section weizo-kanban-lead" aria-label="待分配">
+    <section className="mobile-work-section weizo-kanban-lead" aria-label="待办">
       <div className="mobile-section-heading">
-        <h2>待分配</h2>
+        <h2>待办</h2>
         <span>老板待办</span>
       </div>
       <div className="weizo-todo-compose">
@@ -741,7 +741,7 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
           onKeyDown={(ev) => {
             if (ev.key === 'Enter') { ev.preventDefault(); void addTodo(); }
           }}
-          placeholder="新增待分配任务…"
+          placeholder="新增待办任务…"
           disabled={adding}
         />
         <button
@@ -756,12 +756,12 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
       {error && <div className="mobile-error">{error}</div>}
       {loading && items.length === 0 && <div className="mobile-empty-panel">加载中…</div>}
       {!loading && items.length === 0 && !error && (
-        <div className="mobile-empty-panel">暂无待分配任务。</div>
+        <div className="mobile-empty-panel">暂无待办任务。</div>
       )}
       <div className="mobile-job-list">
         {items.map((todo) => (
           <div key={todo.id} className="mobile-job-row weizo-todo-row">
-            <span className="mobile-job-status mobile-job-status-queued weizo-todo-status">待分配</span>
+            <span className="mobile-job-status mobile-job-status-queued weizo-todo-status">待办</span>
             <span className="mobile-job-title">{todo.text}</span>
             <span className="mobile-job-sub weizo-todo-actions">
               <button
@@ -950,7 +950,7 @@ function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
   const [board, setBoard] = useState<'todo' | 'doing' | 'done'>('todo');
 
   const BOARD_TABS: Array<{ key: 'todo' | 'doing' | 'done'; label: string }> = [
-    { key: 'todo', label: '待分配' },
+    { key: 'todo', label: '待办' },
     { key: 'doing', label: '进行中' },
     { key: 'done', label: '交付' },
   ];
