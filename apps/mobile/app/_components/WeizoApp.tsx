@@ -1016,7 +1016,87 @@ function isOverdue(iso: string): boolean {
   return iso <= todayLocalIso();
 }
 
+// ─── 看板 — sample data (always-visible mock) ──────────────────────────────
+
+interface SampleTodo {
+  id: string;
+  text: string;
+  priority: TodoPriority;
+  due_label: string | null; // display string, e.g. '今天(逾期)' / '5-28'
+  age_days: number;         // for ⏳已挂N天
+  overdue: boolean;
+  isSample: true;
+}
+
+const SAMPLE_TODOS: SampleTodo[] = [
+  { id: 's1', text: '重构登录到 OAuth', priority: 'high',   due_label: '今天(逾期)', age_days: 3, overdue: true,  isSample: true },
+  { id: 's2', text: '写 Q3 邮件营销初稿',   priority: 'medium', due_label: '5-28',       age_days: 1, overdue: false, isSample: true },
+  { id: 's3', text: '整理竞品资料',          priority: 'low',    due_label: null,          age_days: 6, overdue: false, isSample: true },
+];
+
+interface SampleJob {
+  id: string;
+  assignee: string;        // emoji/initial for avatar
+  name: string;
+  jobStatus: 'running' | 'queued' | 'stuck';
+  elapsed: string | null;  // e.g. '12分'
+  title: string;
+  latest: string;          // latest activity or wait reason
+  latestPrefix: '最新' | '等待';
+  isSample: true;
+}
+
+const SAMPLE_JOBS: SampleJob[] = [
+  {
+    id: 'sj1', assignee: '赵', name: '小赵', jobStatus: 'running', elapsed: '12分',
+    title: '重构登录到 OAuth',
+    latest: '正在写单元测试…', latestPrefix: '最新',
+    isSample: true,
+  },
+  {
+    id: 'sj2', assignee: '钱', name: '小钱', jobStatus: 'queued', elapsed: null,
+    title: '爬取竞品定价',
+    latest: 'CLI 被小赵占用', latestPrefix: '等待',
+    isSample: true,
+  },
+];
+
+interface SampleDeliverable {
+  id: string;
+  title: string;
+  reviewStatus: 'pending' | 'seen';
+  when: string;
+  who: string;
+  excerpt: string;
+  isSample: true;
+}
+
+const SAMPLE_DELIVERABLES: SampleDeliverable[] = [
+  {
+    id: 'sd1', title: 'OAuth 迁移方案', reviewStatus: 'pending',
+    when: '2小时前', who: '小赵',
+    excerpt: '3 文件改动 + 测试，建议合并。',
+    isSample: true,
+  },
+];
+
 // ─── 看板 — work tracker (待办 LEAD) ───────────────────────────────────────
+
+function AgingLine({ days }: { days: number }) {
+  return (
+    <span className="weizo-kanban-aging">
+      ⏳ 已挂{days}天
+    </span>
+  );
+}
+
+function PriorityBar({ priority }: { priority: TodoPriority }) {
+  return <span className={`weizo-kanban-priority-bar weizo-kanban-priority-bar-${priority}`} aria-hidden="true" />;
+}
+
+function SampleBadge() {
+  return <span className="weizo-kanban-sample-badge">样例</span>;
+}
 
 function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
   const [items, setItems] = useState<Todo[]>([]);
@@ -1146,11 +1226,12 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
     }
   }
 
+  const showSamples = !loading && items.length === 0;
+
   return (
     <section className="mobile-work-section weizo-kanban-lead" aria-label="待办">
       <div className="mobile-section-heading">
-        <h2>待办</h2>
-        <span>老板待办</span>
+        <h2>待办 · {showSamples ? SAMPLE_TODOS.length : items.length}</h2>
       </div>
       <div className="weizo-todo-compose">
         <input
@@ -1160,7 +1241,7 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
           onKeyDown={(ev) => {
             if (ev.key === 'Enter') { ev.preventDefault(); void addTodo(); }
           }}
-          placeholder="新增待办任务…"
+          placeholder="＋ 新增待办任务…"
           disabled={adding}
         />
         <button
@@ -1174,87 +1255,137 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
       </div>
       {error && <div className="mobile-error">{error}</div>}
       {loading && items.length === 0 && <div className="mobile-empty-panel">加载中…</div>}
-      {!loading && items.length === 0 && !error && (
-        <div className="mobile-empty-panel">暂无待办任务。</div>
-      )}
       <div className="mobile-job-list">
+        {/* Real todos */}
         {items.map((todo) => {
           const priority = todo.priority ?? 'medium';
+          const ageDays = todo.created_at
+            ? Math.max(0, Math.floor((Date.now() - new Date(todo.created_at).getTime()) / 86400000))
+            : 0;
           return (
-            <div key={todo.id} className="mobile-job-row weizo-todo-row">
-              <button
-                type="button"
-                className="weizo-priority-tag"
-                style={{ background: PRIORITY_COLOR[priority] }}
-                onClick={() => void cyclePriority(todo.id, priority)}
-                title={`优先级：${PRIORITY_LABEL[priority]}（点击切换）`}
-                aria-label={`优先级 ${PRIORITY_LABEL[priority]}，点击切换`}
-              >
-                {PRIORITY_LABEL[priority]}
-              </button>
-              <span
-                className="mobile-job-title"
-                style={{ color: PRIORITY_TEXT_COLOR[priority] }}
-              >
-                {todo.text}
-              </span>
-              <span className="mobile-job-sub weizo-todo-actions">
-                {todo.due_date && (
-                  <span
-                    className="weizo-todo-due"
-                    style={isOverdue(todo.due_date) ? { color: '#e0533a' } : undefined}
-                    title={`截止 ${todo.due_date}${isOverdue(todo.due_date) ? '（已到期）' : ''}`}
+            <div key={todo.id} className="weizo-kanban-todo-card">
+              <PriorityBar priority={priority} />
+              <div className="weizo-kanban-todo-body">
+                <div className="weizo-kanban-todo-titlerow">
+                  <button
+                    type="button"
+                    className="weizo-priority-tag"
+                    style={{ background: PRIORITY_COLOR[priority] }}
+                    onClick={() => void cyclePriority(todo.id, priority)}
+                    title={`优先级：${PRIORITY_LABEL[priority]}（点击切换）`}
+                    aria-label={`优先级 ${PRIORITY_LABEL[priority]}，点击切换`}
                   >
-                    📅 {shortDate(todo.due_date)}
+                    {PRIORITY_LABEL[priority]}
+                  </button>
+                  <span
+                    className="weizo-kanban-todo-title"
+                    style={{ color: PRIORITY_TEXT_COLOR[priority] }}
+                  >
+                    {todo.text}
                   </span>
-                )}
-                <label className="weizo-todo-action weizo-todo-datelabel" title="设日期">
-                  设日期
-                  <input
-                    type="date"
-                    className="weizo-todo-dateinput"
-                    value={todo.due_date ?? ''}
-                    onChange={(ev) => void setDueDate(todo.id, ev.target.value || null)}
-                  />
-                </label>
-                {todo.due_date && (
+                </div>
+                <div className="weizo-kanban-todo-meta">
+                  {todo.due_date && (
+                    <span
+                      className="weizo-todo-due"
+                      style={isOverdue(todo.due_date) ? { color: '#e0533a' } : undefined}
+                      title={`截止 ${todo.due_date}${isOverdue(todo.due_date) ? '（已到期）' : ''}`}
+                    >
+                      📅 {shortDate(todo.due_date)}{isOverdue(todo.due_date) ? '(逾期)' : ''}
+                    </span>
+                  )}
+                  {ageDays > 0 && <AgingLine days={ageDays} />}
+                </div>
+                <div className="weizo-kanban-todo-actions">
+                  <label className="weizo-todo-action weizo-todo-datelabel" title="设日期">
+                    设日期
+                    <input
+                      type="date"
+                      className="weizo-todo-dateinput"
+                      value={todo.due_date ?? ''}
+                      onChange={(ev) => void setDueDate(todo.id, ev.target.value || null)}
+                    />
+                  </label>
+                  {todo.due_date && (
+                    <button
+                      type="button"
+                      className="weizo-todo-action"
+                      onClick={() => void setDueDate(todo.id, null)}
+                      title="清除日期"
+                    >
+                      清除
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="weizo-todo-action weizo-kanban-cta"
+                    onClick={() => onTalkToSecretary(todo.text)}
+                    title="对话小秘"
+                  >
+                    💬 对话小秘
+                  </button>
                   <button
                     type="button"
                     className="weizo-todo-action"
-                    onClick={() => void setDueDate(todo.id, null)}
-                    title="清除日期"
+                    onClick={() => void updateTodo(todo.id, 'done')}
+                    title="完成"
                   >
-                    清除
+                    ✓
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="weizo-todo-action"
-                  onClick={() => onTalkToSecretary(todo.text)}
-                  title="对话小秘"
-                >
-                  对话小秘
-                </button>
-                <button
-                  type="button"
-                  className="weizo-todo-action"
-                  onClick={() => void updateTodo(todo.id, 'done')}
-                  title="完成"
-                >
-                  完成
-                </button>
-                <button
-                  type="button"
-                  className="weizo-todo-action weizo-todo-del"
-                  onClick={() => void deleteTodo(todo.id)}
-                  title="删除"
-                >
-                  删除
-                </button>
-              </span>
+                  <button
+                    type="button"
+                    className="weizo-todo-action weizo-todo-del"
+                    onClick={() => void deleteTodo(todo.id)}
+                    title="删除"
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
             </div>
           );
         })}
+        {/* Sample todos (shown when no real data) */}
+        {showSamples && SAMPLE_TODOS.map((s) => (
+          <div key={s.id} className="weizo-kanban-todo-card weizo-kanban-sample-card">
+            <PriorityBar priority={s.priority} />
+            <div className="weizo-kanban-todo-body">
+              <div className="weizo-kanban-todo-titlerow">
+                <span
+                  className="weizo-priority-tag"
+                  style={{ background: PRIORITY_COLOR[s.priority] }}
+                >
+                  {PRIORITY_LABEL[s.priority]}
+                </span>
+                <span
+                  className="weizo-kanban-todo-title"
+                  style={{ color: PRIORITY_TEXT_COLOR[s.priority] }}
+                >
+                  {s.text}
+                </span>
+                <SampleBadge />
+              </div>
+              <div className="weizo-kanban-todo-meta">
+                {s.due_label && (
+                  <span
+                    className="weizo-todo-due"
+                    style={s.overdue ? { color: '#e0533a' } : undefined}
+                  >
+                    📅 {s.due_label}
+                  </span>
+                )}
+                <AgingLine days={s.age_days} />
+              </div>
+              <div className="weizo-kanban-todo-actions">
+                <button type="button" className="weizo-todo-action weizo-kanban-cta" disabled>
+                  💬 对话小秘
+                </button>
+                <button type="button" className="weizo-todo-action" disabled>✓</button>
+                <button type="button" className="weizo-todo-action weizo-todo-del" disabled>🗑</button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -1269,7 +1400,21 @@ interface JobRow {
   completed_at?: string;
 }
 
-function ActiveJobs() {
+function JobStatusPill({ status }: { status: 'running' | 'queued' | 'stuck' }) {
+  const label = status === 'running' ? '运行中' : status === 'queued' ? '排队' : '⚠卡住';
+  return (
+    <span className={`weizo-kanban-status-pill weizo-kanban-status-${status}`}>
+      {status === 'running' && <span className="weizo-kanban-pulse-dot" aria-hidden="true" />}
+      {label}
+    </span>
+  );
+}
+
+function AssigneeAvatar({ initial }: { initial: string }) {
+  return <span className="weizo-kanban-avatar">{initial}</span>;
+}
+
+function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
   const [items, setItems] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1291,40 +1436,93 @@ function ActiveJobs() {
     return () => { cancelled = true; };
   }, []);
 
-  const JOB_LABEL: Record<JobRow['status'], string> = {
-    queued: '排队中',
-    running: '进行中',
-    completed: '完成',
-    failed: '失败',
-  };
+  function elapsedMinutes(createdAt: string | undefined): string | null {
+    if (!createdAt) return null;
+    const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+    if (mins < 1) return '< 1分';
+    return `${mins}分`;
+  }
+
+  const showSamples = !loading && items.length === 0;
 
   return (
     <section className="mobile-work-section" aria-label="进行中">
       <div className="mobile-section-heading">
-        <h2>进行中</h2>
-        <span>Active jobs</span>
+        <h2>进行中 · {showSamples ? SAMPLE_JOBS.length : items.length}</h2>
       </div>
       {loading && items.length === 0 && <div className="mobile-empty-panel">加载中…</div>}
       {error && <div className="mobile-error">任务加载失败：{error}</div>}
-      {!loading && items.length === 0 && !error && (
-        <div className="mobile-empty-panel">暂无进行中的任务。</div>
-      )}
       <div className="mobile-job-list">
-        {items.map((job) => (
-          <div key={job.id} className="mobile-job-row">
-            <span className={`mobile-job-status mobile-job-status-${job.status}`}>
-              {JOB_LABEL[job.status]}
-            </span>
-            <span className="mobile-job-title">{job.brief ?? job.id}</span>
-            <span className="mobile-job-sub">
-              {(job.completed_at ?? job.created_at)?.slice(0, 16) ?? ''}
-              {job.staff_id ? ` · ${job.staff_id}` : ''}
-            </span>
+        {/* Real jobs */}
+        {items.map((job) => {
+          const jobStatus: 'running' | 'queued' | 'stuck' =
+            job.status === 'running' ? 'running' : 'queued';
+          const elapsed = elapsedMinutes(job.created_at);
+          const assigneeInitial = job.staff_id ? job.staff_id.charAt(0).toUpperCase() : '?';
+          return (
+            <div key={job.id} className="weizo-kanban-job-card">
+              <div className="weizo-kanban-job-row1">
+                <AssigneeAvatar initial={assigneeInitial} />
+                <span className="weizo-kanban-job-name">{job.staff_id ?? '未分配'}</span>
+                <JobStatusPill status={jobStatus} />
+                {elapsed && <span className="weizo-kanban-elapsed">⏱ 已跑{elapsed}</span>}
+              </div>
+              <div className="weizo-kanban-job-title">{job.brief ?? job.id}</div>
+              <div className="weizo-kanban-job-latest">
+                {jobStatus === 'queued' ? '等待：' : '最新：'}排队中…
+              </div>
+              <div className="weizo-kanban-job-actions">
+                <button type="button" className="weizo-kanban-action-btn" disabled>
+                  查看实时
+                </button>
+                <button
+                  type="button"
+                  className="weizo-kanban-action-btn weizo-kanban-action-primary"
+                  onClick={() => onTalkToSecretary(job.brief ?? job.id)}
+                >
+                  去对话
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {/* Sample jobs */}
+        {showSamples && SAMPLE_JOBS.map((s) => (
+          <div key={s.id} className="weizo-kanban-job-card weizo-kanban-sample-card">
+            <div className="weizo-kanban-job-row1">
+              <AssigneeAvatar initial={s.assignee} />
+              <span className="weizo-kanban-job-name">{s.name}</span>
+              <JobStatusPill status={s.jobStatus} />
+              {s.elapsed && <span className="weizo-kanban-elapsed">⏱ 已跑{s.elapsed}</span>}
+              <SampleBadge />
+            </div>
+            <div className="weizo-kanban-job-title">{s.title}</div>
+            <div className="weizo-kanban-job-latest">{s.latestPrefix}：{s.latest}</div>
+            <div className="weizo-kanban-job-actions">
+              <button type="button" className="weizo-kanban-action-btn" disabled>查看实时</button>
+              <button type="button" className="weizo-kanban-action-btn weizo-kanban-action-primary" disabled>去对话</button>
+            </div>
           </div>
         ))}
       </div>
     </section>
   );
+}
+
+function DelivReviewPill({ status }: { status: 'pending' | 'seen' }) {
+  return (
+    <span className={`weizo-kanban-status-pill weizo-kanban-review-${status}`}>
+      {status === 'pending' ? '待验收' : '已看'}
+    </span>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 60) return `${mins}分钟前`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}小时前`;
+  return `${Math.floor(hrs / 24)}天前`;
 }
 
 function DelivSection() {
@@ -1381,29 +1579,64 @@ function DelivSection() {
     );
   }
 
+  const showSamples = !loading && items.length === 0;
+
   return (
     <section className="mobile-work-section weizo-deliverables-section" aria-label="交付">
       <div className="mobile-section-heading">
-        <h2>交付</h2>
-        <span style={{ fontSize: '11px', color: '#999' }}>DE-EMPHASIZED</span>
+        <h2>交付 · {showSamples ? SAMPLE_DELIVERABLES.length : items.length}</h2>
       </div>
       {loading && items.length === 0 && <div className="mobile-empty-panel">加载中…</div>}
       {error && <div className="mobile-error">加载失败：{error}</div>}
-      {!loading && items.length === 0 && !error && (
-        <div className="mobile-empty-panel">还没有交付。</div>
-      )}
       <div className="mobile-job-list">
-        {items.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            className="mobile-deliverable-row"
-            onClick={() => setOpenId(d.id)}
-          >
-            <span className="mobile-deliverable-status">{STATUS_LABEL[d.status]}</span>
-            <span className="mobile-deliverable-title">{d.title}</span>
-            <span className="mobile-deliverable-sub">{excerpt(bodyText(d.body))}</span>
-          </button>
+        {/* Real deliverables */}
+        {items.map((d) => {
+          const reviewStatus: 'pending' | 'seen' =
+            d.status === 'accepted' || d.status === 'rejected' ? 'seen' : 'pending';
+          return (
+            <div key={d.id} className="weizo-kanban-deliv-card">
+              <div className="weizo-kanban-deliv-row1">
+                <span className="weizo-kanban-deliv-icon">📄</span>
+                <span className="weizo-kanban-deliv-title">{d.title}</span>
+                <DelivReviewPill status={reviewStatus} />
+              </div>
+              <div className="weizo-kanban-deliv-meta">
+                {d.created_at ? `🕐 ${timeAgo(d.created_at)}` : ''}
+                {d.created_at ? ' · ' : ''}
+                {'👤 ' + (d.title ? d.title.slice(0, 4) : '—')}
+              </div>
+              <div className="weizo-kanban-deliv-excerpt">{excerpt(bodyText(d.body))}</div>
+              <div className="weizo-kanban-job-actions">
+                <button
+                  type="button"
+                  className="weizo-kanban-action-btn weizo-kanban-action-primary"
+                  onClick={() => setOpenId(d.id)}
+                >
+                  查看交付
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {/* Sample deliverables */}
+        {showSamples && SAMPLE_DELIVERABLES.map((s) => (
+          <div key={s.id} className="weizo-kanban-deliv-card weizo-kanban-sample-card">
+            <div className="weizo-kanban-deliv-row1">
+              <span className="weizo-kanban-deliv-icon">📄</span>
+              <span className="weizo-kanban-deliv-title">{s.title}</span>
+              <DelivReviewPill status={s.reviewStatus} />
+              <SampleBadge />
+            </div>
+            <div className="weizo-kanban-deliv-meta">
+              🕐 {s.when} · 👤 {s.who}
+            </div>
+            <div className="weizo-kanban-deliv-excerpt">{s.excerpt}</div>
+            <div className="weizo-kanban-job-actions">
+              <button type="button" className="weizo-kanban-action-btn weizo-kanban-action-primary" disabled>
+                查看交付
+              </button>
+            </div>
+          </div>
         ))}
       </div>
     </section>
@@ -1434,7 +1667,7 @@ function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
         ))}
       </div>
       {board === 'todo' && <TodoBacklog onTalkToSecretary={onTalkToSecretary} />}
-      {board === 'doing' && <ActiveJobs />}
+      {board === 'doing' && <ActiveJobs onTalkToSecretary={onTalkToSecretary} />}
       {board === 'done' && <DelivSection />}
     </div>
   );
