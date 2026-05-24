@@ -2,6 +2,9 @@ import { validateDeviceTokenDetailed } from './device-pairing-store';
 
 const LOOPBACK_HOST_RE = /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$/;
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$/;
+// Dev/demo only: the desktop owner may reach their own desk via a private-LAN IP
+// (e.g. the §6 mobile preview at http://<wsl-ip>:3100/me). Loopback + private LAN.
+const DEV_LAN_HOST_RE = /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\]|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|100\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/;
 
 function isLoopbackIp(raw: string): boolean {
   const s = raw.trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
@@ -12,6 +15,15 @@ function isLoopbackIp(raw: string): boolean {
 
 export function isLoopbackRequest(req: Request): boolean {
   const host = req.headers.get('host') ?? '';
+  // Dev/demo escape hatch: the owner accessing their OWN desk via a private-LAN
+  // IP counts as "the desktop" (so QR pair-start works from http://<lan-ip>/me).
+  // Production (no OPEN_DEMO/LAN_ACCESS) stays strict loopback-only.
+  if (
+    (process.env.HOLON_OPEN_DEMO === '1' || process.env.HOLON_LAN_ACCESS === '1') &&
+    DEV_LAN_HOST_RE.test(host)
+  ) {
+    return true;
+  }
   if (!LOOPBACK_HOST_RE.test(host)) return false;
 
   const origin = req.headers.get('origin');
