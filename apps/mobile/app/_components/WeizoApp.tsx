@@ -1297,8 +1297,8 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
                   {ageDays > 0 && <AgingLine days={ageDays} />}
                 </div>
                 <div className="weizo-kanban-todo-actions">
-                  <label className="weizo-todo-action weizo-todo-datelabel" title="设日期">
-                    设日期
+                  <label className="weizo-todo-action weizo-todo-datelabel" title="设日期" aria-label="设日期">
+                    📅
                     <input
                       type="date"
                       className="weizo-todo-dateinput"
@@ -1312,17 +1312,19 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
                       className="weizo-todo-action"
                       onClick={() => void setDueDate(todo.id, null)}
                       title="清除日期"
+                      aria-label="清除日期"
                     >
-                      清除
+                      ✕
                     </button>
                   )}
                   <button
                     type="button"
                     className="weizo-todo-action weizo-kanban-cta"
                     onClick={() => onTalkToSecretary(todo.text)}
-                    title="对话小秘"
+                    title="对话小秘（派活）"
+                    aria-label="对话小秘"
                   >
-                    💬 对话小秘
+                    💬
                   </button>
                   <button
                     type="button"
