@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import type { OptionalFeature } from '@holon/api-contract';
 import { useOwner } from '../../lib/hooks/useOwner';
 import { getEffectiveLanguage } from '../../lib/i18n/get-effective-language';
+import { BugReportButton } from './BugReportButton';
 
 // 2026-05-19 (iter-017 Pass #12 part 1): the previously-inlined
 // getEffectiveLanguage moved to apps/web/lib/i18n/get-effective-language.ts
@@ -255,6 +256,9 @@ export function Nav({ collapsed = false }: NavProps) {
        * Rendered icon-only (bug-20260518-123933) with label "Me" only
        * (bug-20260518-124449): owner has repeatedly asked that the word
        * "Config" not appear anywhere visible — including tooltip text. */}
+      <div className="nav-bug-row">
+        <BugReportButton />
+      </div>
       <div className="nav-footer">
         <div className="nav-divider" role="separator" aria-hidden="true" />
         {footerItems.map((item) => renderItem(item, { iconOnly: true }))}

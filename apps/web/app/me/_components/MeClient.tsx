@@ -8,7 +8,6 @@ import { FolderPicker } from './FolderPicker';
 import { AuthorizationsSection } from './AuthorizationsSection';
 import { ConnectPhoneSection } from './ConnectPhoneSection';
 import { BugQueue } from './BugQueue';
-import { BugReportButton } from '../../_components/BugReportButton';
 import { LanguageSwitcher } from '../../_components/LanguageSwitcher';
 import { primeOwner } from '../../../lib/hooks/useOwner';
 import { useT } from '../../../lib/i18n/useT';
@@ -454,7 +453,6 @@ export function MeClient({
          * (ported from holon-engineering main). */}
         <section className="card" style={{ padding: 20 }}>
           <h2 className="section-title" style={{ marginTop: 0 }}>{t('me.section.bug_queue', zh ? '🐞 缺陷队列' : '🐞 Bug queue')}</h2>
-          <div style={{ marginBottom: 16 }}><BugReportButton /></div>
           <BugQueue />
         </section>
 
