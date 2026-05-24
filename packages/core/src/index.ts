@@ -74,6 +74,15 @@ export {
   readCliStaffMemory,
   writeCliStaffMemory,
 } from './owner-state-persistence.js';
+
+export {
+  listA2APeers,
+  getA2APeer,
+  upsertA2APeer,
+  removeA2APeer,
+  normalizeA2ABaseUrl,
+  type A2APeerRecord,
+} from './a2a-peer-store.js';
 export {
   bossMemoryRoot,
   readBossMemory,

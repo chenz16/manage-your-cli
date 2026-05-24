@@ -643,6 +643,52 @@ export function writeWechatContacts(contacts: WechatContact[]): void {
   writeKey('wechat_contacts', contacts);
 }
 
+/* ── A2A peer registry ─────────────────────────────────────────────────────
+ * Persists the list of known A2A peer desks/agents under key 'a2a_peers'.
+ * Each entry carries a stable `id` (= the normalized base URL) plus the full
+ * agent-card snapshot at the time of connection. Upsert semantics: connecting
+ * a known URL overwrites the prior card rather than duplicating it.
+ *
+ * Same read/write posture as every other key in this module: read returns []
+ * on DB-unavailable / parse-error (audit-logged); write swallows errors
+ * inside writeKey so a disk failure does NOT block the HTTP response. */
+
+export interface A2APeerRecord {
+  /** Stable identifier = normalized base URL (no trailing slash). */
+  id: string;
+  /** The agent-card data as fetched from /.well-known/agent-card.json. */
+  card: Record<string, unknown>;
+  /** ISO timestamp of first connect. */
+  connected_at: string;
+  /** ISO timestamp of last card refresh (may differ from connected_at on updates). */
+  last_seen_at: string;
+}
+
+export function readA2APeers(): A2APeerRecord[] {
+  const db = ensureDb();
+  if (!db) return [];
+  try {
+    const stmt = db.prepare('SELECT value FROM owner_state WHERE key = ?');
+    const row = stmt.get('a2a_peers') as { value: string } | undefined;
+    if (!row) return [];
+    const parsed = JSON.parse(row.value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as A2APeerRecord[];
+  } catch (err) {
+    console.error(JSON.stringify({
+      audit: 'persistence.read_failed',
+      key: 'a2a_peers',
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
+    return [];
+  }
+}
+
+export function writeA2APeers(peers: A2APeerRecord[]): void {
+  writeKey('a2a_peers', peers);
+}
+
 /* ── Test helper ───────────────────────────────────────────────────────── */
 
 /** Vitest-only: drop the singleton + the table so `HOLON_DB_PATH` can be
