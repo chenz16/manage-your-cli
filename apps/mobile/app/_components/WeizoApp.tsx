@@ -702,15 +702,25 @@ const OWNER_CHAT_ID = 'owner';
 /**
  * OwnerChatHistorySync — rendered inside AssistantRuntimeProvider.
  * Reads the live thread via useThread() and:
- *   1. On mount: restores cached messages into the runtime via reset().
- *   2. On every message array change: persists to cache.
+ *   1. On mount: seeds from desk transcript (PRIMARY) via
+ *      GET /api/v1/chat/history?thread=owner. Falls back to local
+ *      cache (offline / desk unreachable) for instant first-paint.
+ *   2. On every message array change: persists to local cache (write-through
+ *      so offline fallback stays warm).
  * Both operations are SSR-safe (only inside effects).
+ *
+ * Desk-fetch strategy:
+ *   a. Immediately seed from local cache (fast first-paint, may be stale).
+ *   b. Fetch desk transcript async. When it arrives and it is longer
+ *      than the local cache, call runtime.thread.reset() to replace
+ *      the thread WITHOUT triggering the LLM (reset() = state-only).
  */
 function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocalRuntime> }) {
   const thread = useThread();
   const restoredRef = useRef(false);
+  const deskSyncedRef = useRef(false);
 
-  // Restore cached history once on mount (before any user interaction)
+  // Step 1: instant first-paint from local cache (offline fallback)
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
@@ -725,7 +735,47 @@ function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocal
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist thread messages to cache whenever they change
+  // Step 2: desk-primary sync — fetch desk transcript, reconcile with local
+  useEffect(() => {
+    if (deskSyncedRef.current) return;
+    deskSyncedRef.current = true;
+    holonApiFetch('/api/v1/chat/history?thread=owner', { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({})) as {
+          messages?: Array<{ role?: unknown; content?: unknown }>;
+        };
+        const raw = Array.isArray(data.messages) ? data.messages : [];
+        const deskMsgs: CachedMessage[] = raw
+          .filter((m) =>
+            (m.role === 'user' || m.role === 'assistant') &&
+            typeof m.content === 'string' &&
+            (m.content as string).length > 0,
+          )
+          .map((m) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content as string,
+          }));
+        if (deskMsgs.length === 0) return;
+        // Write-through to local cache (keeps offline fallback fresh)
+        saveChatMessages(OWNER_CHAT_ID, deskMsgs);
+        // Re-seed if desk has more messages than what is currently displayed
+        if (deskMsgs.length > thread.messages.length) {
+          const seed: ThreadMessageLike[] = deskMsgs.map((m) => ({
+            role: m.role,
+            content: m.content,
+          }));
+          // reset() does NOT trigger the model — safe for restoring history
+          runtime.thread.reset(seed);
+        }
+      })
+      .catch(() => {
+        // Desk unreachable (offline / not paired) — local cache already shown
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist thread messages to local cache whenever they change (write-through)
   useEffect(() => {
     const msgs = thread.messages;
     if (msgs.length === 0) return;
@@ -806,14 +856,47 @@ function StaffChat({ staff }: { staff: Staff }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  // Restore cached history on mount (SSR-safe: only runs on client in effect)
+  // Step 1: instant first-paint from local cache (offline fallback)
+  // Step 2: desk-primary sync — fetch desk transcript and reconcile
   useEffect(() => {
+    // Immediate: seed from local cache for first-paint
     const cached = loadChatMessages(staffChatId);
     if (cached.length > 0) setMessages(cached);
+
+    // Async: fetch the shared desk transcript as primary source of truth
+    const encodedThread = encodeURIComponent(staffChatId);
+    holonApiFetch(`/api/v1/chat/history?thread=${encodedThread}`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({})) as {
+          messages?: Array<{ role?: unknown; content?: unknown }>;
+        };
+        const raw = Array.isArray(data.messages) ? data.messages : [];
+        const deskMsgs: StaffChatMessage[] = raw
+          .filter((m) =>
+            (m.role === 'user' || m.role === 'assistant') &&
+            typeof m.content === 'string' &&
+            (m.content as string).length > 0,
+          )
+          .map((m) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content as string,
+          }));
+        if (deskMsgs.length === 0) return;
+        // Write-through to local cache for offline use
+        saveChatMessages(staffChatId, deskMsgs);
+        // Update state if desk has more messages than what we showed from cache
+        setMessages((current) =>
+          deskMsgs.length > current.length ? deskMsgs : current,
+        );
+      })
+      .catch(() => {
+        // Desk unreachable — local cache already shown, no action needed
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffChatId]);
 
-  // Persist messages to cache whenever they change
+  // Persist messages to local cache whenever they change (write-through)
   useEffect(() => {
     if (messages.length === 0) return;
     saveChatMessages(staffChatId, messages);

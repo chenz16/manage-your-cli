@@ -1,8 +1,10 @@
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 import { spawn } from 'node:child_process';
-import { getOrCreateSecretaryStaff, readBossMemory, getProject } from '@holon/core';
+import { getOrCreateSecretaryStaff, readBossMemory, getProject, appendChatMessage } from '@holon/core';
 import { sendWarmTurn } from '@/lib/warm-agent';
 import { parseJsonRequestBody, extractChatMessages, extractLatestUserText, buildOwnerPrompt } from '@/lib/owner-chat-helpers';
+
+const OWNER_THREAD_ID = 'owner';
 
 /**
  * POST /api/v1/chat/owner/stream - owner chat turn streamed as SSE.
@@ -55,6 +57,10 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
+  // Persist the user message immediately (before we await the LLM response)
+  // so the desk transcript is visible even if the assistant reply is slow.
+  appendChatMessage(OWNER_THREAD_ID, { role: 'user', content: userText });
+
   // Phase 1: active project memory injection (design doc § 9 item 8).
   // When the client passes `active_project_id`, read its boss-memory scope
   // and prepend it to the owner prompt as context. Backward-compat: if
@@ -99,10 +105,16 @@ export async function POST(req: Request): Promise<Response> {
       const finish = (stopReason: string, reason?: string) => {
         if (closed) return;
         closed = true;
+        const finalText = assembled.trim();
         try {
-          controller.enqueue(encoder.encode(sse({ type: 'done', stopReason, finalText: assembled.trim() })));
+          controller.enqueue(encoder.encode(sse({ type: 'done', stopReason, finalText })));
           controller.close();
         } catch { /* already closed */ }
+        // Persist the assistant reply to the desk transcript so mobile
+        // (and desk on reload) can sync the full conversation.
+        if (finalText) {
+          appendChatMessage(OWNER_THREAD_ID, { role: 'assistant', content: finalText });
+        }
         console.log(JSON.stringify({
           audit: 'owner.chat_turn',
           runtime: 'secretary-headless',

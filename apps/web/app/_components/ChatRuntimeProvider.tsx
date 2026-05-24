@@ -6,6 +6,7 @@ import {
   makeOwnerAdapter,
   loadInitialMessages,
   fetchInitialMessagesFromApi,
+  fetchTranscriptFromDesk,
   clearStoredMessages,
 } from './owner-adapter';
 
@@ -54,26 +55,49 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
 
 function ChatRuntimeInner({ children }: { children: ReactNode }) {
   const stored = useMemo(() => loadInitialMessages(), []);
-  // L-050 follow-up: always render the bound runtime (Provider must be
-  // present in the tree from first paint, otherwise descendants like
-  // ThreadPrimitiveEmpty throw "requires an AuiProvider"). When stored
-  // is empty we fire the /chat/threads fetch and, once it resolves,
-  // bump remountKey so ChatRuntimeBound re-mounts with the hydrated
-  // initialMessages. Warm reloads (stored.length > 0) skip the fetch
-  // entirely and never remount.
+  // chat-sync: always try to hydrate from the desk transcript (shared source of
+  // truth) so messages sent from mobile show up here. Strategy:
+  //   1. Paint immediately with sessionStorage (stored) if non-empty — zero
+  //      extra latency for warm reloads.
+  //   2. In background, fetch /api/v1/chat/history?thread=owner (the desk
+  //      transcript). If it's longer than sessionStorage (i.e. messages sent
+  //      from mobile that haven't hit this session), re-mount with the full set.
+  //      If not longer, keep the stored view (avoids unnecessary re-render).
+  //   3. If sessionStorage was empty, fall back to /api/v1/chat/threads
+  //      (persona starter greeting — existing L-050 path).
   const [hydrated, setHydrated] = useState<ThreadMessageLike[] | null>(null);
 
   useEffect(() => {
-    if (stored.length > 0) return;
     let cancelled = false;
-    fetchInitialMessagesFromApi().then((msgs) => {
-      if (!cancelled && msgs.length > 0) setHydrated(msgs);
+    fetchTranscriptFromDesk().then((deskMsgs) => {
+      if (cancelled) return;
+      if (deskMsgs.length > 0) {
+        // Desk transcript is the primary source. Use it if it has more messages
+        // than what sessionStorage holds (catches messages from other devices).
+        if (deskMsgs.length > stored.length) {
+          setHydrated(deskMsgs);
+        }
+        // If stored already covers everything (same or more), no re-mount needed.
+        return;
+      }
+      // Desk transcript empty (first use / cleared). Fall back to persona greeting.
+      if (stored.length > 0) return; // sessionStorage has content, no need to fetch
+      fetchInitialMessagesFromApi().then((msgs) => {
+        if (!cancelled && msgs.length > 0) setHydrated(msgs);
+      });
+    }).catch(() => {
+      // Desk fetch failed — fall through to persona greeting if no sessionStorage.
+      if (stored.length > 0) return;
+      fetchInitialMessagesFromApi().then((msgs) => {
+        if (!cancelled && msgs.length > 0) setHydrated(msgs);
+      });
     });
     return () => { cancelled = true; };
-  }, [stored]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const initialMessages = stored.length > 0 ? stored : (hydrated ?? []);
-  const remountKey = stored.length > 0 ? 'stored' : (hydrated ? 'hydrated' : 'empty');
+  const initialMessages = hydrated ?? (stored.length > 0 ? stored : []);
+  const remountKey = hydrated ? 'desk-transcript' : (stored.length > 0 ? 'stored' : 'empty');
 
   return (
     <ChatRuntimeBound key={remountKey} initialMessages={initialMessages}>

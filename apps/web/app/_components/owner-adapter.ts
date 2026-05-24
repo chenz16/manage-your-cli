@@ -58,6 +58,40 @@ export function loadInitialMessages(): ThreadMessageLike[] {
   return readStored().map((m) => ({ role: m.role, content: m.content }));
 }
 
+/** chat-sync: fetch the shared desk transcript for the owner thread.
+ *  This is the PRIMARY source of truth — it includes messages sent from
+ *  mobile and any messages from this session. Returns [] on any error
+ *  so the caller can gracefully fall back. Also primes sessionStorage
+ *  with the latest transcript so refreshes remain fast. */
+export async function fetchTranscriptFromDesk(): Promise<ThreadMessageLike[]> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const res = await fetch('/api/v1/chat/history?thread=owner', { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json() as {
+      messages?: Array<{ role?: unknown; content?: unknown; ts?: unknown }>;
+    };
+    const msgs = Array.isArray(data.messages) ? data.messages : [];
+    const hydrated = msgs
+      .filter((m) =>
+        (m.role === 'user' || m.role === 'assistant') &&
+        typeof m.content === 'string' &&
+        (m.content as string).length > 0,
+      )
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content as string,
+      }));
+    // Prime sessionStorage so page refreshes don't re-fetch from the desk
+    if (hydrated.length > 0) {
+      writeStored(hydrated.map((m) => ({ role: m.role, content: m.content as string })));
+    }
+    return hydrated;
+  } catch {
+    return [];
+  }
+}
+
 /** L-050: hydrate first-load chat from the persona's seeded starter
  *  greeting (`/api/v1/chat/threads`) when sessionStorage is empty.
  *  Without this, Pass #4's per-persona starter_greeting has no UI

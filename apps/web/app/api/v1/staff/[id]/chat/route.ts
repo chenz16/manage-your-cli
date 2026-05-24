@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getStaffMerged } from '@holon/core';
+import { getStaffMerged, appendChatMessage } from '@holon/core';
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 
 interface Context { params: Promise<{ id: string }> }
@@ -43,8 +43,18 @@ export async function POST(req: Request, ctx: Context): Promise<Response> {
     return NextResponse.json({ error: 'at least one user message required', code: 'missing_user_message' }, { status: 400 });
   }
 
+  const threadId = `staff:${id}`;
+  const userContent = latestUser.content.trim();
+  const replyContent = `${staff.name} received: ${userContent}`;
+
+  // Persist both sides of the exchange to the desk transcript so cross-device
+  // sync works even when the staff reply is a stub. When staff chat gains a
+  // real LLM backend, replace this block's append with a finish-callback.
+  appendChatMessage(threadId, { role: 'user', content: userContent });
+  appendChatMessage(threadId, { role: 'assistant', content: replyContent });
+
   return NextResponse.json({
-    reply: `${staff.name} received: ${latestUser.content.trim()}`,
+    reply: replyContent,
     staff_id: staff.id,
     mode: 'stub',
   });

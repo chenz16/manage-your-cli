@@ -244,3 +244,11 @@ export {
   readClaudeUsageByAgent,
   type ClaudeUsage,
 } from './usage-stats.js';
+
+// Chat transcript store — desk-shared source of truth for cross-device sync
+export {
+  appendChatMessage,
+  readChatTranscript,
+  clearChatTranscript,
+  type TranscriptMessage,
+} from './chat-transcript-store.js';
