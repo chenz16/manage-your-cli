@@ -119,9 +119,7 @@ export default function ConnectorsPage() {
   const [ttsStatus, setTtsStatus] = useState<string | null>(null);
 
   // A2A state
-  const [myCard, setMyCard] = useState<AgentCard | null>(null);
   const [myCardError, setMyCardError] = useState<string | null>(null);
-  const [myCardSkillsExpanded, setMyCardSkillsExpanded] = useState(false);
   const [peerUrl, setPeerUrl] = useState('');
   const [peerCard, setPeerCard] = useState<AgentCard | null>(null);
   const [peerCardStatus, setPeerCardStatus] = useState<string | null>(null);
@@ -223,7 +221,7 @@ export default function ConnectorsPage() {
     fetchPlugins();
   }, [fetchPlugins]);
 
-  // Fetch this desk's own agent card on mount.
+  // Pre-fill peer URL with own origin; verify agent card is reachable.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setPeerUrl(window.location.origin);
@@ -232,10 +230,7 @@ export default function ConnectorsPage() {
       .then(async (res) => {
         if (!res.ok) {
           setMyCardError(`HTTP ${res.status}: ${await res.text()}`);
-          return;
         }
-        const data = await res.json() as AgentCard;
-        setMyCard(data);
       })
       .catch((err: unknown) => {
         setMyCardError(err instanceof Error ? err.message : String(err));
@@ -570,102 +565,136 @@ export default function ConnectorsPage() {
         </div>
       </section>
 
-      {/* ── 通知 group: Agent peers (A2A) ─────────────────────────────── */}
+      {/* ── 对外连接 group: Connect to other agents (A2A) ────────────── */}
       <section className="card conn-card">
         <div className="conn-card-head">
-          <p className="conn-eyebrow">Agent peers (A2A)</p>
-          <h2 className="conn-card-title">Agent-to-Agent interconnect</h2>
+          <p className="conn-eyebrow">对外连接 · Agent network</p>
+          <h2 className="conn-card-title">连接其他 agent / Connect to other agents</h2>
           <p className="conn-card-hint">
-            Discover and message other A2A-speaking desks. Uses the A2A 0.2.0 standard (agent card + JSON-RPC task protocol).
+            主动连接外部 agent，创建对外连接器。A2A 0.2.0 标准（agent card + JSON-RPC），支持任意实现了该协议的桌面或服务。
           </p>
         </div>
 
-        {/* This desk's card */}
+        {/* ── Primary action: Add peer by agent-card URL ── */}
         <div className="conn-field">
-          <span className="conn-field-label">This desk&apos;s card</span>
+          <span className="conn-field-label">添加 agent 对端 / Add a peer agent</span>
           <p className="conn-field-hint">
-            This is your desk&apos;s outward &ldquo;business card&rdquo; — other people&apos;s agents read{' '}
-            <code>/.well-known/agent-card.json</code> to discover what your Secretary can do.
-            Only relevant if you federate with other agents; safe to ignore otherwise.
+            粘贴另一个 agent 的地址（base URL 或完整的{' '}
+            <code>…/.well-known/agent-card.json</code> URL），点击 Connect 发现并连接。
           </p>
-          {myCardError && (
-            <p className="conn-status">Error loading card: {myCardError}</p>
-          )}
-          {myCard && (
-            <div className="conn-panel">
-              <div className="conn-panel-row">
-                <span className="conn-panel-name">{myCard.name}</span>
-                <span className="conn-panel-meta">A2A {myCard.protocolVersion}</span>
-              </div>
-              {myCard.skills.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: 12, padding: '3px 10px', marginTop: 8, alignSelf: 'flex-start' }}
-                    onClick={() => setMyCardSkillsExpanded((prev) => !prev)}
-                    aria-expanded={myCardSkillsExpanded}
-                  >
-                    {myCardSkillsExpanded
-                      ? `隐藏能力列表 ▴`
-                      : `查看全部 ${myCard.skills.length} 项能力 ▾`}
-                  </button>
-                  {myCardSkillsExpanded && (
-                    <div className="conn-chips" style={{ marginTop: 8 }}>
-                      {myCard.skills.map((sk) => (
-                        <span key={sk.id} title={sk.id} className="conn-chip">{sk.name}</span>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-              {myCard.skills.length === 0 && (
-                <p className="conn-panel-empty">No skills/employees registered.</p>
-              )}
-            </div>
-          )}
-          {!myCard && !myCardError && (
-            <p className="conn-status">Loading…</p>
-          )}
-        </div>
-
-        {/* Ping a peer */}
-        <div className="conn-field">
-          <span className="conn-field-label">Ping a peer</span>
           <input
             className="conn-input"
             value={peerUrl}
             onChange={(event) => { setPeerUrl(event.target.value); setPeerCard(null); setPeerCardStatus(null); }}
-            placeholder="http://host:port"
+            placeholder="http://host:port  或  http://host:port/.well-known/agent-card.json"
             autoComplete="off"
           />
           <div className="conn-actions">
-            <button type="button" className="btn btn-secondary" onClick={discoverPeer}>Discover</button>
+            <button type="button" className="btn btn-primary" onClick={discoverPeer}>Connect</button>
             {peerCardStatus && <span className="conn-status">{peerCardStatus}</span>}
           </div>
-          {peerCard && peerCard.skills.length > 0 && (
-            <div className="conn-chips">
-              {peerCard.skills.map((sk) => (
-                <span key={sk.id} title={sk.id} className="conn-chip">{sk.name}</span>
-              ))}
+          {peerCard && (
+            <div className="conn-panel" style={{ marginTop: 4 }}>
+              <div className="conn-panel-row">
+                <span className="conn-panel-name">{peerCard.name}</span>
+                <span className="conn-panel-meta">A2A {peerCard.protocolVersion}</span>
+              </div>
+              {peerCard.skills.length > 0 && (
+                <div className="conn-chips" style={{ marginTop: 8 }}>
+                  {peerCard.skills.map((sk) => (
+                    <span key={sk.id} title={sk.id} className="conn-chip">{sk.name}</span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Send test message */}
-        <div className="conn-field">
-          <span className="conn-field-label">Send test message</span>
-          <input
-            className="conn-input"
-            value={pingMsg}
-            onChange={(event) => setPingMsg(event.target.value)}
-            placeholder="Hello from this desk!"
-            autoComplete="off"
-          />
-          <div className="conn-actions">
-            <button type="button" className="btn btn-primary" onClick={sendPingMessage}>Send test message</button>
-            {pingStatus && <span className="conn-status">{pingStatus}</span>}
+        {/* ── Test message to connected peer ── */}
+        {peerCard && (
+          <div className="conn-field">
+            <span className="conn-field-label">发送测试消息 / Send test message</span>
+            <input
+              className="conn-input"
+              value={pingMsg}
+              onChange={(event) => setPingMsg(event.target.value)}
+              placeholder="Hello from this desk!"
+              autoComplete="off"
+            />
+            <div className="conn-actions">
+              <button type="button" className="btn btn-primary" onClick={sendPingMessage}>Send</button>
+              {pingStatus && <span className="conn-status">{pingStatus}</span>}
+            </div>
           </div>
+        )}
+
+        {/* ── Vendor bridges (informational, honest status) ── */}
+        <div className="conn-field">
+          <span className="conn-field-label">外部桥接 / Vendor bridges</span>
+          <p className="conn-field-hint">
+            非 A2A 原生的外部系统需要适配器桥接。以下为已规划的桥接方案及当前进展：
+          </p>
+
+          {/* OpenClaw / WeChat */}
+          <div className="conn-plugin" style={{ padding: '12px 14px' }}>
+            <div className="conn-plugin-head">
+              <div className="conn-plugin-title-wrap">
+                <div className="conn-plugin-title-row">
+                  <span className="conn-plugin-name">OpenClaw / WeChat (iLink)</span>
+                  <span className="conn-tag">via ClawBot</span>
+                </div>
+                <p className="conn-plugin-desc">
+                  通过 ClawBot 网关桥接微信联系人和群聊（<code>scripts/clawbot/</code>）。ClawBot 以 iLink 形式转发消息，桥接到 A2A task 流程。
+                </p>
+              </div>
+              <span className="conn-plugin-state">接入中</span>
+            </div>
+          </div>
+
+          {/* Hermes HTTP API */}
+          <div className="conn-plugin" style={{ padding: '12px 14px' }}>
+            <div className="conn-plugin-head">
+              <div className="conn-plugin-title-wrap">
+                <div className="conn-plugin-title-row">
+                  <span className="conn-plugin-name">Hermes (HTTP API)</span>
+                </div>
+                <p className="conn-plugin-desc">
+                  通过 HTTP 适配器将 Hermes API 接入 A2A 协议。需要实现一个轻量 HTTP adapter 将 Hermes 请求转译为 A2A task。
+                </p>
+              </div>
+              <span className="conn-plugin-state">规划中</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Your outward address (one-liner, minimized) ── */}
+        <div className="conn-field">
+          <span className="conn-field-label" style={{ color: 'var(--ink-mute)', fontSize: 13, fontWeight: 500 }}>
+            你的对外地址 / Your address
+          </span>
+          <div className="conn-panel" style={{ padding: '10px 14px' }}>
+            <div className="conn-panel-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <code style={{ fontSize: 12, color: 'var(--ink-soft)', wordBreak: 'break-all', flex: 1 }}>
+                {typeof window !== 'undefined' ? window.location.origin : ''}/.well-known/agent-card.json
+              </code>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '3px 10px', flexShrink: 0 }}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    void navigator.clipboard.writeText(`${window.location.origin}/.well-known/agent-card.json`);
+                  }
+                }}
+              >
+                Copy
+              </button>
+            </div>
+            <p className="conn-panel-empty" style={{ marginTop: 4 }}>别人用它来连接你 — 把这个地址发给对方粘贴到上方输入框。</p>
+          </div>
+          {myCardError && (
+            <p className="conn-status" style={{ fontSize: 12 }}>Agent card error: {myCardError}</p>
+          )}
         </div>
       </section>
 
