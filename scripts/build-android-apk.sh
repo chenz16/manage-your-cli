@@ -121,6 +121,11 @@ patch_manifest_line() {
 
 patch_manifest_line '<uses-permission android:name="android.permission.CAMERA" />'
 patch_manifest_line '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
+# Capacitor's WebChromeClient.onPermissionRequest grants WebView AUDIO_CAPTURE
+# (getUserMedia audio) only when BOTH RECORD_AUDIO and MODIFY_AUDIO_SETTINGS are
+# held. Without this, mic is granted at the OS level but getUserMedia still throws
+# NotAllowedError. Required for the 微作 voice-input button.
+patch_manifest_line '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
 patch_manifest_line '<uses-feature android:name="android.hardware.camera" android:required="false" />'
 
 # Patch android:usesCleartextTraffic="true" into the <application> tag so
