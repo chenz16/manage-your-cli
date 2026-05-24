@@ -24,8 +24,15 @@ import {
   useAui,
   useMessage,
   useLocalRuntime,
+  useThread,
   type ChatModelAdapter,
+  type ThreadMessageLike,
 } from '@assistant-ui/react';
+import {
+  loadMessages as loadChatMessages,
+  saveMessages as saveChatMessages,
+  type CachedMessage,
+} from '../_lib/chat-history-cache';
 import type {
   Deliverable,
   GetDeliverableResponse,
@@ -690,6 +697,54 @@ function OwnerChatVvScroller() {
   return null;
 }
 
+const OWNER_CHAT_ID = 'owner';
+
+/**
+ * OwnerChatHistorySync — rendered inside AssistantRuntimeProvider.
+ * Reads the live thread via useThread() and:
+ *   1. On mount: restores cached messages into the runtime via reset().
+ *   2. On every message array change: persists to cache.
+ * Both operations are SSR-safe (only inside effects).
+ */
+function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocalRuntime> }) {
+  const thread = useThread();
+  const restoredRef = useRef(false);
+
+  // Restore cached history once on mount (before any user interaction)
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const cached = loadChatMessages(OWNER_CHAT_ID);
+    if (cached.length === 0) return;
+    const seed: ThreadMessageLike[] = cached.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+    // reset() re-populates the thread with existing messages without sending to the LLM
+    runtime.thread.reset(seed);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist thread messages to cache whenever they change
+  useEffect(() => {
+    const msgs = thread.messages;
+    if (msgs.length === 0) return;
+    const toSave: CachedMessage[] = msgs
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => {
+        const text = m.content
+          .filter((p): p is { type: 'text'; text: string } => p.type === 'text' && typeof (p as { text?: unknown }).text === 'string')
+          .map((p) => (p as { text: string }).text)
+          .join('');
+        return { role: m.role as 'user' | 'assistant', content: text };
+      })
+      .filter((m) => m.content.length > 0);
+    if (toSave.length > 0) saveChatMessages(OWNER_CHAT_ID, toSave);
+  }, [thread.messages]);
+
+  return null;
+}
+
 function MobileOwnerChat({
   staff,
   seed,
@@ -710,6 +765,7 @@ function MobileOwnerChat({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <OwnerChatHistorySync runtime={runtime} />
       <ComposerSeeder seed={seed} onSeedConsumed={onSeedConsumed} />
       {mounted && <OwnerChatVvScroller />}
       <ThreadPrimitive.Root className="chat-thread mobile-chat-thread">
@@ -744,10 +800,24 @@ function MobileOwnerChat({
 // ─── Staff 1:1 chat ───────────────────────────────────────────────────────────
 
 function StaffChat({ staff }: { staff: Staff }) {
+  const staffChatId = `staff:${staff.id}`;
   const [messages, setMessages] = useState<StaffChatMessage[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+
+  // Restore cached history on mount (SSR-safe: only runs on client in effect)
+  useEffect(() => {
+    const cached = loadChatMessages(staffChatId);
+    if (cached.length > 0) setMessages(cached);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffChatId]);
+
+  // Persist messages to cache whenever they change
+  useEffect(() => {
+    if (messages.length === 0) return;
+    saveChatMessages(staffChatId, messages);
+  }, [messages, staffChatId]);
 
   // Auto-scroll: stick to bottom unless user scrolled up.
   // deps = [messages, sending] so every new message / "正在回复…" indicator scrolls down.
