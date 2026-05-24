@@ -1961,3 +1961,55 @@ button, input, textarea, select { font: inherit; }
     max-width: none;
   }
 }
+
+/* ── SwipeToDelete — WeChat/iOS-style reveal-red-删除 ─────────────────────────
+   .weizo-swipe-wrap   : overflow-hidden clip layer (hides the action behind)
+   .weizo-swipe-card   : the actual card; translateX follows the finger
+   .weizo-swipe-action : 80px red 删除 button, revealed as card slides left
+   .weizo-swipe-deleting: triggers the "fly left + collapse" exit animation
+──────────────────────────────────────────────────────────────────────────── */
+.weizo-swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  /* Clip the red action so it doesn't show before swipe */
+}
+.weizo-swipe-card {
+  position: relative;
+  z-index: 1;
+  /* transition applied inline via JS for snappy drag + snap */
+  will-change: transform;
+  touch-action: pan-y; /* allow vertical scroll by default; JS locks on diagonal */
+  background: transparent; /* card itself must have its own bg */
+}
+.weizo-swipe-card.is-snapping {
+  transition: transform 0.18s ease;
+}
+.weizo-swipe-action {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 80px;
+  display: flex; align-items: center; justify-content: center;
+  background: #e0533a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: none;
+  border-radius: 0 8px 8px 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.weizo-swipe-action:active { background: #c94330; }
+
+/* Exit animation: slide fully left and collapse height */
+@keyframes weizo-swipe-exit {
+  0%   { transform: translateX(-80px); max-height: 200px; opacity: 1; }
+  40%  { transform: translateX(-105%); max-height: 200px; opacity: 0.7; }
+  100% { transform: translateX(-105%); max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+}
+.weizo-swipe-wrap.is-deleting {
+  animation: weizo-swipe-exit 0.30s ease forwards;
+  overflow: hidden;
+  pointer-events: none;
+}

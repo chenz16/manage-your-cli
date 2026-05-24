@@ -8,6 +8,7 @@ export type { Fixtures } from './fixture-store.js';
 export {
   clearMutableStore,
   listJobs,
+  deleteJob,
   type OwnerAssistantPatch,
   type StaffPatch,
 } from './mutable-store.js';
@@ -160,6 +161,7 @@ export {
 export {
   listDeliverables,
   getDeliverable,
+  deleteDeliverable,
   type ListDeliverablesQueryInput,
 } from './deliverables-service.js';
 

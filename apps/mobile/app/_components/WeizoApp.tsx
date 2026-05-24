@@ -6,6 +6,7 @@
 // All API calls go through holonApiFetch (proxied to paired desktop).
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -13,6 +14,7 @@ import {
   type ChangeEvent,
   type PointerEvent,
   type ReactNode,
+  type TouchEvent,
 } from 'react';
 import {
   AssistantRuntimeProvider,
@@ -1016,6 +1018,166 @@ function isOverdue(iso: string): boolean {
   return iso <= todayLocalIso();
 }
 
+// ─── SwipeToDelete — WeChat/iOS-style swipe-left to reveal 删除 ───────────
+
+interface SwipeToDeleteProps {
+  id: string;
+  openId: string | null;
+  onOpen: (id: string | null) => void;
+  onDelete: () => void;
+  children: ReactNode;
+}
+
+function SwipeToDelete({ id, openId, onOpen, onDelete, children }: SwipeToDeleteProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // Touch tracking state — kept in a ref so no re-renders during drag
+  const drag = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    axisLocked: false,
+    isHorizontal: false,
+    currentX: 0,
+  });
+  const [isOpen, setIsOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const SNAP_THRESHOLD = 40;   // px drag to snap open
+  const ACTION_WIDTH   = 80;   // px width of the red button
+
+  // If another card opened, snap this one shut
+  useEffect(() => {
+    if (openId !== id && isOpen) {
+      setIsOpen(false);
+      applyTransform(0, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId]);
+
+  function applyTransform(x: number, animated: boolean) {
+    const card = cardRef.current;
+    if (!card) return;
+    if (animated) {
+      card.classList.add('is-snapping');
+      card.addEventListener('transitionend', () => card.classList.remove('is-snapping'), { once: true });
+    } else {
+      card.classList.remove('is-snapping');
+    }
+    card.style.transform = x === 0 ? '' : `translateX(${x}px)`;
+  }
+
+  const handleTouchStart = useCallback((ev: TouchEvent<HTMLDivElement>) => {
+    const t = ev.touches[0];
+    if (!t) return;
+    drag.current = {
+      active: true,
+      startX: t.clientX,
+      startY: t.clientY,
+      axisLocked: false,
+      isHorizontal: false,
+      currentX: isOpen ? -ACTION_WIDTH : 0,
+    };
+  }, [isOpen]);
+
+  const handleTouchMove = useCallback((ev: TouchEvent<HTMLDivElement>) => {
+    if (!drag.current.active) return;
+    const t = ev.touches[0];
+    if (!t) return;
+    const dx = t.clientX - drag.current.startX;
+    const dy = t.clientY - drag.current.startY;
+
+    // Axis lock: first move > 6px decides
+    if (!drag.current.axisLocked) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      drag.current.axisLocked = true;
+      drag.current.isHorizontal = Math.abs(dx) > Math.abs(dy);
+    }
+
+    if (!drag.current.isHorizontal) return;
+
+    // Prevent vertical scroll page-scroll when we own the gesture
+    ev.preventDefault();
+
+    const base = drag.current.currentX;
+    const raw = base + dx;
+    // Clamp: 0 (closed) to -ACTION_WIDTH (fully open)
+    const clamped = Math.max(-ACTION_WIDTH, Math.min(0, raw));
+    applyTransform(clamped, false);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!drag.current.active) return;
+    drag.current.active = false;
+    if (!drag.current.isHorizontal) return;
+
+    const card = cardRef.current;
+    if (!card) return;
+    // Read current translateX
+    const matrix = new DOMMatrix(getComputedStyle(card).transform);
+    const tx = matrix.m41;
+
+    const dragged = Math.abs(tx) - (isOpen ? 0 : 0);
+    const shouldOpen = isOpen
+      ? Math.abs(tx) > ACTION_WIDTH / 4          // must drag back > 20px to close
+      : Math.abs(tx) > SNAP_THRESHOLD;
+
+    if (shouldOpen && !isOpen) {
+      applyTransform(-ACTION_WIDTH, true);
+      setIsOpen(true);
+      onOpen(id);
+    } else if (!shouldOpen || (isOpen && Math.abs(tx) < ACTION_WIDTH - ACTION_WIDTH / 4)) {
+      applyTransform(0, true);
+      setIsOpen(false);
+      if (openId === id) onOpen(null);
+    } else {
+      // keep open
+      applyTransform(-ACTION_WIDTH, true);
+    }
+    void dragged; // consumed above
+  }, [id, isOpen, onOpen, openId]);
+
+  function handleDelete() {
+    // Animate out, then fire delete
+    const wrap = wrapRef.current;
+    if (wrap) {
+      wrap.classList.add('is-deleting');
+      wrap.addEventListener('animationend', () => { onDelete(); }, { once: true });
+    } else {
+      onDelete();
+    }
+    setIsDeleting(true);
+  }
+
+  return (
+    <div
+      ref={wrapRef}
+      className="weizo-swipe-wrap"
+      style={{ pointerEvents: isDeleting ? 'none' : undefined }}
+    >
+      <button
+        type="button"
+        className="weizo-swipe-action"
+        onClick={handleDelete}
+        tabIndex={isOpen ? 0 : -1}
+        aria-label="删除"
+      >
+        删除
+      </button>
+      <div
+        ref={cardRef}
+        className="weizo-swipe-card"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ─── 看板 — work tracker (待办 LEAD) ───────────────────────────────────────
 
 function AgingLine({ days }: { days: number }) {
@@ -1036,6 +1198,7 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -1193,88 +1356,88 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
             ? Math.max(0, Math.floor((Date.now() - new Date(todo.created_at).getTime()) / 86400000))
             : 0;
           return (
-            <div key={todo.id} className="weizo-kanban-todo-card">
-              <PriorityBar priority={priority} />
-              <div className="weizo-kanban-todo-body">
-                <div className="weizo-kanban-todo-titlerow">
-                  <button
-                    type="button"
-                    className="weizo-priority-tag"
-                    style={{ background: PRIORITY_COLOR[priority] }}
-                    onClick={() => void cyclePriority(todo.id, priority)}
-                    title={`优先级：${PRIORITY_LABEL[priority]}（点击切换）`}
-                    aria-label={`优先级 ${PRIORITY_LABEL[priority]}，点击切换`}
-                  >
-                    {PRIORITY_LABEL[priority]}
-                  </button>
-                  <span
-                    className="weizo-kanban-todo-title"
-                    style={{ color: PRIORITY_TEXT_COLOR[priority] }}
-                  >
-                    {todo.text}
-                  </span>
-                </div>
-                <div className="weizo-kanban-todo-meta">
-                  {todo.due_date && (
-                    <span
-                      className="weizo-todo-due"
-                      style={isOverdue(todo.due_date) ? { color: '#e0533a' } : undefined}
-                      title={`截止 ${todo.due_date}${isOverdue(todo.due_date) ? '（已到期）' : ''}`}
+            <SwipeToDelete
+              key={todo.id}
+              id={todo.id}
+              openId={openSwipeId}
+              onOpen={setOpenSwipeId}
+              onDelete={() => void deleteTodo(todo.id)}
+            >
+              <div className="weizo-kanban-todo-card">
+                <PriorityBar priority={priority} />
+                <div className="weizo-kanban-todo-body">
+                  <div className="weizo-kanban-todo-titlerow">
+                    <button
+                      type="button"
+                      className="weizo-priority-tag"
+                      style={{ background: PRIORITY_COLOR[priority] }}
+                      onClick={() => void cyclePriority(todo.id, priority)}
+                      title={`优先级：${PRIORITY_LABEL[priority]}（点击切换）`}
+                      aria-label={`优先级 ${PRIORITY_LABEL[priority]}，点击切换`}
                     >
-                      📅 {shortDate(todo.due_date)}{isOverdue(todo.due_date) ? '(逾期)' : ''}
+                      {PRIORITY_LABEL[priority]}
+                    </button>
+                    <span
+                      className="weizo-kanban-todo-title"
+                      style={{ color: PRIORITY_TEXT_COLOR[priority] }}
+                    >
+                      {todo.text}
                     </span>
-                  )}
-                  {ageDays > 0 && <AgingLine days={ageDays} />}
-                </div>
-                <div className="weizo-kanban-todo-actions">
-                  <label className="weizo-todo-action weizo-todo-datelabel" title="设日期" aria-label="设日期">
-                    📅
-                    <input
-                      type="date"
-                      className="weizo-todo-dateinput"
-                      value={todo.due_date ?? ''}
-                      onChange={(ev) => void setDueDate(todo.id, ev.target.value || null)}
-                    />
-                  </label>
-                  {todo.due_date && (
+                  </div>
+                  <div className="weizo-kanban-todo-meta">
+                    {todo.due_date && (
+                      <span
+                        className="weizo-todo-due"
+                        style={isOverdue(todo.due_date) ? { color: '#e0533a' } : undefined}
+                        title={`截止 ${todo.due_date}${isOverdue(todo.due_date) ? '（已到期）' : ''}`}
+                      >
+                        📅 {shortDate(todo.due_date)}{isOverdue(todo.due_date) ? '(逾期)' : ''}
+                      </span>
+                    )}
+                    {ageDays > 0 && <AgingLine days={ageDays} />}
+                  </div>
+                  <div className="weizo-kanban-todo-actions">
+                    <label className="weizo-todo-action weizo-todo-datelabel" title="设日期" aria-label="设日期">
+                      📅
+                      <input
+                        type="date"
+                        className="weizo-todo-dateinput"
+                        value={todo.due_date ?? ''}
+                        onChange={(ev) => void setDueDate(todo.id, ev.target.value || null)}
+                      />
+                    </label>
+                    {todo.due_date && (
+                      <button
+                        type="button"
+                        className="weizo-todo-action"
+                        onClick={() => void setDueDate(todo.id, null)}
+                        title="清除日期"
+                        aria-label="清除日期"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="weizo-todo-action weizo-kanban-cta"
+                      onClick={() => onTalkToSecretary(todo.text)}
+                      title="对话小秘（派活）"
+                      aria-label="对话小秘"
+                    >
+                      💬
+                    </button>
                     <button
                       type="button"
                       className="weizo-todo-action"
-                      onClick={() => void setDueDate(todo.id, null)}
-                      title="清除日期"
-                      aria-label="清除日期"
+                      onClick={() => void updateTodo(todo.id, 'done')}
+                      title="完成"
                     >
-                      ✕
+                      ✓
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="weizo-todo-action weizo-kanban-cta"
-                    onClick={() => onTalkToSecretary(todo.text)}
-                    title="对话小秘（派活）"
-                    aria-label="对话小秘"
-                  >
-                    💬
-                  </button>
-                  <button
-                    type="button"
-                    className="weizo-todo-action"
-                    onClick={() => void updateTodo(todo.id, 'done')}
-                    title="完成"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    className="weizo-todo-action weizo-todo-del"
-                    onClick={() => void deleteTodo(todo.id)}
-                    title="删除"
-                  >
-                    🗑
-                  </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </SwipeToDelete>
           );
         })}
       </div>
@@ -1309,6 +1472,7 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
   const [items, setItems] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1326,6 +1490,25 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  async function deleteJob(id: string) {
+    // Optimistic remove
+    setItems((prev) => prev.filter((j) => j.id !== id));
+    try {
+      const r = await holonApiFetch(`/api/v1/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!r.ok && r.status !== 404) throw new Error(`HTTP ${r.status}`);
+    } catch {
+      // On failure: reload list to restore
+      holonApiFetch('/api/v1/jobs', { cache: 'no-store' })
+        .then(async (r) => {
+          if (!r.ok) return;
+          const j = await r.json() as { items?: JobRow[] };
+          const all = Array.isArray(j.items) ? j.items : [];
+          setItems(all.filter((job) => job.status === 'queued' || job.status === 'running').slice(0, 12));
+        })
+        .catch(() => undefined);
+    }
+  }
 
   function elapsedMinutes(createdAt: string | undefined): string | null {
     if (!createdAt) return null;
@@ -1349,30 +1532,38 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
           const elapsed = elapsedMinutes(job.created_at);
           const assigneeInitial = job.staff_id ? job.staff_id.charAt(0).toUpperCase() : '?';
           return (
-            <div key={job.id} className="weizo-kanban-job-card">
-              <div className="weizo-kanban-job-row1">
-                <AssigneeAvatar initial={assigneeInitial} />
-                <span className="weizo-kanban-job-name">{job.staff_id ?? '未分配'}</span>
-                <JobStatusPill status={jobStatus} />
-                {elapsed && <span className="weizo-kanban-elapsed">⏱ 已跑{elapsed}</span>}
+            <SwipeToDelete
+              key={job.id}
+              id={job.id}
+              openId={openSwipeId}
+              onOpen={setOpenSwipeId}
+              onDelete={() => void deleteJob(job.id)}
+            >
+              <div className="weizo-kanban-job-card">
+                <div className="weizo-kanban-job-row1">
+                  <AssigneeAvatar initial={assigneeInitial} />
+                  <span className="weizo-kanban-job-name">{job.staff_id ?? '未分配'}</span>
+                  <JobStatusPill status={jobStatus} />
+                  {elapsed && <span className="weizo-kanban-elapsed">⏱ 已跑{elapsed}</span>}
+                </div>
+                <div className="weizo-kanban-job-title">{job.brief ?? job.id}</div>
+                <div className="weizo-kanban-job-latest">
+                  {jobStatus === 'queued' ? '等待：' : '最新：'}排队中…
+                </div>
+                <div className="weizo-kanban-job-actions">
+                  <button type="button" className="weizo-kanban-action-btn" disabled>
+                    查看实时
+                  </button>
+                  <button
+                    type="button"
+                    className="weizo-kanban-action-btn weizo-kanban-action-primary"
+                    onClick={() => onTalkToSecretary(job.brief ?? job.id)}
+                  >
+                    去对话
+                  </button>
+                </div>
               </div>
-              <div className="weizo-kanban-job-title">{job.brief ?? job.id}</div>
-              <div className="weizo-kanban-job-latest">
-                {jobStatus === 'queued' ? '等待：' : '最新：'}排队中…
-              </div>
-              <div className="weizo-kanban-job-actions">
-                <button type="button" className="weizo-kanban-action-btn" disabled>
-                  查看实时
-                </button>
-                <button
-                  type="button"
-                  className="weizo-kanban-action-btn weizo-kanban-action-primary"
-                  onClick={() => onTalkToSecretary(job.brief ?? job.id)}
-                >
-                  去对话
-                </button>
-              </div>
-            </div>
+            </SwipeToDelete>
           );
         })}
       </div>
@@ -1402,6 +1593,7 @@ function DelivSection() {
   const [detail, setDetail] = useState<GetDeliverableResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1431,6 +1623,24 @@ function DelivSection() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [openId]);
+
+  async function handleDeleteDeliverable(id: string) {
+    // Optimistic remove
+    setItems((prev) => prev.filter((d) => d.id !== id));
+    try {
+      const r = await holonApiFetch(`/api/v1/deliverables/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!r.ok && r.status !== 404) throw new Error(`HTTP ${r.status}`);
+    } catch {
+      // On failure: reload
+      holonApiFetch('/api/v1/deliverables', { cache: 'no-store' })
+        .then(async (r) => {
+          if (!r.ok) return;
+          const j = await r.json() as ListDeliverablesResponse;
+          setItems(Array.isArray(j.items) ? j.items.slice(0, 8) : []);
+        })
+        .catch(() => undefined);
+    }
+  }
 
   if (openId) {
     const d = detail?.deliverable;
@@ -1463,28 +1673,36 @@ function DelivSection() {
           const reviewStatus: 'pending' | 'seen' =
             d.status === 'accepted' || d.status === 'rejected' ? 'seen' : 'pending';
           return (
-            <div key={d.id} className="weizo-kanban-deliv-card">
-              <div className="weizo-kanban-deliv-row1">
-                <span className="weizo-kanban-deliv-icon">📄</span>
-                <span className="weizo-kanban-deliv-title">{d.title}</span>
-                <DelivReviewPill status={reviewStatus} />
+            <SwipeToDelete
+              key={d.id}
+              id={d.id}
+              openId={openSwipeId}
+              onOpen={setOpenSwipeId}
+              onDelete={() => void handleDeleteDeliverable(d.id)}
+            >
+              <div className="weizo-kanban-deliv-card">
+                <div className="weizo-kanban-deliv-row1">
+                  <span className="weizo-kanban-deliv-icon">📄</span>
+                  <span className="weizo-kanban-deliv-title">{d.title}</span>
+                  <DelivReviewPill status={reviewStatus} />
+                </div>
+                <div className="weizo-kanban-deliv-meta">
+                  {d.created_at ? `🕐 ${timeAgo(d.created_at)}` : ''}
+                  {d.created_at ? ' · ' : ''}
+                  {'👤 ' + (d.title ? d.title.slice(0, 4) : '—')}
+                </div>
+                <div className="weizo-kanban-deliv-excerpt">{excerpt(bodyText(d.body))}</div>
+                <div className="weizo-kanban-job-actions">
+                  <button
+                    type="button"
+                    className="weizo-kanban-action-btn weizo-kanban-action-primary"
+                    onClick={() => setOpenId(d.id)}
+                  >
+                    查看交付
+                  </button>
+                </div>
               </div>
-              <div className="weizo-kanban-deliv-meta">
-                {d.created_at ? `🕐 ${timeAgo(d.created_at)}` : ''}
-                {d.created_at ? ' · ' : ''}
-                {'👤 ' + (d.title ? d.title.slice(0, 4) : '—')}
-              </div>
-              <div className="weizo-kanban-deliv-excerpt">{excerpt(bodyText(d.body))}</div>
-              <div className="weizo-kanban-job-actions">
-                <button
-                  type="button"
-                  className="weizo-kanban-action-btn weizo-kanban-action-primary"
-                  onClick={() => setOpenId(d.id)}
-                >
-                  查看交付
-                </button>
-              </div>
-            </div>
+            </SwipeToDelete>
           );
         })}
       </div>
