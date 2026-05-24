@@ -1440,6 +1440,292 @@ function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
   );
 }
 
+// ─── 集成 / 连接服务 — integrations section ──────────────────────────────────
+
+interface MeOwnerData {
+  integrations?: Array<{ kind: string; config?: { email_address?: string } }>;
+  slack_webhook_url?: string | null;
+  discord_webhook_url?: string | null;
+  telegram_bot_token?: string | null;
+  telegram_chat_id?: string | null;
+}
+
+type IntegrationModal =
+  | { kind: 'slack' }
+  | { kind: 'discord' }
+  | { kind: 'telegram' }
+  | { kind: 'gmail_hint' }
+  | { kind: 'wechat_hint' };
+
+function IntegrationConnectedPill({ label }: { label: string }) {
+  return <span className="mobile-intg-pill mobile-intg-pill-connected">{label}</span>;
+}
+function IntegrationDisconnectedPill() {
+  return <span className="mobile-intg-pill mobile-intg-pill-disconnected">未连接</span>;
+}
+function IntegrationNeutralPill({ label }: { label: string }) {
+  return <span className="mobile-intg-pill mobile-intg-pill-neutral">{label}</span>;
+}
+
+function IntegrationsSection({ meData, onRefresh }: {
+  meData: MeOwnerData | null;
+  onRefresh: () => void;
+}) {
+  const [modal, setModal] = useState<IntegrationModal | null>(null);
+  const [inputA, setInputA] = useState('');
+  const [inputB, setInputB] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const integrations = Array.isArray(meData?.integrations) ? meData.integrations : [];
+  const gmailLink = integrations.find((i) => i.kind === 'gmail');
+  const gmailEmail = gmailLink?.config?.email_address ?? null;
+
+  const slackConnected = typeof meData?.slack_webhook_url === 'string' && meData.slack_webhook_url.length > 0;
+  const discordConnected = typeof meData?.discord_webhook_url === 'string' && meData.discord_webhook_url.length > 0;
+  const telegramConnected = typeof meData?.telegram_bot_token === 'string' && meData.telegram_bot_token.length > 0;
+
+  function openModal(m: IntegrationModal) {
+    setSaveError('');
+    setInputA('');
+    setInputB('');
+    setModal(m);
+  }
+
+  function closeModal() {
+    if (saving) return;
+    setModal(null);
+    setSaveError('');
+    setInputA('');
+    setInputB('');
+  }
+
+  async function handleSave() {
+    if (!modal || modal.kind === 'gmail_hint' || modal.kind === 'wechat_hint') return;
+    const value = inputA.trim();
+    const valueB = inputB.trim();
+
+    let body: Record<string, string | null>;
+    if (modal.kind === 'slack') {
+      if (!value) { setSaveError('请粘贴 Slack Webhook URL'); return; }
+      body = { slack_webhook_url: value };
+    } else if (modal.kind === 'discord') {
+      if (!value) { setSaveError('请粘贴 Discord Webhook URL'); return; }
+      body = { discord_webhook_url: value };
+    } else {
+      // telegram
+      if (!value) { setSaveError('请填写 Bot Token'); return; }
+      if (!valueB) { setSaveError('请填写 Chat ID'); return; }
+      body = { telegram_bot_token: value, telegram_chat_id: valueB };
+    }
+
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await holonApiFetch('/api/v1/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error ?? `保存失败 HTTP ${res.status}`);
+      }
+      setModal(null);
+      setInputA('');
+      setInputB('');
+      onRefresh();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const ROWS = [
+    {
+      key: 'gmail',
+      icon: '📧',
+      name: '邮件 Gmail',
+      pill: gmailEmail
+        ? <IntegrationConnectedPill label={`已连接 · ${gmailEmail}`} />
+        : <IntegrationDisconnectedPill />,
+      action: () => openModal({ kind: 'gmail_hint' }),
+    },
+    {
+      key: 'wechat',
+      icon: '💬',
+      name: '微信',
+      pill: <IntegrationNeutralPill label="桌面管理" />,
+      action: () => openModal({ kind: 'wechat_hint' }),
+    },
+    {
+      key: 'slack',
+      icon: '🔔',
+      name: 'Slack',
+      pill: slackConnected
+        ? <IntegrationConnectedPill label="已连接" />
+        : <IntegrationDisconnectedPill />,
+      action: () => openModal({ kind: 'slack' }),
+    },
+    {
+      key: 'discord',
+      icon: '🎮',
+      name: 'Discord',
+      pill: discordConnected
+        ? <IntegrationConnectedPill label="已连接" />
+        : <IntegrationDisconnectedPill />,
+      action: () => openModal({ kind: 'discord' }),
+    },
+    {
+      key: 'telegram',
+      icon: '✈️',
+      name: 'Telegram',
+      pill: telegramConnected
+        ? <IntegrationConnectedPill label="已连接" />
+        : <IntegrationDisconnectedPill />,
+      action: () => openModal({ kind: 'telegram' }),
+    },
+  ] as const;
+
+  const isHintModal = modal?.kind === 'gmail_hint' || modal?.kind === 'wechat_hint';
+
+  return (
+    <>
+      <div className="mobile-me-section">
+        <div className="mobile-me-label">集成 / 连接服务</div>
+        <div className="mobile-intg-list">
+          {ROWS.map((row) => (
+            <button
+              key={row.key}
+              type="button"
+              className="mobile-intg-row"
+              onClick={row.action}
+            >
+              <span className="mobile-intg-icon">{row.icon}</span>
+              <span className="mobile-intg-name">{row.name}</span>
+              <span className="mobile-intg-pill-wrap">{row.pill}</span>
+              <span className="mobile-intg-chevron">›</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {modal && (
+        <div
+          className="bug-modal-backdrop mobile-intg-backdrop"
+          onClick={closeModal}
+          role="presentation"
+        >
+          <div
+            className="bug-modal mobile-intg-sheet"
+            role="dialog"
+            aria-modal="true"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <div className="bug-modal-header">
+              <h2 className="mobile-intg-sheet-title">
+                {modal.kind === 'slack' && 'Slack Webhook'}
+                {modal.kind === 'discord' && 'Discord Webhook'}
+                {modal.kind === 'telegram' && 'Telegram Bot'}
+                {modal.kind === 'gmail_hint' && '邮件 Gmail'}
+                {modal.kind === 'wechat_hint' && '微信'}
+              </h2>
+              <button type="button" className="bug-modal-close" onClick={closeModal} aria-label="关闭">×</button>
+            </div>
+
+            {isHintModal ? (
+              <p className="mobile-intg-hint">
+                {modal.kind === 'gmail_hint'
+                  ? 'Gmail 的授权需在桌面完成，连好后这里会自动显示已连接。'
+                  : '微信 的授权需在桌面完成，连好后这里会自动显示已连接。'}
+              </p>
+            ) : (
+              <>
+                {modal.kind === 'slack' && (
+                  <>
+                    <label className="mobile-intg-field-label" htmlFor="intg-slack-url">Webhook URL</label>
+                    <input
+                      id="intg-slack-url"
+                      className="mobile-intg-input"
+                      type="url"
+                      value={inputA}
+                      onChange={(ev) => setInputA(ev.target.value)}
+                      placeholder="https://hooks.slack.com/services/..."
+                      autoComplete="off"
+                      disabled={saving}
+                    />
+                  </>
+                )}
+                {modal.kind === 'discord' && (
+                  <>
+                    <label className="mobile-intg-field-label" htmlFor="intg-discord-url">Webhook URL</label>
+                    <input
+                      id="intg-discord-url"
+                      className="mobile-intg-input"
+                      type="url"
+                      value={inputA}
+                      onChange={(ev) => setInputA(ev.target.value)}
+                      placeholder="https://discord.com/api/webhooks/..."
+                      autoComplete="off"
+                      disabled={saving}
+                    />
+                  </>
+                )}
+                {modal.kind === 'telegram' && (
+                  <>
+                    <label className="mobile-intg-field-label" htmlFor="intg-tg-token">Bot Token</label>
+                    <input
+                      id="intg-tg-token"
+                      className="mobile-intg-input"
+                      type="text"
+                      value={inputA}
+                      onChange={(ev) => setInputA(ev.target.value)}
+                      placeholder="123456:ABC-..."
+                      autoComplete="off"
+                      disabled={saving}
+                    />
+                    <label className="mobile-intg-field-label" htmlFor="intg-tg-chatid" style={{ marginTop: 10 }}>Chat ID</label>
+                    <input
+                      id="intg-tg-chatid"
+                      className="mobile-intg-input"
+                      type="text"
+                      value={inputB}
+                      onChange={(ev) => setInputB(ev.target.value)}
+                      placeholder="数字 Chat ID"
+                      autoComplete="off"
+                      disabled={saving}
+                    />
+                  </>
+                )}
+                {saveError && <div className="mobile-error" style={{ marginTop: 10 }}>{saveError}</div>}
+                <div className="mobile-intg-sheet-actions">
+                  <button
+                    type="button"
+                    className="mobile-feedback-cancel"
+                    onClick={closeModal}
+                    disabled={saving}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="mobile-feedback-submit"
+                    onClick={() => void handleSave()}
+                    disabled={saving}
+                  >
+                    {saving ? '保存中…' : '保存到桌面'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── 我 — me tab ──────────────────────────────────────────────────────────────
 
 type MobileFeedbackAttachment = { file: File; id: string; url: string };
@@ -1561,6 +1847,7 @@ function MeTab({
   onDisconnect: () => void;
 }) {
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
+  const [meData, setMeData] = useState<MeOwnerData | null>(null);
   const [snapshot, setSnapshot] = useState<OwnerSnapshot | null>(null);
   const [personas, setPersonas] = useState<PersonaPreset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1582,11 +1869,12 @@ function MeTab({
       if (!meRes.ok) throw new Error(`/me HTTP ${meRes.status}`);
       if (!snapRes.ok) throw new Error(`/snapshot HTTP ${snapRes.status}`);
       const [meJson, snapJson, pJson] = await Promise.all([
-        meRes.json() as Promise<OwnerProfile>,
+        meRes.json() as Promise<OwnerProfile & MeOwnerData>,
         snapRes.json() as Promise<OwnerSnapshot>,
         pRes.ok ? (pRes.json() as Promise<{ items?: PersonaPreset[] }>) : Promise.resolve({ items: [] }),
       ]);
       setOwner(meJson);
+      setMeData(meJson);
       setSnapshot(snapJson);
       setPersonas(Array.isArray(pJson.items) ? pJson.items : []);
     } catch (err) {
@@ -1662,6 +1950,7 @@ function MeTab({
         {personaApplied && <div className="mobile-me-note">{personaApplied}</div>}
         {loading && <div className="mobile-me-note">加载人设…</div>}
       </div>
+      <IntegrationsSection meData={meData} onRefresh={() => void load()} />
       <div className="mobile-me-section">
         <div className="mobile-me-label">应用版本</div>
         <div className="mobile-me-value">微作 Weizo 0.1.0</div>

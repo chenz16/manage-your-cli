@@ -1416,6 +1416,50 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-persona-current { flex: 0 0 auto; color: #1f7a44; font-size: 12px; }
 
+/* Integrations section */
+.mobile-intg-list { display: flex; flex-direction: column; margin-top: 4px; }
+.mobile-intg-row {
+  width: 100%; min-height: 44px;
+  display: flex; align-items: center; gap: 10px;
+  border: 0; border-top: 1px solid #f0f0f0; border-radius: 0;
+  background: transparent; padding: 8px 0; font: inherit; text-align: left;
+  cursor: pointer; color: #111;
+}
+.mobile-intg-row:first-child { border-top: 0; }
+.mobile-intg-row:active { background: #f8f8f8; }
+.mobile-intg-icon { flex: 0 0 auto; width: 24px; text-align: center; font-size: 16px; }
+.mobile-intg-name { flex: 1 1 auto; font-size: 14px; }
+.mobile-intg-pill-wrap { flex: 0 0 auto; }
+.mobile-intg-chevron { flex: 0 0 auto; color: #b0b0b0; font-size: 16px; margin-left: 2px; }
+.mobile-intg-pill {
+  display: inline-block; font-size: 11px; border-radius: 999px;
+  padding: 2px 8px; white-space: nowrap;
+}
+.mobile-intg-pill-connected { background: #edf6f0; color: #1f7a44; }
+.mobile-intg-pill-disconnected { background: #f2f2f2; color: #9a9a9a; }
+.mobile-intg-pill-neutral { background: #f0f4ff; color: #4a6fa8; }
+.mobile-intg-backdrop { align-items: flex-end; padding: 12px; }
+.mobile-intg-sheet {
+  width: 100%; max-width: 520px;
+  border-radius: 14px 14px 10px 10px;
+  padding: 16px;
+}
+.mobile-intg-sheet-title { margin: 0; font-size: 16px; color: #111; }
+.mobile-intg-hint {
+  margin: 12px 0 4px; font-size: 13.5px; color: #555; line-height: 1.5;
+}
+.mobile-intg-field-label { display: block; color: #666; font-size: 12px; margin-bottom: 5px; }
+.mobile-intg-input {
+  width: 100%; min-height: 38px; border: 1px solid #d0d0d0; border-radius: 8px;
+  padding: 0 10px; font: inherit; font-size: 13.5px; color: #111;
+  background: #fafafa; box-sizing: border-box;
+}
+.mobile-intg-input:focus { outline: none; border-color: #1a73e8; background: #fff; }
+.mobile-intg-input:disabled { opacity: 0.6; }
+.mobile-intg-sheet-actions {
+  display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end;
+}
+
 /* Feedback + disconnect */
 .mobile-feedback-button {
   width: 100%; min-height: 48px; border: 0; border-radius: 8px;
