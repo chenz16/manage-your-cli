@@ -32,6 +32,7 @@ interface McpPluginManifest {
   bundled?: boolean;
   capabilities: McpToolCapability[];
   needsConfig: McpPluginConfigField[];
+  setupSteps?: string[];
 }
 
 interface InstalledMcpPlugin {
@@ -120,6 +121,7 @@ export default function ConnectorsPage() {
   // A2A state
   const [myCard, setMyCard] = useState<AgentCard | null>(null);
   const [myCardError, setMyCardError] = useState<string | null>(null);
+  const [myCardSkillsExpanded, setMyCardSkillsExpanded] = useState(false);
   const [peerUrl, setPeerUrl] = useState('');
   const [peerCard, setPeerCard] = useState<AgentCard | null>(null);
   const [peerCardStatus, setPeerCardStatus] = useState<string | null>(null);
@@ -138,9 +140,10 @@ export default function ConnectorsPage() {
   // Plugin state
   const [pluginsData, setPluginsData] = useState<PluginsData | null>(null);
   const [pluginsError, setPluginsError] = useState<string | null>(null);
-  // per-plugin: config inputs (keyed by plugin id) and action status
+  // per-plugin: config inputs (keyed by plugin id), action status, setup steps open/closed
   const [pluginConfigInputs, setPluginConfigInputs] = useState<Record<string, Record<string, string>>>({});
   const [pluginActionStatus, setPluginActionStatus] = useState<Record<string, string>>({});
+  const [pluginSetupOpen, setPluginSetupOpen] = useState<Record<string, boolean>>({});
 
   const fetchPlugins = useCallback(() => {
     setPluginsError(null);
@@ -558,12 +561,13 @@ export default function ConnectorsPage() {
         {/* Coming channels (OAuth-required) */}
         <div className="conn-field">
           <span className="conn-field-label" style={{ color: 'var(--ink-mute)' }}>Coming soon (OAuth required)</span>
-          {(['Gmail', 'Google Meet'] as const).map((name) => (
+          {(['Google Meet'] as const).map((name) => (
             <div key={name} className="conn-soon">
               <span className="conn-soon-name">{name}</span>
               <span className="conn-soon-tag">Coming</span>
             </div>
           ))}
+          <p className="conn-field-hint">Gmail is now available as an MCP plugin in the Plugins section below.</p>
         </div>
       </section>
 
@@ -581,7 +585,9 @@ export default function ConnectorsPage() {
         <div className="conn-field">
           <span className="conn-field-label">This desk&apos;s card</span>
           <p className="conn-field-hint">
-            Other desks discover you at <code>/.well-known/agent-card.json</code>.
+            This is your desk&apos;s outward &ldquo;business card&rdquo; — other people&apos;s agents read{' '}
+            <code>/.well-known/agent-card.json</code> to discover what your Secretary can do.
+            Only relevant if you federate with other agents; safe to ignore otherwise.
           </p>
           {myCardError && (
             <p className="conn-status">Error loading card: {myCardError}</p>
@@ -593,11 +599,26 @@ export default function ConnectorsPage() {
                 <span className="conn-panel-meta">A2A {myCard.protocolVersion}</span>
               </div>
               {myCard.skills.length > 0 && (
-                <div className="conn-chips">
-                  {myCard.skills.map((sk) => (
-                    <span key={sk.id} title={sk.id} className="conn-chip">{sk.name}</span>
-                  ))}
-                </div>
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12, padding: '3px 10px', marginTop: 8, alignSelf: 'flex-start' }}
+                    onClick={() => setMyCardSkillsExpanded((prev) => !prev)}
+                    aria-expanded={myCardSkillsExpanded}
+                  >
+                    {myCardSkillsExpanded
+                      ? `隐藏能力列表 ▴`
+                      : `查看全部 ${myCard.skills.length} 项能力 ▾`}
+                  </button>
+                  {myCardSkillsExpanded && (
+                    <div className="conn-chips" style={{ marginTop: 8 }}>
+                      {myCard.skills.map((sk) => (
+                        <span key={sk.id} title={sk.id} className="conn-chip">{sk.name}</span>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               {myCard.skills.length === 0 && (
                 <p className="conn-panel-empty">No skills/employees registered.</p>
@@ -719,6 +740,31 @@ export default function ConnectorsPage() {
                       {cap.risk === 'write' ? '写入' : '读取'} · {cap.label}
                     </span>
                   ))}
+                </div>
+              )}
+
+              {/* Setup steps — shown for any plugin that declares them */}
+              {manifest.setupSteps && manifest.setupSteps.length > 0 && (
+                <div className="conn-plugin-config">
+                  <button
+                    type="button"
+                    className="conn-field-label"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}
+                    onClick={() => setPluginSetupOpen((prev) => ({ ...prev, [manifest.id]: !prev[manifest.id] }))}
+                    aria-expanded={!!pluginSetupOpen[manifest.id]}
+                  >
+                    如何连接 / Setup
+                    <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--ink-mute)' }}>
+                      {pluginSetupOpen[manifest.id] ? '▴ 收起' : '▾ 展开'}
+                    </span>
+                  </button>
+                  {pluginSetupOpen[manifest.id] && (
+                    <ol style={{ margin: '4px 0 0 0', paddingLeft: 18, display: 'grid', gap: 6 }}>
+                      {manifest.setupSteps.map((step, idx) => (
+                        <li key={idx} style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--ink-soft)' }}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
                 </div>
               )}
 

@@ -41,6 +41,13 @@ export interface McpPluginManifest {
   install: McpPluginInstallSpec;
   capabilities: McpPluginToolCapability[];
   needsConfig: McpPluginConfigField[];
+  /**
+   * Optional numbered setup steps shown in the plugin card before install.
+   * Each string is one step (plain text, rendered as an ordered list).
+   * Use when the plugin requires manual credential / OAuth setup outside
+   * the normal needsConfig flow (e.g. Gmail OAuth, API key generation).
+   */
+  setupSteps?: string[];
 }
 
 export const MCP_PLUGIN_REGISTRY: McpPluginManifest[] = [
@@ -126,6 +133,60 @@ export const MCP_PLUGIN_REGISTRY: McpPluginManifest[] = [
         label: 'Write files',
         risk: 'write',
         description: 'Writes files within the configured allowed directories.',
+      },
+    ],
+  },
+  {
+    id: 'gmail',
+    name: 'Gmail MCP',
+    description:
+      'Give the desk Secretary read/draft access to your Gmail inbox via MCP. Uses the official @gongrzhe/server-gmail-autoauth MCP server — OAuth is handled locally on first run; no credentials leave your machine.',
+    transport: 'stdio',
+    install: {
+      type: 'stdio',
+      npmPackage: '@gongrzhe/server-gmail-autoauth',
+      command: 'npx',
+      args: ['-y', '@gongrzhe/server-gmail-autoauth'],
+    },
+    needsConfig: [],
+    setupSteps: [
+      'Install Node.js 18+ and make sure `npx` is on your PATH.',
+      'Run the install step on this card — `npx -y @gongrzhe/server-gmail-autoauth` will download and start the server.',
+      'On first start, a browser window opens automatically asking you to sign in to Google and grant the requested Gmail scopes (read threads, manage labels, create drafts). Complete that OAuth flow.',
+      'The server saves an OAuth token to `~/.gmail-mcp/` on your desk machine. No tokens are sent anywhere outside your machine.',
+      'Return to this page and enable the plugin. The Secretary can now search, read, and draft Gmail messages on your behalf.',
+      'To revoke access at any time: visit https://myaccount.google.com/permissions and remove "Gmail MCP", then uninstall this plugin.',
+    ],
+    capabilities: [
+      {
+        id: 'gmail.search_threads',
+        label: 'Search threads',
+        risk: 'read',
+        description: 'Searches Gmail threads by query (from:, subject:, label:, date ranges, etc.).',
+      },
+      {
+        id: 'gmail.get_thread',
+        label: 'Read thread',
+        risk: 'read',
+        description: 'Retrieves the full message content of a Gmail thread.',
+      },
+      {
+        id: 'gmail.list_labels',
+        label: 'List labels',
+        risk: 'read',
+        description: 'Lists all Gmail labels (system + user-defined).',
+      },
+      {
+        id: 'gmail.create_draft',
+        label: 'Create draft',
+        risk: 'write',
+        description: 'Creates a new draft email in the authenticated Gmail account.',
+      },
+      {
+        id: 'gmail.label_thread',
+        label: 'Label thread',
+        risk: 'write',
+        description: 'Adds or removes labels on a Gmail thread.',
       },
     ],
   },
