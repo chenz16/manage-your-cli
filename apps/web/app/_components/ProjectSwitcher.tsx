@@ -26,16 +26,26 @@ import { useProjects } from '../../lib/hooks/useProjects';
 import type { Project } from '@holon/api-contract';
 
 export interface ProjectSwitcherProps {
-  /** Currently selected project id, or null/"" for "All". */
-  activeProjectId: string | null;
-  /** Called when the user picks a project or "All". null = "All". */
-  onChange: (projectId: string | null) => void;
+  /** Currently selected project id, or null/"" for "All".
+   *  When omitted the switcher reads/writes from the shared module-level
+   *  selection (useProjects().activeProjectId) — the single source of truth
+   *  that the chat adapter also reads. Pass explicitly only when you need a
+   *  locally-controlled copy (e.g. a filtered list view).
+   */
+  activeProjectId?: string | null;
+  /** Called when the user picks a project or "All". null = "All".
+   *  When omitted the switcher writes to the shared selection automatically.
+   */
+  onChange?: (projectId: string | null) => void;
   /** Optional CSS class on the pill button. */
   className?: string;
 }
 
-export function ProjectSwitcher({ activeProjectId, onChange, className }: ProjectSwitcherProps) {
-  const { projects } = useProjects();
+export function ProjectSwitcher({ activeProjectId: externalId, onChange, className }: ProjectSwitcherProps) {
+  const { projects, activeProjectId: sharedId, setActiveProjectId } = useProjects();
+  // When no external controlled value is provided, use the shared module state.
+  const activeProjectId = externalId !== undefined ? externalId : sharedId;
+  const handleChange = onChange ?? setActiveProjectId;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -50,7 +60,7 @@ export function ProjectSwitcher({ activeProjectId, onChange, className }: Projec
   const label = active ? active.name : 'All';
 
   const handleSelect = (id: string | null) => {
-    onChange(id);
+    handleChange(id);
     setOpen(false);
   };
 
