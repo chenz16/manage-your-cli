@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { idOf, zPriorityInt, zIsoDateTimeLoose } from '../primitives.js';
 import { WorkQueueItemSource } from '../enums.js';
 
+// Phase 1 project tag (additive, backward-compat — null = untagged/default project)
+
 /**
  * Personal work-queue item — owner's own tasks per ADR-015.
  *
@@ -17,5 +19,8 @@ export const WorkQueueItem = z.object({
   source: WorkQueueItemSource,
   priority: zPriorityInt,
   deadline: zIsoDateTimeLoose.optional(),
+  /** Phase 1 — optional project tag. null = untagged/default project.
+   *  Existing rows without this field parse as `undefined`, treated as null. */
+  project_id: idOf('proj').nullable().optional(),
 });
 export type WorkQueueItem = z.infer<typeof WorkQueueItem>;

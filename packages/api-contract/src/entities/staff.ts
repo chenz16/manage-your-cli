@@ -230,5 +230,11 @@ export const Staff = z.object({
    *  owner hasn't explicitly hired yet. The UI may dim / decorate them.
    *  Empty array = no labels (default; preserves backward-compat). */
   tags: z.array(z.string()).default([]),
+
+  /** Phase 1 project tags — IDs of projects this staff primarily works on.
+   *  Empty array = shared/cross-project (visible in all project views).
+   *  Default `[]` preserves backward-compat: existing rows without this
+   *  field parse with an empty set (no project affiliation). */
+  project_ids: z.array(idOf('proj')).default([]),
 });
 export type Staff = z.infer<typeof Staff>;
