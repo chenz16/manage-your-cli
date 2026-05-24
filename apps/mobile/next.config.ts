@@ -29,7 +29,10 @@ const config: NextConfig = {
   // call to its trailing-slash form before the rewrite runs. The APK calls the
   // desk origin directly via deskApi() (M-L-045), so this only affects dev.
   skipTrailingSlashRedirect: true,
-  ...(isCapacitorBuild ? { output: 'export' as const } : {}),
+  // Static export for Capacitor: emit a pure static `out/` and disable the
+  // Next.js Image Optimization server (no Node runtime in the APK), otherwise
+  // `next/image` requests 404 on a real device.
+  ...(isCapacitorBuild ? { output: 'export' as const, images: { unoptimized: true } } : {}),
   ...(isProdPreview ? { distDir: '.next-prod' } : {}),
   // Reuse workspace packages (raw TS, no built dist)
   transpilePackages: ['@holon/api-contract', '@holon/core'],
