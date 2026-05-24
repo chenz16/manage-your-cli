@@ -1,10 +1,50 @@
 'use client';
 
 import { redirect } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
 
 type MessagingChannel = 'slack' | 'discord' | 'telegram';
+
+// ---------------------------------------------------------------------------
+// Plugin types (mirrors api-contract/src/manifests/plugins.ts + plugin-store.ts)
+// ---------------------------------------------------------------------------
+interface McpToolCapability {
+  id: string;
+  label: string;
+  risk: 'read' | 'write';
+  description: string;
+}
+
+interface McpPluginConfigField {
+  key: string;
+  label: string;
+  required: boolean;
+  secret?: boolean;
+  description?: string;
+}
+
+interface McpPluginManifest {
+  id: string;
+  name: string;
+  description: string;
+  transport: 'stdio' | 'remote';
+  bundled?: boolean;
+  capabilities: McpToolCapability[];
+  needsConfig: McpPluginConfigField[];
+}
+
+interface InstalledMcpPlugin {
+  id: string;
+  label: string;
+  config: Record<string, unknown>;
+  enabled: boolean;
+}
+
+interface PluginsData {
+  registry: McpPluginManifest[];
+  installed: InstalledMcpPlugin[];
+}
 
 // ---------------------------------------------------------------------------
 // A2A types (subset of A2A 0.2.0 agent card + task result)
@@ -94,6 +134,91 @@ export default function ConnectorsPage() {
   const [telegramToken, setTelegramToken] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramStatus, setTelegramStatus] = useState<string | null>(null);
+
+  // Plugin state
+  const [pluginsData, setPluginsData] = useState<PluginsData | null>(null);
+  const [pluginsError, setPluginsError] = useState<string | null>(null);
+  // per-plugin: config inputs (keyed by plugin id) and action status
+  const [pluginConfigInputs, setPluginConfigInputs] = useState<Record<string, Record<string, string>>>({});
+  const [pluginActionStatus, setPluginActionStatus] = useState<Record<string, string>>({});
+
+  const fetchPlugins = useCallback(() => {
+    setPluginsError(null);
+    fetch('/api/v1/plugins')
+      .then(async (res) => {
+        if (!res.ok) {
+          setPluginsError(`HTTP ${res.status}: ${await res.text()}`);
+          return;
+        }
+        const data = await res.json() as PluginsData;
+        setPluginsData(data);
+      })
+      .catch((err: unknown) => {
+        setPluginsError(err instanceof Error ? err.message : String(err));
+      });
+  }, []);
+
+  async function installPlugin(manifest: McpPluginManifest) {
+    const config = pluginConfigInputs[manifest.id] ?? {};
+    setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: 'Installing…' }));
+    try {
+      const res = await fetch('/api/v1/plugins/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: manifest.id, config }),
+      });
+      const data = await res.json() as { installed?: InstalledMcpPlugin; error?: string };
+      if (!res.ok) {
+        setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: `错误: ${data.error ?? res.status}` }));
+        return;
+      }
+      setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: '已安装' }));
+      fetchPlugins();
+    } catch (err: unknown) {
+      setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  async function togglePlugin(id: string, enabled: boolean) {
+    setPluginActionStatus((prev) => ({ ...prev, [id]: enabled ? '启用中…' : '停用中…' }));
+    try {
+      const res = await fetch(`/api/v1/plugins/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await res.json() as { installed?: InstalledMcpPlugin; error?: string };
+      if (!res.ok) {
+        setPluginActionStatus((prev) => ({ ...prev, [id]: `错误: ${data.error ?? res.status}` }));
+        return;
+      }
+      setPluginActionStatus((prev) => ({ ...prev, [id]: enabled ? '已启用' : '已停用' }));
+      fetchPlugins();
+    } catch (err: unknown) {
+      setPluginActionStatus((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  async function uninstallPlugin(id: string) {
+    setPluginActionStatus((prev) => ({ ...prev, [id]: '卸载中…' }));
+    try {
+      const res = await fetch(`/api/v1/plugins/${id}`, { method: 'DELETE' });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setPluginActionStatus((prev) => ({ ...prev, [id]: `错误: ${data.error ?? res.status}` }));
+        return;
+      }
+      setPluginActionStatus((prev) => ({ ...prev, [id]: '' }));
+      fetchPlugins();
+    } catch (err: unknown) {
+      setPluginActionStatus((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Fetch plugins on mount.
+  useEffect(() => {
+    fetchPlugins();
+  }, [fetchPlugins]);
 
   // Fetch this desk's own agent card on mount.
   useEffect(() => {
@@ -565,6 +690,182 @@ export default function ConnectorsPage() {
           </div>
           {pingStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{pingStatus}</p>}
         </div>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 插件 / Plugins (MCP plugin manager)                                 */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760, marginTop: 18 }}>
+        <div>
+          <p className="eyebrow">插件 / Plugins</p>
+          <h2 style={{ margin: 0, fontSize: 18 }}>MCP 插件管理</h2>
+          <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
+            仅精选白名单插件（curated）。插件是 MCP server = 会在桌面执行代码，只装可信来源。
+          </p>
+        </div>
+
+        {pluginsError && (
+          <p style={{ margin: 0, color: 'var(--color-warning, #d97706)', fontSize: 13 }}>
+            加载失败: {pluginsError}
+          </p>
+        )}
+
+        {!pluginsData && !pluginsError && (
+          <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>加载中…</p>
+        )}
+
+        {pluginsData && pluginsData.registry.map((manifest) => {
+          const installedEntry = pluginsData.installed.find((p) => p.id === manifest.id);
+          const isInstalled = installedEntry !== undefined;
+          const isEnabled = installedEntry?.enabled ?? false;
+          const actionStatus = pluginActionStatus[manifest.id];
+          const configInputs = pluginConfigInputs[manifest.id] ?? {};
+          const hasWriteCap = manifest.capabilities.some((c) => c.risk === 'write');
+
+          // State label
+          const stateLabel = !isInstalled
+            ? '未安装'
+            : isEnabled
+              ? '已安装 · 已启用'
+              : '已安装 · 已停用';
+
+          return (
+            <div
+              key={manifest.id}
+              style={{
+                padding: '14px 16px',
+                border: '1px solid var(--line)',
+                borderRadius: 10,
+                display: 'grid',
+                gap: 10,
+              }}
+            >
+              {/* Header row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ display: 'grid', gap: 3, flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>{manifest.name}</span>
+                    {manifest.bundled && (
+                      <span style={{
+                        fontSize: 11, padding: '1px 6px', borderRadius: 99,
+                        background: 'var(--bg-subtle, rgba(128,128,128,0.12))',
+                        color: 'var(--ink-mute)',
+                      }}>
+                        bundled
+                      </span>
+                    )}
+                    {hasWriteCap && (
+                      <span style={{
+                        fontSize: 11, padding: '1px 7px', borderRadius: 99,
+                        background: 'rgba(217, 119, 6, 0.15)',
+                        color: '#d97706',
+                        fontWeight: 600,
+                      }}>
+                        ⚠ write
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{manifest.description}</p>
+                </div>
+                <span style={{
+                  fontSize: 12,
+                  color: isInstalled ? (isEnabled ? 'var(--color-success, #16a34a)' : 'var(--ink-mute)') : 'var(--ink-mute)',
+                  whiteSpace: 'nowrap',
+                  paddingTop: 2,
+                }}>
+                  {stateLabel}
+                </span>
+              </div>
+
+              {/* Capabilities */}
+              {manifest.capabilities.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {manifest.capabilities.map((cap) => (
+                    <span
+                      key={cap.id}
+                      title={cap.description}
+                      style={{
+                        fontSize: 11,
+                        padding: '2px 8px',
+                        borderRadius: 99,
+                        border: '1px solid var(--line)',
+                        color: cap.risk === 'write' ? '#d97706' : 'var(--ink-mute)',
+                        background: cap.risk === 'write'
+                          ? 'rgba(217, 119, 6, 0.08)'
+                          : 'var(--bg-subtle, rgba(128,128,128,0.07))',
+                      }}
+                    >
+                      {cap.risk === 'write' ? '✏ ' : '👁 '}{cap.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Config inputs for needsConfig fields (show when not yet installed) */}
+              {!isInstalled && manifest.needsConfig.length > 0 && (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {manifest.needsConfig.map((field) => (
+                    <div key={field.key} style={{ display: 'grid', gap: 4 }}>
+                      <label style={{ fontSize: 12, color: 'var(--ink-mute)', fontWeight: 500 }}>
+                        {field.label}{field.required && ' *'}
+                      </label>
+                      {field.description && (
+                        <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-mute)' }}>{field.description}</p>
+                      )}
+                      <input
+                        className="input"
+                        type={field.secret ? 'password' : 'text'}
+                        value={configInputs[field.key] ?? ''}
+                        onChange={(e) => {
+                          setPluginConfigInputs((prev) => ({
+                            ...prev,
+                            [manifest.id]: { ...(prev[manifest.id] ?? {}), [field.key]: e.target.value },
+                          }));
+                        }}
+                        placeholder={field.label}
+                        autoComplete="off"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                {!isInstalled && (
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => installPlugin(manifest)}
+                  >
+                    安装
+                  </button>
+                )}
+                {isInstalled && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      onClick={() => togglePlugin(manifest.id, !isEnabled)}
+                    >
+                      {isEnabled ? '停用' : '启用'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => uninstallPlugin(manifest.id)}
+                    >
+                      卸载
+                    </button>
+                  </>
+                )}
+                {actionStatus && (
+                  <span style={{ fontSize: 13, color: 'var(--ink-mute)' }}>{actionStatus}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </section>
     </main>
   );
