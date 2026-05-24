@@ -140,6 +140,26 @@ type ActiveChat = { kind: 'owner' } | { kind: 'staff'; staff: Staff } | null;
 type StaffChatMessage = { role: 'user' | 'assistant'; content: string };
 type BadgedTabKey = 'chats' | 'work';
 
+/** A pending attachment chosen by the user, before/after upload. */
+interface PendingAttachment {
+  /** Local object URL (for image preview) or null for non-image files. */
+  previewUrl: string | null;
+  /** Original file name from the picker. */
+  filename: string;
+  /** MIME type reported by the browser. */
+  mime: string;
+  /** File size in bytes. */
+  size: number;
+  /** Raw file data (base64 without prefix) — populated by readFileBase64. */
+  base64: string;
+  /** Absolute desk path — set after a successful upload. */
+  deskPath: string | null;
+  /** Upload state. */
+  uploadState: 'pending' | 'uploading' | 'done' | 'error';
+  /** Error message if uploadState === 'error'. */
+  uploadError: string | null;
+}
+
 interface OwnerProfile {
   owner_name?: string;
   owner_role?: string;
@@ -222,6 +242,200 @@ function insertTranscriptIntoComposer(transcript: string): void {
   setter?.call(ta, next);
   ta.dispatchEvent(new Event('input', { bubbles: true }));
   ta.focus();
+}
+
+// ─── Attachment helpers ───────────────────────────────────────────────────────
+
+interface UploadResponse {
+  path?: string;
+  filename?: string;
+  mime?: string;
+  size?: number;
+  error?: string;
+  message?: string;
+}
+
+/** Read a File object as base64 string (without the data-URL prefix). */
+function readFileBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('文件读取失败。'));
+    reader.onloadend = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const [, b64 = ''] = result.split(',', 2);
+      if (b64) resolve(b64);
+      else reject(new Error('文件内容为空。'));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Format bytes as a human-readable size string. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Upload a PendingAttachment to the desk and return the absolute path. */
+async function uploadAttachmentToDesk(
+  attachment: PendingAttachment,
+): Promise<string> {
+  const res = await holonApiFetch('/api/v1/uploads', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: attachment.filename,
+      mime: attachment.mime,
+      base64: attachment.base64,
+    }),
+  });
+  const data = await res.json().catch(() => ({})) as UploadResponse;
+  if (!res.ok || typeof data.path !== 'string') {
+    throw new Error(data.message ?? `上传失败 (${res.status})`);
+  }
+  return data.path;
+}
+
+/** Build the text annotation to append to the user message. */
+function attachmentAnnotation(filename: string, deskPath: string): string {
+  return `\n[附件: ${filename} → ${deskPath}]`;
+}
+
+// ─── Attachment button + preview ─────────────────────────────────────────────
+
+/**
+ * MobileAttachButton — a "+" button that opens a file picker and calls
+ * onAttach with the selected file's data.
+ *
+ * SSR-safe: the hidden file input is rendered client-side only (no
+ * FileReader at module load); all DOM/File access is inside event handlers.
+ */
+function MobileAttachButton({
+  onAttach,
+  disabled,
+}: {
+  onAttach: (attachment: PendingAttachment) => void;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleClick() {
+    inputRef.current?.click();
+  }
+
+  async function handleChange(ev: ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0];
+    // Reset the input so the same file can be re-selected after removal.
+    if (inputRef.current) inputRef.current.value = '';
+    if (!file) return;
+
+    const isImage = file.type.startsWith('image/');
+    const previewUrl = isImage ? URL.createObjectURL(file) : null;
+
+    // Read base64 immediately so the file handle stays valid.
+    let base64 = '';
+    try {
+      base64 = await readFileBase64(file);
+    } catch {
+      // If reading fails, deliver an attachment in error state — the UI
+      // will show the error and the user can remove it.
+      onAttach({
+        previewUrl,
+        filename: file.name,
+        mime: file.type || 'application/octet-stream',
+        size: file.size,
+        base64: '',
+        deskPath: null,
+        uploadState: 'error',
+        uploadError: '文件读取失败，请重试。',
+      });
+      return;
+    }
+
+    onAttach({
+      previewUrl,
+      filename: file.name,
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      base64,
+      deskPath: null,
+      uploadState: 'pending',
+      uploadError: null,
+    });
+  }
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,.pdf,.txt,.md,.doc,.docx,.csv,.xlsx"
+        aria-hidden="true"
+        tabIndex={-1}
+        style={{ display: 'none' }}
+        onChange={(ev) => void handleChange(ev)}
+      />
+      <button
+        type="button"
+        className="mobile-attach-button"
+        aria-label="添加附件"
+        disabled={disabled}
+        onClick={handleClick}
+      >
+        +
+      </button>
+    </>
+  );
+}
+
+/**
+ * AttachmentPreviewBar — shows the pending attachment above the send button row.
+ * Renders a small image thumbnail for images, or a file chip for other types.
+ */
+function AttachmentPreviewBar({
+  attachment,
+  onRemove,
+}: {
+  attachment: PendingAttachment;
+  onRemove: () => void;
+}) {
+  const isImage = attachment.mime.startsWith('image/');
+  const stateLabel =
+    attachment.uploadState === 'uploading' ? '上传中…' :
+    attachment.uploadState === 'error' ? `上传失败: ${attachment.uploadError ?? ''}` :
+    attachment.uploadState === 'done' ? '已上传' :
+    '待发送';
+
+  return (
+    <div className="attachment-preview-bar">
+      {isImage && attachment.previewUrl ? (
+        <img
+          src={attachment.previewUrl}
+          alt={attachment.filename}
+          className="attachment-preview-image"
+        />
+      ) : (
+        <span className="attachment-file-icon" aria-hidden="true">📄</span>
+      )}
+      <div className="attachment-preview-info">
+        <span className="attachment-preview-name" title={attachment.filename}>
+          {attachment.filename}
+        </span>
+        <span className="attachment-preview-meta">
+          {formatBytes(attachment.size)} · {stateLabel}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="attachment-remove-btn"
+        aria-label="移除附件"
+        onClick={onRemove}
+      >
+        ✕
+      </button>
+    </div>
+  );
 }
 
 // ── Native STT availability cache (checked once per mount) ───────────────────
@@ -1070,6 +1284,68 @@ function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocal
   return null;
 }
 
+/**
+ * OwnerAttachAwareSend — wraps the assistant-ui send button with attachment upload.
+ * Before letting the send proceed, it uploads any pending attachment and injects
+ * the [附件: …] annotation into the composer textarea (via the same DOM-setter
+ * pattern used by voice transcription). Then it fires the normal send.
+ */
+function OwnerAttachAwareSend({
+  attachment,
+  onAttachmentUpdate,
+  onAttachmentClear,
+}: {
+  attachment: PendingAttachment | null;
+  onAttachmentUpdate: (a: PendingAttachment) => void;
+  onAttachmentClear: () => void;
+}) {
+  const aui = useAui();
+  const [busy, setBusy] = useState(false);
+
+  async function handleSend() {
+    if (busy) return;
+
+    if (attachment && attachment.uploadState !== 'error') {
+      setBusy(true);
+      let deskPath = attachment.deskPath;
+      if (!deskPath) {
+        // Upload now
+        onAttachmentUpdate({ ...attachment, uploadState: 'uploading' });
+        try {
+          deskPath = await uploadAttachmentToDesk(attachment);
+          onAttachmentUpdate({ ...attachment, deskPath, uploadState: 'done', uploadError: null });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          onAttachmentUpdate({ ...attachment, uploadState: 'error', uploadError: msg });
+          setBusy(false);
+          return;
+        }
+      }
+      // Inject annotation into the textarea BEFORE assistant-ui reads it.
+      const annotation = attachmentAnnotation(attachment.filename, deskPath);
+      insertTranscriptIntoComposer(annotation);
+      // Small tick to let React flush the textarea value change.
+      await new Promise<void>((r) => window.setTimeout(r, 0));
+      onAttachmentClear();
+      setBusy(false);
+    }
+
+    aui.thread().composer().send();
+  }
+
+  return (
+    <button
+      type="button"
+      className="chat-send"
+      aria-label="发送"
+      disabled={busy}
+      onClick={() => void handleSend()}
+    >
+      {busy ? '…' : '↑'}
+    </button>
+  );
+}
+
 function MobileOwnerChat({
   staff,
   seed,
@@ -1082,11 +1358,20 @@ function MobileOwnerChat({
   const adapter = useMemo(() => makeMobileOwnerAdapter(), []);
   const runtime = useLocalRuntime(adapter);
   const [mounted, setMounted] = useState(false);
+  const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
 
   useEffect(() => {
     setMounted(true);
     void holonApiFetch('/api/v1/chat/warm').catch(() => undefined);
   }, []);
+
+  // Revoke object URL on removal to avoid memory leaks.
+  function clearAttachment() {
+    setAttachment((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -1105,15 +1390,34 @@ function MobileOwnerChat({
         </ThreadPrimitive.Viewport>
         {mounted ? (
           <ComposerPrimitive.Root className="chat-composer mobile-chat-composer">
-            <MobileVoiceRecorderButton />
-            <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" autoFocus />
-            <ComposerPrimitive.Send className="chat-send" aria-label="发送">↑</ComposerPrimitive.Send>
+            {attachment && (
+              <AttachmentPreviewBar
+                attachment={attachment}
+                onRemove={clearAttachment}
+              />
+            )}
+            <div className="composer-input-row">
+              <MobileVoiceRecorderButton />
+              <MobileAttachButton
+                onAttach={(a) => setAttachment(a)}
+                disabled={attachment !== null}
+              />
+              <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" autoFocus />
+              <OwnerAttachAwareSend
+                attachment={attachment}
+                onAttachmentUpdate={(a) => setAttachment(a)}
+                onAttachmentClear={clearAttachment}
+              />
+            </div>
           </ComposerPrimitive.Root>
         ) : (
           <div className="chat-composer mobile-chat-composer" aria-hidden="true">
-            <button type="button" className="mobile-voice-button" disabled tabIndex={-1}>🎙</button>
-            <textarea rows={1} className="chat-input" placeholder="发消息给小秘…" readOnly tabIndex={-1} />
-            <button type="button" className="chat-send" disabled tabIndex={-1}>↑</button>
+            <div className="composer-input-row">
+              <button type="button" className="mobile-voice-button" disabled tabIndex={-1}>🎙</button>
+              <button type="button" className="mobile-attach-button" disabled tabIndex={-1}>+</button>
+              <textarea rows={1} className="chat-input" placeholder="发消息给小秘…" readOnly tabIndex={-1} />
+              <button type="button" className="chat-send" disabled tabIndex={-1}>↑</button>
+            </div>
           </div>
         )}
         {mounted && <MobileMentionTypeahead staff={staff} />}
@@ -1130,6 +1434,7 @@ function StaffChat({ staff }: { staff: Staff }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
 
   // Step 1: instant first-paint from local cache (offline fallback)
   // Step 2: desk-primary sync — fetch desk transcript and reconcile
@@ -1181,9 +1486,40 @@ function StaffChat({ staff }: { staff: Staff }) {
   // deps = [messages, sending] so every new message / "正在回复…" indicator scrolls down.
   const { scrollRef, scrollToBottom, forceRef } = useChatAutoScroll<HTMLDivElement>([messages, sending]);
 
+  // Revoke object URL on removal to avoid memory leaks.
+  function clearAttachment() {
+    setAttachment((prev) => {
+      if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }
+
   async function send() {
-    const content = text.trim();
-    if (!content || sending) return;
+    let content = text.trim();
+    if ((!content && !attachment) || sending) return;
+
+    // Upload attachment if pending
+    if (attachment && attachment.uploadState !== 'error') {
+      setSending(true);
+      let deskPath = attachment.deskPath;
+      if (!deskPath) {
+        setAttachment((prev) => prev ? { ...prev, uploadState: 'uploading' } : prev);
+        try {
+          deskPath = await uploadAttachmentToDesk(attachment);
+          setAttachment((prev) => prev ? { ...prev, deskPath, uploadState: 'done', uploadError: null } : prev);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setAttachment((prev) => prev ? { ...prev, uploadState: 'error', uploadError: msg } : prev);
+          setSending(false);
+          return;
+        }
+      }
+      content = (content ? content + '\n' : '') + `[附件: ${attachment.filename} → ${deskPath}]`;
+      clearAttachment();
+    }
+
+    if (!content) { setSending(false); return; }
+
     const next = [...messages, { role: 'user' as const, content }];
     setMessages(next);
     setText('');
@@ -1243,31 +1579,43 @@ function StaffChat({ staff }: { staff: Staff }) {
         {error && <div className="mobile-error">发送失败：{error}</div>}
       </div>
       <div className="chat-composer mobile-chat-composer">
-        <MobileVoiceRecorderButton onTranscript={(transcript) => setText((current) => current ? `${current} ${transcript}` : transcript)} />
-        <textarea
-          rows={1}
-          className="chat-input"
-          value={text}
-          onChange={(ev) => setText(ev.target.value)}
-          onKeyDown={(ev) => {
-            if (ev.key === 'Enter' && !ev.shiftKey) {
-              ev.preventDefault();
-              void send();
-            }
-          }}
-          onFocus={() => { forceRef.current = true; scrollToBottom(); }}
-          placeholder={`发消息给 ${staff.name}…`}
-          autoFocus
-        />
-        <button
-          type="button"
-          className="chat-send"
-          onClick={() => void send()}
-          disabled={sending || !text.trim()}
-          aria-label="发送"
-        >
-          ↑
-        </button>
+        {attachment && (
+          <AttachmentPreviewBar
+            attachment={attachment}
+            onRemove={clearAttachment}
+          />
+        )}
+        <div className="composer-input-row">
+          <MobileVoiceRecorderButton onTranscript={(transcript) => setText((current) => current ? `${current} ${transcript}` : transcript)} />
+          <MobileAttachButton
+            onAttach={(a) => setAttachment(a)}
+            disabled={attachment !== null}
+          />
+          <textarea
+            rows={1}
+            className="chat-input"
+            value={text}
+            onChange={(ev) => setText(ev.target.value)}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' && !ev.shiftKey) {
+                ev.preventDefault();
+                void send();
+              }
+            }}
+            onFocus={() => { forceRef.current = true; scrollToBottom(); }}
+            placeholder={`发消息给 ${staff.name}…`}
+            autoFocus
+          />
+          <button
+            type="button"
+            className="chat-send"
+            onClick={() => void send()}
+            disabled={sending || (!text.trim() && !attachment)}
+            aria-label="发送"
+          >
+            ↑
+          </button>
+        </div>
       </div>
     </div>
   );
