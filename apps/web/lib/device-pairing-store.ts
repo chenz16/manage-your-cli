@@ -358,8 +358,146 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
+// ---------------------------------------------------------------------------
+// Mobile-initiated pairing (4-digit code, phone requests → desk confirms)
+// ---------------------------------------------------------------------------
+
+const MOBILE_PAIR_REQUEST_TTL_MS = 2 * 60 * 1000; // 120 s
+
+interface MobilePairingRequest {
+  requestId: string;
+  code: string;       // 4-digit string, e.g. "0742"
+  deviceName: string;
+  createdAt: string;
+  expiresAt: number;
+  consumed: boolean;
+  token: string;
+  deviceId: string;
+}
+
+interface MobilePairingState {
+  requests: Map<string, MobilePairingRequest>;
+}
+
+const GM = globalThis as unknown as { __holonMobilePairing?: MobilePairingState };
+if (!GM.__holonMobilePairing) GM.__holonMobilePairing = { requests: new Map() };
+const MSTATE = GM.__holonMobilePairing;
+
+function pruneMobileExpired(now = Date.now()): void {
+  for (const [id, req] of MSTATE.requests.entries()) {
+    if (req.expiresAt <= now) MSTATE.requests.delete(id);
+  }
+}
+
+function randomRequestId(): string {
+  return `mpr_${randomBytes(16).toString('base64url')}`;
+}
+
+function random4DigitCode(): string {
+  return String(randomBytes(2).readUInt16BE(0) % 10000).padStart(4, '0');
+}
+
+export interface MobilePairingRequestPublic {
+  requestId: string;
+  code: string;
+  deviceName: string;
+  createdAt: string;
+  expires_at: string;
+}
+
+export function createPairingRequest(deviceName: string, now = Date.now()): { requestId: string; expires_at: string } {
+  pruneMobileExpired(now);
+  const requestId = randomRequestId();
+  const code = random4DigitCode();
+  const expiresAt = now + MOBILE_PAIR_REQUEST_TTL_MS;
+  const record: MobilePairingRequest = {
+    requestId,
+    code,
+    deviceName: deviceName.slice(0, 64),
+    createdAt: new Date(now).toISOString(),
+    expiresAt,
+    consumed: false,
+    token: randomToken(),
+    deviceId: `device_${randomBytes(10).toString('base64url')}`,
+  };
+  MSTATE.requests.set(requestId, record);
+  console.log(JSON.stringify({
+    audit: 'pairing.mobile_request_created',
+    requestId,
+    deviceName: record.deviceName,
+    ts: new Date(now).toISOString(),
+  }));
+  return { requestId, expires_at: new Date(expiresAt).toISOString() };
+}
+
+export function listPendingPairingRequests(now = Date.now()): MobilePairingRequestPublic[] {
+  pruneMobileExpired(now);
+  const results: MobilePairingRequestPublic[] = [];
+  for (const req of MSTATE.requests.values()) {
+    if (!req.consumed && req.expiresAt > now) {
+      results.push({
+        requestId: req.requestId,
+        code: req.code,
+        deviceName: req.deviceName,
+        createdAt: req.createdAt,
+        expires_at: new Date(req.expiresAt).toISOString(),
+      });
+    }
+  }
+  return results;
+}
+
+export type ConfirmPairingRequestResult =
+  | { ok: true; device_token: string; device_id: string; paired_at: string }
+  | { ok: false; reason: 'not_found' | 'expired' | 'bad_code' | 'persistence_failed' };
+
+export function confirmPairingRequest(requestId: string, code: string, now = Date.now()): ConfirmPairingRequestResult {
+  pruneMobileExpired(now);
+  const req = MSTATE.requests.get(requestId);
+  if (!req || req.consumed) return { ok: false, reason: 'not_found' };
+  if (req.expiresAt <= now) {
+    MSTATE.requests.delete(requestId);
+    return { ok: false, reason: 'expired' };
+  }
+  // Constant-time safe string compare via timing-safe equal
+  const normalizedCode = code.replace(/\D/g, '').padStart(4, '0').slice(0, 4);
+  const expectedBuf = Buffer.from(req.code, 'utf8');
+  const presentedBuf = Buffer.from(normalizedCode, 'utf8');
+  const codeMatch =
+    expectedBuf.length === presentedBuf.length &&
+    timingSafeEqual(expectedBuf, presentedBuf);
+  if (!codeMatch) return { ok: false, reason: 'bad_code' };
+
+  const pairedAt = new Date(now).toISOString();
+  const devices = readPairedDevices().filter((d) => d.id !== req.deviceId);
+  devices.push({
+    id: req.deviceId,
+    token_hash: tokenHash(req.token),
+    label: req.deviceName || 'Holon phone',
+    paired_at: pairedAt,
+  });
+
+  try {
+    writePairedDevices(devices);
+  } catch {
+    return { ok: false, reason: 'persistence_failed' };
+  }
+
+  req.consumed = true;
+  MSTATE.requests.delete(requestId);
+  console.log(JSON.stringify({
+    audit: 'pairing.mobile_request_confirmed',
+    requestId,
+    deviceId: req.deviceId,
+    deviceName: req.deviceName,
+    ts: pairedAt,
+  }));
+  return { ok: true, device_token: req.token, device_id: req.deviceId, paired_at: pairedAt };
+}
+
 export function _resetPairingStateForTests(): void {
   STATE.pending.clear();
+  MSTATE.requests.clear();
   if (db) {
     try { db.close(); } catch { /* ignore */ }
   }

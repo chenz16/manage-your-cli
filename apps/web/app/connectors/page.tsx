@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
+import { ConnectPhoneSection } from './_components/ConnectPhoneSection';
 import { MyAgentCardSection } from './_components/MyAgentCardSection';
 
 type MessagingChannel = 'slack' | 'discord' | 'telegram';
@@ -570,6 +571,9 @@ export default function ConnectorsPage() {
           <p className="page-subtitle">Optional services your Secretary and employees can use — each category is described below. CLI agents are created from chat or the Team page, not here.</p>
         </div>
       </header>
+
+      {/* ── Phone pairing ─────────────────────────────────────────────── */}
+      <ConnectPhoneSection />
 
       {/* ── Voice ────────────────────────────────────────────────────── */}
       <section className="card conn-card">

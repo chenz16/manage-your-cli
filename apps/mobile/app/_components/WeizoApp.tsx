@@ -2898,42 +2898,75 @@ function QrScanner({
   );
 }
 
-// ─── Pairing screen (inline — avoids the old multi-route redirect) ────────────
+// ─── Pairing screen (inline — mobile-initiated 2-step flow) ──────────────────
+//
+// Step 1: user confirms desk address, taps 请求连接 → POST /api/v1/pair/request
+// Step 2: desk shows 4-digit code → user enters it → POST /api/v1/pair/confirm
 
 function PairingPrompt({ onPaired }: { onPaired: () => void }) {
   const [baseUrl, setBaseUrl] = useState(deskOrigin);
+  const [step, setStep] = useState<'request' | 'confirm'>('request');
+  const [requestId, setRequestId] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [scanning, setScanning] = useState(false);
 
-  async function claimWithUrl(claimUrl: string): Promise<void> {
+  async function requestPairing() {
+    if (!baseUrl.trim()) { setErr('请填写桌面端地址'); return; }
     setBusy(true);
     setErr('');
     try {
-      // Parse the claim URL: extract baseUrl (origin) and code query param.
-      let parsed: URL;
-      try {
-        parsed = new URL(claimUrl);
-      } catch {
-        throw new Error('二维码内容无法解析为有效 URL。');
-      }
-      const scannedCode = parsed.searchParams.get('code');
-      if (!scannedCode) throw new Error('二维码中未找到配对码。');
-      const scannedBase = parsed.origin;
-
-      const { normalizeBaseUrl, writeDesktopConnection } = await import('../_lib/mobile-runtime');
-      const normalizedUrl = normalizeBaseUrl(scannedBase);
-      const r = await fetch(`${normalizedUrl}/api/v1/pair/claim`, {
+      const { normalizeBaseUrl } = await import('../_lib/mobile-runtime');
+      const normalizedUrl = normalizeBaseUrl(baseUrl.trim());
+      const r = await fetch(`${normalizedUrl}/api/v1/pair/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: scannedCode }),
+        body: JSON.stringify({ deviceName: '微作' }),
       });
       const body = await r.json().catch(() => ({})) as {
-        ok?: boolean; device_token?: string; device_id?: string; error?: string;
+        requestId?: string; expires_at?: string; error?: string; code?: string;
+      };
+      if (!r.ok || !body.requestId) {
+        const detail = body.error ?? body.code ?? `HTTP ${r.status}`;
+        throw new Error(`连不上桌面,确认地址和同一网络: ${detail}`);
+      }
+      setRequestId(body.requestId);
+      setStep('confirm');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmPairing() {
+    const digits = code.replace(/\D/g, '');
+    if (digits.length < 4) { setErr('请输入 4 位验证码'); return; }
+    setBusy(true);
+    setErr('');
+    try {
+      const { normalizeBaseUrl, writeDesktopConnection } = await import('../_lib/mobile-runtime');
+      const normalizedUrl = normalizeBaseUrl(baseUrl.trim());
+      const r = await fetch(`${normalizedUrl}/api/v1/pair/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, code: digits }),
+      });
+      const body = await r.json().catch(() => ({})) as {
+        ok?: boolean; device_token?: string; device_id?: string;
+        error?: string; code?: string;
       };
       if (!r.ok || !body.ok || !body.device_token) {
-        throw new Error(body.error ?? `HTTP ${r.status}`);
+        if (r.status === 410 || body.code === 'expired') {
+          throw new Error('验证码已过期,请重新请求');
+        }
+        if (r.status === 401 || body.code === 'bad_code') {
+          throw new Error('验证码不对');
+        }
+        if (r.status === 404 || body.code === 'not_found') {
+          throw new Error('配对请求失效,请重新请求');
+        }
+        throw new Error(body.error ?? body.code ?? `HTTP ${r.status}`);
       }
       writeDesktopConnection({ baseUrl: normalizedUrl, deviceToken: body.device_token });
       installMobileApiFetchProxy();
@@ -2945,52 +2978,46 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
     }
   }
 
-  async function submit() {
-    const url = baseUrl.trim();
-    const pairingCode = code.trim();
-    if (!url || !pairingCode) { setErr('请填写桌面端地址和配对码'); return; }
-    setBusy(true);
+  function goBack() {
+    setStep('request');
+    setCode('');
     setErr('');
-    try {
-      const { normalizeBaseUrl, writeDesktopConnection } = await import('../_lib/mobile-runtime');
-      const normalizedUrl = normalizeBaseUrl(url);
-      const r = await fetch(`${normalizedUrl}/api/v1/pair/claim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: pairingCode }),
-      });
-      const body = await r.json().catch(() => ({})) as {
-        ok?: boolean; device_token?: string; device_id?: string; error?: string;
-      };
-      if (!r.ok || !body.ok || !body.device_token) {
-        throw new Error(body.error ?? `HTTP ${r.status}`);
-      }
-      writeDesktopConnection({ baseUrl: normalizedUrl, deviceToken: body.device_token });
-      installMobileApiFetchProxy();
-      onPaired();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+    setRequestId('');
   }
 
-  function handleQrResult(text: string) {
-    setScanning(false);
-    // Only proceed if it looks like a pair/claim URL.
-    if (text.includes('/api/v1/pair/claim')) {
-      void claimWithUrl(text);
-    } else {
-      setErr('扫描结果不是配对二维码，请使用桌面端 /me 页面显示的二维码。');
-    }
-  }
-
-  if (scanning) {
+  if (step === 'request') {
     return (
-      <QrScanner
-        onResult={handleQrResult}
-        onClose={() => setScanning(false)}
-      />
+      <div className="mobile-pairing-shell">
+        <div className="mobile-pairing-panel">
+          <div className="mobile-pairing-kicker">微作 · Weizo</div>
+          <h1 className="mobile-pairing-title">连接桌面</h1>
+
+          <div className="mobile-pairing-field">
+            <label htmlFor="weizo-pair-url">桌面端地址</label>
+            <input
+              id="weizo-pair-url"
+              type="url"
+              value={baseUrl}
+              onChange={(ev) => setBaseUrl(ev.target.value)}
+              onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); void requestPairing(); } }}
+              placeholder="http://192.168.x.x:3000"
+              autoComplete="url"
+              disabled={busy}
+            />
+          </div>
+
+          {err && <div className="mobile-pairing-error">{err}</div>}
+
+          <button
+            type="button"
+            className="mobile-pairing-submit"
+            onClick={() => void requestPairing()}
+            disabled={busy || !baseUrl.trim()}
+          >
+            {busy ? '请求中…' : '请求连接'}
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -2998,54 +3025,48 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
     <div className="mobile-pairing-shell">
       <div className="mobile-pairing-panel">
         <div className="mobile-pairing-kicker">微作 · Weizo</div>
-        <h1 className="mobile-pairing-title">连接桌面</h1>
+        <h1 className="mobile-pairing-title">输入验证码</h1>
 
-        {/* QR scan button */}
+        <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--ink-soft, #555)', margin: '0 0 16px' }}>
+          在桌面上查看 4 位验证码并输入
+        </p>
+
+        <div className="mobile-pairing-field">
+          <label htmlFor="weizo-pair-otp">4 位验证码</label>
+          <input
+            id="weizo-pair-otp"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={4}
+            value={code}
+            onChange={(ev) => setCode(ev.target.value.replace(/\D/g, '').slice(0, 4))}
+            onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); void confirmPairing(); } }}
+            placeholder="0000"
+            disabled={busy}
+            style={{ fontSize: 28, letterSpacing: '0.3em', textAlign: 'center' }}
+          />
+        </div>
+
+        {err && <div className="mobile-pairing-error">{err}</div>}
+
         <button
           type="button"
           className="mobile-pairing-submit"
-          style={{ marginBottom: 12, background: 'var(--accent, #1a73e8)' }}
-          onClick={() => { setErr(''); setScanning(true); }}
-          disabled={busy}
+          onClick={() => void confirmPairing()}
+          disabled={busy || code.replace(/\D/g, '').length < 4}
         >
-          📷 扫码配对
+          {busy ? '连接中…' : '连接'}
         </button>
 
-        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-mute)', margin: '4px 0 12px' }}>
-          — 或手动输入 —
-        </div>
-
-        <div className="mobile-pairing-field">
-          <label htmlFor="weizo-pair-url">桌面端地址</label>
-          <input
-            id="weizo-pair-url"
-            type="url"
-            value={baseUrl}
-            onChange={(ev) => setBaseUrl(ev.target.value)}
-            placeholder="http://192.168.x.x:3000"
-            autoComplete="url"
-          />
-        </div>
-        <div className="mobile-pairing-field">
-          <label htmlFor="weizo-pair-code">配对码</label>
-          <input
-            id="weizo-pair-code"
-            type="text"
-            value={code}
-            onChange={(ev) => setCode(ev.target.value)}
-            onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); void submit(); } }}
-            placeholder="在桌面端 /me 页面获取"
-            autoComplete="one-time-code"
-          />
-        </div>
-        {err && <div className="mobile-pairing-error">{err}</div>}
         <button
           type="button"
           className="mobile-pairing-submit"
-          onClick={() => void submit()}
-          disabled={busy || !baseUrl.trim() || !code.trim()}
+          style={{ marginTop: 8, background: 'transparent', color: 'var(--ink-mute, #888)', border: '1px solid var(--line, #ddd)' }}
+          onClick={goBack}
+          disabled={busy}
         >
-          {busy ? '连接中…' : '连接桌面'}
+          重新请求
         </button>
       </div>
     </div>
