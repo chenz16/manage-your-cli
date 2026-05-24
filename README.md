@@ -152,17 +152,67 @@ keep agents warm instead.
   has its own native `CLAUDE.md`/`AGENTS.md`.
 - **No LLM config.** You log into your CLI(s) once; the app detects and uses them.
 
-## Quickstart
+## Install & Use
+
+### 1. Prerequisites
+
+- **Node.js 20.10.0+** with corepack: `corepack enable`
+- **At least one CLI subscription** logged in on your machine:
+  - Claude Code: `npm install -g @anthropic-ai/claude-code` then `claude` (OAuth)
+  - Codex: `npm install -g @openai/codex` then `codex` (OAuth)
+  - Gemini: `npm install -g @google/gemini-cli` then `gemini` (OAuth)
+  - Qwen: per Alibaba Cloud docs, then `qwen login`
+
+No API keys are ever entered into this app — it drives your existing CLI login.
+
+### 2. Desk (WSL2 / Linux)
 
 ```bash
 corepack pnpm install
-bash scripts/build-web.sh                 # production build
-# serve the standalone build (bind 0.0.0.0); HOLON_OPEN_DEMO=1 = single-user, no device token
-NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3100 HOLON_OPEN_DEMO=1 \
-  node apps/web/.next/standalone/apps/web/server.js
+bash scripts/build-web.sh           # production build (isolated, won't clobber your config)
+HOLON_LAN_ACCESS=1 bash scripts/serve-production-wsl.sh  # bind 0.0.0.0, LAN-accessible
 ```
 
-Then open the app, chat with your Secretary, and ask it to hire an employee.
+Open `http://localhost:3000`, complete the onboarding wizard, and chat with the Secretary.
+
+**Key flags:**
+
+| Flag | When to use |
+|------|-------------|
+| `HOLON_OPEN_DEMO=1` | Single-user localhost use — bypasses device token gate entirely |
+| `HOLON_LAN_ACCESS=1` | **Recommended for LAN/phone** — lets private-LAN IPs (10.x / 192.168.x / 172.16–31.x / 100.x Tailscale) be treated as "the local desktop", so you can view pairing codes from a Windows browser and pair a phone over Wi-Fi |
+
+### 3. Phone access (WSL2 + Windows)
+
+Expose the desk port to your Windows LAN — double-click `scripts\iphone-lan-bridge.bat`
+(auto-elevates to admin) and pass the desk port:
+
+```powershell
+# (Windows PowerShell, Administrator)
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts\iphone-lan-bridge.ps1 -Port 3000 -Label desk
+```
+
+Re-run after every WSL or Windows restart (WSL2's internal IP changes each time).
+Tailscale is the simpler alternative — it gives the machine a stable `100.x.x.x` IP
+with no manual portproxy.
+
+### 4. Android mobile app (微作)
+
+Build and sideload the APK (requires JDK 21 + Android SDK; see `docs/INSTALL.md §4`):
+
+```bash
+NEXT_PUBLIC_DESK_ORIGIN=http://<windows-lan-ip>:3000 \
+  bash scripts/build-android-apk.sh
+# Install via USB adb or sideload the APK from dist/
+```
+
+Pairing is mobile-initiated: 微作 opens to a pairing screen on first launch → tap
+"请求连接" → the desk (`/connectors`) shows a 4-digit code → type it on the phone →
+done. Device token stored for all future requests.
+
+For the full guide including all env flags, pairing flow, plugins, voice input,
+projects, and WeChat connector: **[`docs/INSTALL.md`](docs/INSTALL.md)**.
 
 ## Status
 
