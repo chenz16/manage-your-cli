@@ -616,6 +616,88 @@ button, input, textarea, select { font: inherit; }
 .bug-fab-result { font-size: 13px; color: var(--muted); }
 .bug-fab-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
 
+/* ── VoiceBugReport ──────────────────────────────────────────────────────── */
+.voice-bug-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 4px;
+}
+.voice-bug-body {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 12px 0;
+  min-height: 120px;
+}
+.voice-bug-hint {
+  font-size: 14px; text-align: center;
+  color: var(--ink);
+  margin: 0;
+}
+.voice-bug-hint.muted { color: var(--muted); font-size: 12px; }
+.voice-bug-mic-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--cream);
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.voice-bug-mic-btn:active { background: #000; }
+.voice-bug-mic-btn--recording { background: #C0392B; }
+.voice-bug-mic-btn--recording:active { background: #922b21; }
+.voice-bug-recording-indicator {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; color: #C0392B;
+}
+.voice-bug-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #C0392B;
+  animation: voice-bug-pulse 1s ease-in-out infinite;
+}
+@keyframes voice-bug-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+.voice-bug-status {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; color: var(--muted);
+}
+.voice-bug-spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--line);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: voice-bug-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes voice-bug-spin {
+  to { transform: rotate(360deg); }
+}
+.voice-bug-done {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+}
+.voice-bug-done-icon {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: #27AE60;
+  color: #fff;
+  font-size: 24px;
+  display: flex; align-items: center; justify-content: center;
+}
+.voice-bug-done-text {
+  font-size: 14px; font-weight: 500; color: var(--ink);
+  max-width: 240px;
+}
+.voice-bug-done-meta { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.voice-bug-error {
+  font-size: 14px; color: #C0392B;
+  text-align: center;
+  padding: 4px 0;
+}
+
 /* M-L-Pass#3 — pull-to-refresh indicator (Linear/Notion mobile pattern).
    Indicator grows from 0 to ~64px as the user drags; spinner rotates with
    progress until release, then spins continuously while onRefresh resolves. */
