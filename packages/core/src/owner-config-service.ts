@@ -217,6 +217,7 @@ function materializeSeed(seed: StarterStaffSeed, desk_id: string): Staff {
     created_at: new Date().toISOString(),
     denied_skills: [],
     tags: ['suggested'],
+    project_ids: [],
   };
 }
 

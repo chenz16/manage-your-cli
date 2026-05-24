@@ -207,3 +207,22 @@ export {
   listBugsWithStatus, reprocessBug,
   type BugStatus,
 } from './bug-watcher.js';
+
+// Phase 1 — todos service (project_id filter support)
+export {
+  listTodos,
+  type ListTodosInput,
+} from './todos-service.js';
+
+// Phase 1 — project store
+export {
+  createProject,
+  listProjects,
+  getProject,
+  updateProject,
+  deleteProject,
+  clearProjectStore,
+  slugify,
+  type CreateProjectInput,
+  type UpdateProjectInput,
+} from './project-store.js';

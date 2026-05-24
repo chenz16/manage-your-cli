@@ -20,7 +20,10 @@ import { z } from 'zod';
 import { loadFixtures } from './fixture-store.js';
 import { listMutableDeliverables, getMutableDeliverable } from './mutable-store.js';
 
-export type ListDeliverablesQueryInput = z.input<typeof ListDeliverablesQuerySchema>;
+/** Phase 1: extended query type with optional project_id filter. */
+export type ListDeliverablesQueryInput = z.input<typeof ListDeliverablesQuerySchema> & {
+  project_id?: string | null;
+};
 
 export function listDeliverables(query?: ListDeliverablesQueryInput): ListDeliverablesResponse {
   const q = ListDeliverablesQuerySchema.parse(query ?? {});
@@ -31,6 +34,12 @@ export function listDeliverables(query?: ListDeliverablesQueryInput): ListDelive
   let items: Deliverable[] = [...listMutableDeliverables(), ...fx.deliverables];
   if (q.origin) items = items.filter((d) => d.origin_label === q.origin);
   if (q.status) items = items.filter((d) => d.status === q.status);
+  // Phase 1: project_id filter — strict per-project view (untagged items NOT
+  // included in a per-project view, per design doc open-Q2 recommendation).
+  if (query?.project_id !== undefined && query.project_id !== null) {
+    const pid = query.project_id;
+    items = items.filter((d) => d.project_id === pid);
+  }
   items.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
   return ListDeliverablesResponseSchema.parse({
     items: items.slice(0, q.limit),

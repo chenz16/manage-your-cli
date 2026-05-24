@@ -111,6 +111,7 @@ export function createCliAgentStaff(input: CreateCliAgentInput): Staff {
     created_at: new Date().toISOString(),
     denied_skills: [],
     tags: lifecycle === 'long' ? ['long_term'] : ['short_term'],
+    project_ids: [],
   };
   addDynamicStaff(staff);
   if (lifecycle === 'long') ensureAgentMemoryFile(cwd, staff, binary);
@@ -177,6 +178,8 @@ export function createStaff(input: CreateStaffInput): Staff {
     // iter-012 Pass #4: free-form labels. Owner-created staff via chat
     // get no tags (only persona-seeded "suggested" staff carry one).
     tags: [],
+    // Phase 1: no project affiliation by default (shared/cross-project).
+    project_ids: [],
   };
 
   addDynamicStaff(staff);
