@@ -55,6 +55,12 @@ function ensureDb(): DB | null {
     } catch {
       // Column already exists — ignore.
     }
+    // Graceful migration: add due_date column (nullable ISO 'YYYY-MM-DD').
+    try {
+      db.exec(`ALTER TABLE todos ADD COLUMN due_date TEXT`);
+    } catch {
+      // Column already exists — ignore.
+    }
     _db = db;
     console.log(JSON.stringify({
       audit: 'todo_store.opened',
@@ -92,12 +98,17 @@ function normalizePriority(p: unknown): TodoPriority {
   return 'medium';
 }
 
+function normalizeDueDate(d: unknown): string | null {
+  return typeof d === 'string' && d.length > 0 ? d : null;
+}
+
 function normalizeRow(row: Record<string, unknown>): Todo {
   return {
     id: row.id as string,
     text: row.text as string,
     status: row.status as Todo['status'],
     priority: normalizePriority(row.priority),
+    due_date: normalizeDueDate(row.due_date),
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -114,7 +125,15 @@ export function listTodos(): Todo[] {
       const pa = PRIORITY_ORDER[a.priority] ?? 1;
       const pb = PRIORITY_ORDER[b.priority] ?? 1;
       if (pa !== pb) return pa - pb;
-      // same priority: newest first (already sorted by created_at DESC from DB)
+      // same priority: a sooner due_date comes first; todos with no due_date last.
+      const da = a.due_date ?? null;
+      const db_ = b.due_date ?? null;
+      if (da !== db_) {
+        if (da === null) return 1;
+        if (db_ === null) return -1;
+        return da < db_ ? -1 : 1;
+      }
+      // otherwise: newest first (already sorted by created_at DESC from DB)
       return 0;
     });
     return todos;
@@ -129,7 +148,11 @@ export function listTodos(): Todo[] {
 }
 
 /** Add a new todo with status='pending'. Returns the created todo. */
-export function addTodo(text: string, priority: TodoPriority = 'medium'): Todo {
+export function addTodo(
+  text: string,
+  priority: TodoPriority = 'medium',
+  due_date: string | null = null,
+): Todo {
   const db = ensureDb();
   const now = nowIso();
   const todo: Todo = {
@@ -137,14 +160,15 @@ export function addTodo(text: string, priority: TodoPriority = 'medium'): Todo {
     text,
     status: 'pending',
     priority,
+    due_date,
     created_at: now,
     updated_at: now,
   };
   if (!db) return todo; // in-memory fallback: return but don't persist
   try {
     db.prepare(
-      'INSERT INTO todos (id, text, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(todo.id, todo.text, todo.status, todo.priority, todo.created_at, todo.updated_at);
+      'INSERT INTO todos (id, text, status, priority, due_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(todo.id, todo.text, todo.status, todo.priority, todo.due_date, todo.created_at, todo.updated_at);
     console.log(JSON.stringify({
       audit: 'todo_store.add',
       id: todo.id,
@@ -163,7 +187,7 @@ export function addTodo(text: string, priority: TodoPriority = 'medium'): Todo {
 /** Update status, text, and/or priority. Returns updated todo, or null if not found. */
 export function updateTodo(
   id: string,
-  patch: { status?: Todo['status']; text?: string; priority?: TodoPriority },
+  patch: { status?: Todo['status']; text?: string; priority?: TodoPriority; due_date?: string | null },
 ): Todo | null {
   const db = ensureDb();
   if (!db) return null;
@@ -176,11 +200,12 @@ export function updateTodo(
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.text !== undefined ? { text: patch.text } : {}),
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      ...(patch.due_date !== undefined ? { due_date: normalizeDueDate(patch.due_date) } : {}),
       updated_at: nowIso(),
     };
     db.prepare(
-      'UPDATE todos SET text = ?, status = ?, priority = ?, updated_at = ? WHERE id = ?',
-    ).run(updated.text, updated.status, updated.priority, updated.updated_at, id);
+      'UPDATE todos SET text = ?, status = ?, priority = ?, due_date = ?, updated_at = ? WHERE id = ?',
+    ).run(updated.text, updated.status, updated.priority, updated.due_date ?? null, updated.updated_at, id);
     console.log(JSON.stringify({
       audit: 'todo_store.update',
       id,

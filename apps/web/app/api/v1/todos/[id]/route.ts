@@ -21,10 +21,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'invalid patch body', issues: parsed.error.issues }, { status: 400 });
   }
   // Strip undefined values so the patch satisfies exactOptionalPropertyTypes.
-  const patch: { status?: 'pending' | 'delegated' | 'done'; text?: string; priority?: 'high' | 'medium' | 'low' } = {};
+  const patch: { status?: 'pending' | 'delegated' | 'done'; text?: string; priority?: 'high' | 'medium' | 'low'; due_date?: string | null } = {};
   if (parsed.data.status !== undefined) patch.status = parsed.data.status;
   if (parsed.data.text !== undefined) patch.text = parsed.data.text;
   if (parsed.data.priority !== undefined) patch.priority = parsed.data.priority;
+  if (parsed.data.due_date !== undefined) patch.due_date = parsed.data.due_date;
   const updated = updateTodo(id, patch);
   if (!updated) {
     return NextResponse.json({ error: 'todo not found' }, { status: 404 });

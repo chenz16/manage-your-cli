@@ -671,6 +671,33 @@ const PRIORITY_COLOR: Record<TodoPriority, string> = {
 const PRIORITY_CYCLE: Record<TodoPriority, TodoPriority> = { high: 'medium', medium: 'low', low: 'high' };
 const PRIORITY_ORDER: Record<TodoPriority, number> = { high: 0, medium: 1, low: 2 };
 
+// Urgency-via-text-color: 高=red, 中=normal ink, 低=muted grey.
+const PRIORITY_TEXT_COLOR: Record<TodoPriority, string> = {
+  high: '#e0533a',
+  medium: 'inherit',
+  low: '#9a9a9a',
+};
+
+// Local 'YYYY-MM-DD' (avoids UTC off-by-one from toISOString).
+function todayLocalIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// 'YYYY-MM-DD' → 'MM-DD' for the compact pill.
+function shortDate(iso: string): string {
+  const parts = iso.split('-');
+  return parts.length === 3 ? `${parts[1]}-${parts[2]}` : iso;
+}
+
+// Overdue = due date is today or earlier.
+function isOverdue(iso: string): boolean {
+  return iso <= todayLocalIso();
+}
+
 // ─── 看板 — work tracker (待办 LEAD) ───────────────────────────────────────
 
 function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
@@ -761,6 +788,37 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
     }
   }
 
+  async function setDueDate(id: string, due_date: string | null) {
+    // Optimistic update for snappy feel; re-sort so sooner-due rises within priority.
+    setItems((prev) => {
+      const updated = prev.map((t) => t.id === id ? { ...t, due_date } : t);
+      updated.sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority ?? 'medium'] ?? 1;
+        const pb = PRIORITY_ORDER[b.priority ?? 'medium'] ?? 1;
+        if (pa !== pb) return pa - pb;
+        const da = a.due_date ?? null;
+        const db = b.due_date ?? null;
+        if (da !== db) {
+          if (da === null) return 1;
+          if (db === null) return -1;
+          return da < db ? -1 : 1;
+        }
+        return 0;
+      });
+      return updated;
+    });
+    try {
+      await holonApiFetch(`/api/v1/todos/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ due_date }),
+      });
+    } catch {
+      // revert on failure
+      await load();
+    }
+  }
+
   async function deleteTodo(id: string) {
     try {
       await holonApiFetch(`/api/v1/todos/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -816,8 +874,41 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
               >
                 {PRIORITY_LABEL[priority]}
               </button>
-              <span className="mobile-job-title">{todo.text}</span>
+              <span
+                className="mobile-job-title"
+                style={{ color: PRIORITY_TEXT_COLOR[priority] }}
+              >
+                {todo.text}
+              </span>
               <span className="mobile-job-sub weizo-todo-actions">
+                {todo.due_date && (
+                  <span
+                    className="weizo-todo-due"
+                    style={isOverdue(todo.due_date) ? { color: '#e0533a' } : undefined}
+                    title={`截止 ${todo.due_date}${isOverdue(todo.due_date) ? '（已到期）' : ''}`}
+                  >
+                    📅 {shortDate(todo.due_date)}
+                  </span>
+                )}
+                <label className="weizo-todo-action weizo-todo-datelabel" title="设日期">
+                  设日期
+                  <input
+                    type="date"
+                    className="weizo-todo-dateinput"
+                    value={todo.due_date ?? ''}
+                    onChange={(ev) => void setDueDate(todo.id, ev.target.value || null)}
+                  />
+                </label>
+                {todo.due_date && (
+                  <button
+                    type="button"
+                    className="weizo-todo-action"
+                    onClick={() => void setDueDate(todo.id, null)}
+                    title="清除日期"
+                  >
+                    清除
+                  </button>
+                )}
                 <button
                   type="button"
                   className="weizo-todo-action"

@@ -16,6 +16,8 @@ export const Todo = z.object({
   text: z.string().min(1),
   status: TodoStatus,
   priority: TodoPriority.default('medium'),
+  // ISO date 'YYYY-MM-DD' or null. Optional for backward compat with old rows.
+  due_date: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -24,6 +26,7 @@ export type Todo = z.infer<typeof Todo>;
 export const AddTodoBody = z.object({
   text: z.string().min(1),
   priority: TodoPriority.optional(),
+  due_date: z.string().nullable().optional(),
 });
 export type AddTodoBody = z.infer<typeof AddTodoBody>;
 
@@ -31,6 +34,7 @@ export const UpdateTodoBody = z.object({
   text: z.string().min(1).optional(),
   status: TodoStatus.optional(),
   priority: TodoPriority.optional(),
+  due_date: z.string().nullable().optional(),
 });
 export type UpdateTodoBody = z.infer<typeof UpdateTodoBody>;
 
