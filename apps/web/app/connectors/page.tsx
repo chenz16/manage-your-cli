@@ -560,6 +560,9 @@ export default function ConnectorsPage() {
           <p className="conn-card-hint">
             Voice is off unless you choose an engine. OpenAI keys here are voice-only keys stored with owner config, not chat or runtime tokens.
           </p>
+          <p className="conn-note">
+            💡 Tip — to talk to the Secretary by voice on Windows, press <kbd>Win</kbd>+<kbd>H</kbd> in the chat box (Windows&apos; built-in speech-to-text). No setup needed.
+          </p>
         </div>
 
         <div className="conn-field">
