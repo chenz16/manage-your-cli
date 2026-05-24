@@ -53,6 +53,7 @@ import {
   type MobileDesktopConnection,
 } from '../_lib/mobile-runtime';
 import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/tts';
+import * as nativeStt from '../_lib/native-stt';
 import { deskOrigin } from '../_lib/desk-origin';
 
 // ─── Chat auto-scroll hook ────────────────────────────────────────────────────
@@ -223,26 +224,113 @@ function insertTranscriptIntoComposer(transcript: string): void {
   ta.focus();
 }
 
+// ── Native STT availability cache (checked once per mount) ───────────────────
+// Stored outside the component so it persists across re-renders without
+// triggering extra effects. null = not yet probed; true/false = result.
+let nativeSttAvailableCache: boolean | null = null;
+
 function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: string) => void }) {
   const [state, setState] = useState<RecordingState>('idle');
   const [hint, setHint] = useState('');
+  // partial text shown while native STT is listening
+  const [partialText, setPartialText] = useState('');
+  // whether native STT is available on this device (probed once on mount)
+  const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(nativeSttAvailableCache);
+
+  // Fallback (desk-transcribe) refs — kept so the fallback path still works.
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const pointerIdRef = useRef<number | null>(null);
   const stopPendingRef = useRef(false);
+  // Track whether native STT is in flight so stop() can cancel it.
+  const nativeSttActiveRef = useRef(false);
+
+  // Probe native availability once on mount.
+  useEffect(() => {
+    if (nativeSttAvailableCache !== null) return;
+    void nativeStt.isAvailable().then((v) => {
+      nativeSttAvailableCache = v;
+      setNativeAvailable(v);
+    });
+  }, []);
 
   function showHint(message: string) {
     setHint(message);
     window.setTimeout(() => setHint((current) => (current === message ? '' : current)), 3500);
   }
 
+  function deliverTranscript(text: string) {
+    if (onTranscript) onTranscript(text);
+    else insertTranscriptIntoComposer(text);
+  }
+
+  // ── PRIMARY: native on-device STT ─────────────────────────────────────────
+
+  async function startNativeStt(ev: PointerEvent<HTMLButtonElement>) {
+    ev.preventDefault();
+    if (state !== 'idle') return;
+    pointerIdRef.current = ev.pointerId;
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    setHint('');
+    setPartialText('');
+
+    // Ensure permission before starting.
+    const perm = await nativeStt.requestPermission();
+    if (perm !== 'granted') {
+      showHint('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
+      return;
+    }
+
+    setState('recording');
+    nativeSttActiveRef.current = true;
+    try {
+      const text = await nativeStt.listen({
+        language: 'zh-CN',
+        partialResults: true,
+        onPartial: (partial) => setPartialText(partial),
+      });
+      nativeSttActiveRef.current = false;
+      setPartialText('');
+      if (!text) {
+        showHint('没有听清，请再试一次。');
+        setState('idle');
+        return;
+      }
+      deliverTranscript(text);
+    } catch (err) {
+      nativeSttActiveRef.current = false;
+      setPartialText('');
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'PERMISSION_DENIED') {
+        showHint('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
+      } else {
+        // Native STT failed — fall through to desk-transcribe fallback.
+        await startDeskTranscribeFallback(ev);
+        return;
+      }
+    } finally {
+      setState('idle');
+    }
+  }
+
+  function stopNativeStt(ev: PointerEvent<HTMLButtonElement>) {
+    ev.preventDefault();
+    if (pointerIdRef.current === ev.pointerId) pointerIdRef.current = null;
+    if (nativeSttActiveRef.current) {
+      // Signal native recognizer to finish and return result.
+      void nativeStt.stop();
+    }
+  }
+
+  // ── FALLBACK: getUserMedia + desk-transcribe ──────────────────────────────
+
   function cleanupStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
   }
 
-  async function transcribe(blob: Blob, mime: string) {
+  async function transcribeViaDesk(blob: Blob, mime: string) {
     setState('transcribing');
     const base64 = await blobToBase64(blob);
     const res = await holonApiFetch('/api/v1/connectors/voice/transcribe', {
@@ -261,11 +349,10 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
       showHint('没有听清，请再试一次。');
       return;
     }
-    if (onTranscript) onTranscript(text);
-    else insertTranscriptIntoComposer(text);
+    deliverTranscript(text);
   }
 
-  function stopRecording() {
+  function stopDeskRecording() {
     const recorder = recorderRef.current;
     if (!recorder) {
       stopPendingRef.current = state === 'recording';
@@ -274,15 +361,14 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
     if (recorder.state !== 'inactive') recorder.stop();
   }
 
-  async function startRecording(ev: PointerEvent<HTMLButtonElement>) {
-    ev.preventDefault();
-    if (state !== 'idle') return;
+  async function startDeskTranscribeFallback(ev: PointerEvent<HTMLButtonElement>) {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       showHint('这个浏览器不支持录音。');
+      setState('idle');
       return;
     }
     pointerIdRef.current = ev.pointerId;
-    ev.currentTarget.setPointerCapture(ev.pointerId);
+    ev.currentTarget?.setPointerCapture(ev.pointerId);
     setHint('');
     setState('recording');
     stopPendingRef.current = false;
@@ -307,7 +393,7 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
           setState('idle');
           return;
         }
-        void transcribe(new Blob(chunks, { type: mime }), mime)
+        void transcribeViaDesk(new Blob(chunks, { type: mime }), mime)
           .catch((error: unknown) => {
             showHint(error instanceof Error ? error.message : '语音转写失败。');
           })
@@ -322,7 +408,7 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
       recorder.start();
       if (stopPendingRef.current) {
         stopPendingRef.current = false;
-        stopRecording();
+        stopDeskRecording();
       }
     } catch (error) {
       cleanupStream();
@@ -334,29 +420,53 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
     }
   }
 
-  function releasePointer(ev: PointerEvent<HTMLButtonElement>) {
+  function releaseDeskPointer(ev: PointerEvent<HTMLButtonElement>) {
     ev.preventDefault();
     if (pointerIdRef.current === ev.pointerId) pointerIdRef.current = null;
-    stopRecording();
+    stopDeskRecording();
   }
+
+  // ── Unified press / release handlers ─────────────────────────────────────
+
+  function onPointerDown(ev: PointerEvent<HTMLButtonElement>) {
+    if (nativeAvailable) {
+      void startNativeStt(ev);
+    } else {
+      void startDeskTranscribeFallback(ev);
+    }
+  }
+
+  function onPointerUp(ev: PointerEvent<HTMLButtonElement>) {
+    if (nativeAvailable) {
+      stopNativeStt(ev);
+    } else {
+      releaseDeskPointer(ev);
+    }
+  }
+
+  // ── Hint text during recording ────────────────────────────────────────────
+
+  const recordingHint = nativeAvailable
+    ? (partialText || '正在聆听…')
+    : '正在录音，松开转写';
 
   return (
     <div className="mobile-voice-control">
       <button
         type="button"
         className={`mobile-voice-button${state === 'recording' ? ' is-recording' : ''}`}
-        aria-label={state === 'recording' ? '松开转写' : '按住说话'}
+        aria-label={state === 'recording' ? '松开结束' : '按住说话'}
         disabled={state === 'transcribing'}
-        onPointerDown={(ev) => void startRecording(ev)}
-        onPointerUp={releasePointer}
-        onPointerCancel={releasePointer}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onContextMenu={(ev) => ev.preventDefault()}
       >
         {state === 'transcribing' ? '…' : '🎙'}
       </button>
       {(state === 'recording' || state === 'transcribing' || hint) && (
         <span className="mobile-voice-hint" role="status">
-          {state === 'recording' ? '正在录音，松开转写' : state === 'transcribing' ? '正在转写…' : hint}
+          {state === 'recording' ? recordingHint : state === 'transcribing' ? '正在转写…' : hint}
         </span>
       )}
     </div>

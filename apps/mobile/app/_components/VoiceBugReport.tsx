@@ -37,6 +37,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { deskApi } from '../_lib/desk-api';
+import * as nativeStt from '../_lib/native-stt';
 
 // ── Screenshot-intent keyword detection ───────────────────────────────────
 // Returns true when the user's words express screenshot intent.
@@ -183,8 +184,61 @@ export function VoiceBugReport() {
     setOpen(true);
   }
 
-  // ── Start recording ──────────────────────────────────────────────────────
+  // ── Start recording — native STT primary, desk-transcribe fallback ────────
   async function startRecording() {
+    const nativeAvail = await nativeStt.isAvailable();
+    if (nativeAvail) {
+      await startNativeRecording();
+    } else {
+      await startDeskRecording();
+    }
+  }
+
+  // ── Native STT path ──────────────────────────────────────────────────────
+  async function startNativeRecording() {
+    const perm = await nativeStt.requestPermission();
+    if (perm !== 'granted') {
+      setPhase('error');
+      setStatusMsg('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
+      return;
+    }
+    setPhase('recording');
+    setStatusMsg('正在聆听… 点击停止');
+    try {
+      const text = await nativeStt.listen({
+        language: 'zh-CN',
+        partialResults: true,
+        onPartial: (p) => setStatusMsg(p || '正在聆听…'),
+      });
+      if (!text) {
+        setPhase('error');
+        setStatusMsg('没有识别到文字，请重试');
+        return;
+      }
+      const wantsScreenshot = hasScreenshotIntent(text);
+      setPhase('filing');
+      setStatusMsg('提交中…');
+      await fileBug(text, wantsScreenshot);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'PERMISSION_DENIED') {
+        setPhase('error');
+        setStatusMsg('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
+      } else {
+        // Native failed — try desk-transcribe fallback silently.
+        await startDeskRecording();
+      }
+    }
+  }
+
+  // ── Stop native STT (tap-to-stop) ────────────────────────────────────────
+  function stopNativeRecording() {
+    void nativeStt.stop();
+    // The listen() promise will resolve with whatever was captured so far.
+  }
+
+  // ── Desk-transcribe fallback path ────────────────────────────────────────
+  async function startDeskRecording() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setPhase('error');
       setStatusMsg('此设备不支持麦克风录制');
@@ -203,7 +257,7 @@ export function VoiceBugReport() {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        void handleRecordingDone(mime);
+        void handleDeskRecordingDone(mime);
       };
       recorder.start();
     } catch (err) {
@@ -212,18 +266,26 @@ export function VoiceBugReport() {
     }
   }
 
-  // ── Stop recording ───────────────────────────────────────────────────────
-  function stopRecording() {
+  // ── Stop desk recording ──────────────────────────────────────────────────
+  function stopDeskRecording() {
     const rec = recorderRef.current;
     if (!rec || rec.state === 'inactive') return;
     setPhase('transcribing');
     setStatusMsg('转录中…');
     rec.stop();
-    // MediaRecorder.onstop fires → handleRecordingDone.
   }
 
-  // ── Transcribe + file ────────────────────────────────────────────────────
-  async function handleRecordingDone(mime: string) {
+  // ── Unified stop (called by UI stop button) ───────────────────────────────
+  function stopRecording() {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      stopDeskRecording();
+    } else {
+      stopNativeRecording();
+    }
+  }
+
+  // ── Desk transcribe + file ────────────────────────────────────────────────
+  async function handleDeskRecordingDone(mime: string) {
     const chunks = chunksRef.current;
     if (chunks.length === 0) {
       setPhase('error');
@@ -233,13 +295,11 @@ export function VoiceBugReport() {
     const blob = new Blob(chunks, { type: mime });
     chunksRef.current = [];
 
-    // Cleanup stream — done recording.
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
     }
 
-    // Transcribe.
     let text = '';
     try {
       const base64 = await blobToBase64(blob);
@@ -269,10 +329,7 @@ export function VoiceBugReport() {
       return;
     }
 
-    // Detect screenshot intent.
     const wantsScreenshot = hasScreenshotIntent(text);
-
-    // File the bug.
     setPhase('filing');
     setStatusMsg('提交中…');
     await fileBug(text, wantsScreenshot);

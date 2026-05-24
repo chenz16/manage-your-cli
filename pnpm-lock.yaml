@@ -24,6 +24,9 @@ importers:
       '@assistant-ui/react':
         specifier: ^0.14.5
         version: 0.14.5(@types/react-dom@19.2.0(@types/react@19.2.0))(@types/react@19.2.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(use-sync-external-store@1.6.0(react@19.2.0))
+      '@capacitor-community/speech-recognition':
+        specifier: ^7.0.1
+        version: 7.0.1(@capacitor/core@6.2.1)
       '@capacitor-community/text-to-speech':
         specifier: ^8.0.0
         version: 8.0.0(@capacitor/core@6.2.1)
@@ -380,6 +383,11 @@ packages:
   '@babel/runtime@7.29.2':
     resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
+
+  '@capacitor-community/speech-recognition@7.0.1':
+    resolution: {integrity: sha512-ykpBZziR575X0eURO5vXaD9gVrXXC/7Ra2qql/2KP6/jxWOqAFuw4eKjSPjwdAgGE6a/Z+v8FJm4SVh57MVwDA==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
 
   '@capacitor-community/text-to-speech@8.0.0':
     resolution: {integrity: sha512-8GCRavhp4uJft+DsJTywxUmMidMxJVTWHtrCKHjai5LPcJwHI93zpf1LsuvNtTSv/AeC0+oB0ULi/kHzqoB5Bg==}
@@ -4557,6 +4565,10 @@ snapshots:
   '@babel/helper-validator-identifier@7.28.5': {}
 
   '@babel/runtime@7.29.2': {}
+
+  '@capacitor-community/speech-recognition@7.0.1(@capacitor/core@6.2.1)':
+    dependencies:
+      '@capacitor/core': 6.2.1
 
   '@capacitor-community/text-to-speech@8.0.0(@capacitor/core@6.2.1)':
     dependencies:

@@ -128,6 +128,26 @@ patch_manifest_line '<uses-permission android:name="android.permission.RECORD_AU
 patch_manifest_line '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
 patch_manifest_line '<uses-feature android:name="android.hardware.camera" android:required="false" />'
 
+# Android 11 (API 30) package-visibility rules: apps must declare a <queries>
+# intent-filter for any implicit intent they fire. The
+# @capacitor-community/speech-recognition plugin starts the system recognizer
+# via ACTION_RECOGNIZE_SPEECH. Without this <queries> block the PackageManager
+# returns "no recognizer" on Android 11+ and plugin.available() returns false.
+#
+# Idempotent: only inserts if the block is not already present.
+# Inserted before </manifest> (safe regardless of whether <queries> already
+# exists — the block is self-contained).
+log "2.5/6 patching AndroidManifest.xml — speech recognizer queries block"
+if ! grep -q 'RECOGNIZE_SPEECH' "$MANIFEST"; then
+  # Insert a <queries> block before the closing </manifest> tag.
+  sed -i 's|</manifest>|    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n        <intent>\n            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />\n        </intent>\n    </queries>\n</manifest>|' "$MANIFEST"
+  grep -q 'RECOGNIZE_SPEECH' "$MANIFEST" \
+    || fail "speech recognizer queries block did not take — check sed invocation"
+  log "  inserted: <queries> RECOGNIZE_SPEECH block"
+else
+  log "  already present: RECOGNIZE_SPEECH in <queries>"
+fi
+
 # Patch android:usesCleartextTraffic="true" into the <application> tag so
 # CapacitorHttp native requests to http:// (LAN desk) are not blocked by
 # Android's cleartext-traffic policy. Idempotent: only adds if not present.
