@@ -1,4 +1,5 @@
 import { validateDeviceTokenDetailed } from './device-pairing-store';
+import { safeSecretEqual } from './loopback-guard';
 
 const LOOPBACK_HOST_RE = /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$/;
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$/;
@@ -49,7 +50,7 @@ export function isLoopbackRequest(req: Request): boolean {
 }
 
 export type DeviceAuthResult =
-  | { ok: true; mode: 'loopback' | 'device_token' }
+  | { ok: true; mode: 'loopback' | 'local_secret' | 'device_token' }
   | { ok: false; status: 401 | 403 | 500; code: 'missing_device_token' | 'invalid_device_token' | 'device_store_unavailable' };
 
 export function requireDeviceTokenForRemote(req: Request): DeviceAuthResult {
@@ -57,6 +58,10 @@ export function requireDeviceTokenForRemote(req: Request): DeviceAuthResult {
   // Local personal use only — do NOT set this on a shared/cloud deployment.
   if (process.env.HOLON_OPEN_DEMO === '1') return { ok: true, mode: 'loopback' };
   if (isLoopbackRequest(req)) return { ok: true, mode: 'loopback' };
+  const localSecret = process.env.HOLON_LOCAL_SHARED_SECRET;
+  if (localSecret && safeSecretEqual(req.headers.get('x-holon-local-secret'), localSecret)) {
+    return { ok: true, mode: 'local_secret' };
+  }
   const token = req.headers.get('x-holon-device-token');
   if (!token) return { ok: false, status: 401, code: 'missing_device_token' };
   const validation = validateDeviceTokenDetailed(token);

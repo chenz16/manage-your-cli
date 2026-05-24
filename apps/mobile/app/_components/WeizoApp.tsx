@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type PointerEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -19,6 +20,7 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
   useAui,
+  useMessage,
   useLocalRuntime,
   type ChatModelAdapter,
 } from '@assistant-ui/react';
@@ -102,6 +104,315 @@ function flattenText(content: ReadonlyArray<{ type: string; text?: unknown }>): 
     .join('\n\n');
 }
 
+interface TranscribeResponse {
+  text?: string;
+  error?: string;
+  message?: string;
+}
+
+interface TtsResponse {
+  base64?: string;
+  mime?: string;
+  error?: string;
+  message?: string;
+}
+
+type RecordingState = 'idle' | 'recording' | 'transcribing';
+
+const mobileTtsState = {
+  activeId: null as string | null,
+  audio: null as HTMLAudioElement | null,
+  url: null as string | null,
+  stop() {
+    if (this.audio) {
+      this.audio.pause();
+      this.audio.currentTime = 0;
+      this.audio.src = '';
+      this.audio = null;
+    }
+    if (this.url) {
+      URL.revokeObjectURL(this.url);
+      this.url = null;
+    }
+    this.activeId = null;
+  },
+};
+
+function recorderMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined') return undefined;
+  const preferred = 'audio/webm;codecs=opus';
+  return MediaRecorder.isTypeSupported(preferred) ? preferred : undefined;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('录音读取失败。'));
+    reader.onloadend = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const [, base64 = ''] = result.split(',', 2);
+      if (base64) resolve(base64);
+      else reject(new Error('录音为空。'));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function base64ToBlob(base64: string, mime: string): Blob {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+function splitTtsText(text: string): string[] {
+  const chunks: string[] = [];
+  let current = '';
+  for (const char of text.replace(/\r\n/g, '\n')) {
+    current += char;
+    if ('。！？；.!?;\n'.includes(char)) {
+      const chunk = current.trim();
+      if (chunk) chunks.push(chunk);
+      current = '';
+    }
+  }
+  const tail = current.trim();
+  if (tail) chunks.push(tail);
+  return chunks.length > 0 ? chunks : [text.trim()].filter(Boolean);
+}
+
+function insertTranscriptIntoComposer(transcript: string): void {
+  const ta = document.querySelector<HTMLTextAreaElement>('.mobile-chat-composer .chat-input');
+  if (!ta) return;
+  const next = ta.value ? `${ta.value} ${transcript}` : transcript;
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+  setter?.call(ta, next);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  ta.focus();
+}
+
+function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: string) => void }) {
+  const [state, setState] = useState<RecordingState>('idle');
+  const [hint, setHint] = useState('');
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const pointerIdRef = useRef<number | null>(null);
+  const stopPendingRef = useRef(false);
+
+  function showHint(message: string) {
+    setHint(message);
+    window.setTimeout(() => setHint((current) => (current === message ? '' : current)), 3500);
+  }
+
+  function cleanupStream() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+
+  async function transcribe(blob: Blob, mime: string) {
+    setState('transcribing');
+    const base64 = await blobToBase64(blob);
+    const res = await holonApiFetch('/api/v1/connectors/voice/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64, mime, language: 'zh' }),
+    });
+    const data = await res.json().catch(() => ({})) as TranscribeResponse;
+    if (!res.ok) throw new Error(data.message ?? `转写失败 (${res.status})`);
+    if (data.error) {
+      if (data.error === 'no_stt_provider') throw new Error('桌面端还没有配置语音识别。');
+      throw new Error(data.message ?? data.error);
+    }
+    const text = typeof data.text === 'string' ? data.text.trim() : '';
+    if (!text) {
+      showHint('没有听清，请再试一次。');
+      return;
+    }
+    if (onTranscript) onTranscript(text);
+    else insertTranscriptIntoComposer(text);
+  }
+
+  function stopRecording() {
+    const recorder = recorderRef.current;
+    if (!recorder) {
+      stopPendingRef.current = state === 'recording';
+      return;
+    }
+    if (recorder.state !== 'inactive') recorder.stop();
+  }
+
+  async function startRecording(ev: PointerEvent<HTMLButtonElement>) {
+    ev.preventDefault();
+    if (state !== 'idle') return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      showHint('这个浏览器不支持录音。');
+      return;
+    }
+    pointerIdRef.current = ev.pointerId;
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    setHint('');
+    setState('recording');
+    stopPendingRef.current = false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      const mimeType = recorderMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const chunks = chunksRef.current;
+        const mime = recorder.mimeType || mimeType || 'audio/webm';
+        chunksRef.current = [];
+        recorderRef.current = null;
+        cleanupStream();
+        if (chunks.length === 0) {
+          showHint('没有录到声音。');
+          setState('idle');
+          return;
+        }
+        void transcribe(new Blob(chunks, { type: mime }), mime)
+          .catch((error: unknown) => {
+            showHint(error instanceof Error ? error.message : '语音转写失败。');
+          })
+          .finally(() => setState('idle'));
+      };
+      recorder.onerror = () => {
+        cleanupStream();
+        recorderRef.current = null;
+        setState('idle');
+        showHint('录音失败，请重试。');
+      };
+      recorder.start();
+      if (stopPendingRef.current) {
+        stopPendingRef.current = false;
+        stopRecording();
+      }
+    } catch (error) {
+      cleanupStream();
+      setState('idle');
+      const name = error instanceof DOMException ? error.name : '';
+      showHint(name === 'NotAllowedError' || name === 'PermissionDeniedError'
+        ? '麦克风权限被拒绝。'
+        : '无法启动麦克风。');
+    }
+  }
+
+  function releasePointer(ev: PointerEvent<HTMLButtonElement>) {
+    ev.preventDefault();
+    if (pointerIdRef.current === ev.pointerId) pointerIdRef.current = null;
+    stopRecording();
+  }
+
+  return (
+    <div className="mobile-voice-control">
+      <button
+        type="button"
+        className={`mobile-voice-button${state === 'recording' ? ' is-recording' : ''}`}
+        aria-label={state === 'recording' ? '松开转写' : '按住说话'}
+        disabled={state === 'transcribing'}
+        onPointerDown={(ev) => void startRecording(ev)}
+        onPointerUp={releasePointer}
+        onPointerCancel={releasePointer}
+        onContextMenu={(ev) => ev.preventDefault()}
+      >
+        {state === 'transcribing' ? '…' : '🎙'}
+      </button>
+      {(state === 'recording' || state === 'transcribing' || hint) && (
+        <span className="mobile-voice-hint" role="status">
+          {state === 'recording' ? '正在录音，松开转写' : state === 'transcribing' ? '正在转写…' : hint}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function MobileReadAloudButton({ id, text }: { id: string; text: string }) {
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [hint, setHint] = useState('');
+
+  useEffect(() => () => {
+    if (mobileTtsState.activeId === id) mobileTtsState.stop();
+  }, [id]);
+
+  async function play() {
+    const chunks = splitTtsText(text);
+    if (chunks.length === 0) {
+      setHint('没有可朗读的内容。');
+      return;
+    }
+    mobileTtsState.stop();
+    mobileTtsState.activeId = id;
+    setLoading(true);
+    setHint('');
+    try {
+      for (const chunk of chunks) {
+        if (mobileTtsState.activeId !== id) return;
+        const res = await holonApiFetch('/api/v1/connectors/tts/synthesize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: chunk, language: 'zh' }),
+        });
+        const data = await res.json().catch(() => ({})) as TtsResponse;
+        if (!res.ok || !data.base64 || !data.mime) {
+          if (data.error === 'no_tts_provider') throw new Error('桌面端还没有配置语音朗读。');
+          throw new Error(data.message ?? data.error ?? `朗读失败 (${res.status})`);
+        }
+        const url = URL.createObjectURL(base64ToBlob(data.base64, data.mime));
+        const audio = new Audio(url);
+        mobileTtsState.audio = audio;
+        mobileTtsState.url = url;
+        setLoading(false);
+        setPlaying(true);
+        await audio.play();
+        await new Promise<void>((resolve, reject) => {
+          audio.onended = () => resolve();
+          audio.onpause = () => resolve();
+          audio.onerror = () => reject(new Error('播放失败。'));
+        });
+        URL.revokeObjectURL(url);
+        if (mobileTtsState.url === url) mobileTtsState.url = null;
+      }
+    } catch (error) {
+      setHint(error instanceof Error ? error.message : '朗读失败。');
+    } finally {
+      if (mobileTtsState.activeId === id) mobileTtsState.stop();
+      setLoading(false);
+      setPlaying(false);
+    }
+  }
+
+  function toggle() {
+    if (playing || loading) {
+      mobileTtsState.stop();
+      setPlaying(false);
+      setLoading(false);
+      return;
+    }
+    void play();
+  }
+
+  return (
+    <span className="mobile-tts">
+      <button
+        type="button"
+        className={`mobile-tts-button${playing ? ' is-playing' : ''}`}
+        onClick={toggle}
+        aria-label={playing || loading ? '停止朗读' : '朗读'}
+        title={playing || loading ? '停止朗读' : '朗读'}
+      >
+        {loading ? '…' : playing ? '■' : '🔊'}
+      </button>
+      {hint && <span className="mobile-tts-hint" role="status">{hint}</span>}
+    </span>
+  );
+}
+
 // ─── Owner chat (小秘 SSE) ────────────────────────────────────────────────────
 
 function makeMobileOwnerAdapter(): ChatModelAdapter {
@@ -182,11 +493,14 @@ function UserMsg() {
 }
 
 function AssistantMsg() {
+  const message = useMessage();
+  const text = flattenText(message.content);
   return (
     <MessagePrimitive.Root className="chatmsg chatmsg-assistant">
       <div className="chatmsg-content">
         <MessagePrimitive.Parts />
       </div>
+      <MobileReadAloudButton id={message.id} text={text} />
     </MessagePrimitive.Root>
   );
 }
@@ -365,11 +679,13 @@ function MobileOwnerChat({
         </ThreadPrimitive.Viewport>
         {mounted ? (
           <ComposerPrimitive.Root className="chat-composer mobile-chat-composer">
+            <MobileVoiceRecorderButton />
             <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" autoFocus />
             <ComposerPrimitive.Send className="chat-send" aria-label="发送">↑</ComposerPrimitive.Send>
           </ComposerPrimitive.Root>
         ) : (
           <div className="chat-composer mobile-chat-composer" aria-hidden="true">
+            <button type="button" className="mobile-voice-button" disabled tabIndex={-1}>🎙</button>
             <textarea rows={1} className="chat-input" placeholder="发消息给小秘…" readOnly tabIndex={-1} />
             <button type="button" className="chat-send" disabled tabIndex={-1}>↑</button>
           </div>
@@ -425,6 +741,7 @@ function StaffChat({ staff }: { staff: Staff }) {
         ) : messages.map((m, i) => (
           <div key={i} className={`chatmsg ${m.role === 'user' ? 'chatmsg-user' : 'chatmsg-assistant'}`}>
             <div className="chatmsg-content">{m.content}</div>
+            {m.role === 'assistant' && <MobileReadAloudButton id={`${staff.id}-${i}`} text={m.content} />}
           </div>
         ))}
         {sending && (
@@ -435,6 +752,7 @@ function StaffChat({ staff }: { staff: Staff }) {
         {error && <div className="mobile-error">发送失败：{error}</div>}
       </div>
       <div className="chat-composer mobile-chat-composer">
+        <MobileVoiceRecorderButton onTranscript={(transcript) => setText((current) => current ? `${current} ${transcript}` : transcript)} />
         <textarea
           rows={1}
           className="chat-input"
