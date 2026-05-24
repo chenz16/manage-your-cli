@@ -129,9 +129,11 @@ patch_manifest_line '<uses-feature android:name="android.hardware.camera" androi
 log "2.5/6 patching AndroidManifest.xml — usesCleartextTraffic"
 if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
   # Capacitor scaffolds the tag as `<application` alone on its own (indented)
-  # line with attributes on the following lines, so match `<application` at
-  # end-of-line; also handle the rarer single-line `<application ` form.
-  sed -i -E 's/^([[:space:]]*)<application[[:space:]]*$/\1<application android:usesCleartextTraffic="true"/; s/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
+  # line with attributes on the following lines. Insert the attribute right
+  # after `<application` on that line. SINGLE substitution only — a second
+  # cascading `s/<application /.../` would re-match the space this one adds and
+  # duplicate the attribute (invalid XML → manifest-merge build failure).
+  sed -i -E 's/^([[:space:]]*)<application[[:space:]]*$/\1<application android:usesCleartextTraffic="true"/' "$MANIFEST"
   grep -q 'usesCleartextTraffic' "$MANIFEST" \
     || fail "usesCleartextTraffic patch did not take — check sed invocation"
   log "  inserted: android:usesCleartextTraffic=\"true\""
