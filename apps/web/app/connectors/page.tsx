@@ -1,7 +1,7 @@
 'use client';
 
 import { redirect } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
 
 type MessagingChannel = 'slack' | 'discord' | 'telegram';
@@ -124,6 +124,14 @@ export default function ConnectorsPage() {
   const [peerCardStatus, setPeerCardStatus] = useState<string | null>(null);
   const [pingMsg, setPingMsg] = useState('Hello from this desk!');
   const [pingStatus, setPingStatus] = useState<string | null>(null);
+
+  // WeChat connect state
+  type WechatBindStatus = 'idle' | 'loading' | 'waiting' | 'scanned' | 'confirmed' | 'error';
+  const [wcBindStatus, setWcBindStatus] = useState<WechatBindStatus>('idle');
+  const [wcQrUrl, setWcQrUrl] = useState<string | null>(null);
+  const [wcQrId, setWcQrId] = useState<string | null>(null);
+  const [wcStatusMsg, setWcStatusMsg] = useState<string | null>(null);
+  const wcPollActive = useRef(false);
 
   // Messaging state
   const [slackUrl, setSlackUrl] = useState('');
@@ -389,6 +397,135 @@ export default function ConnectorsPage() {
     setSttStatus(body.ok ? `${sttLabel(sttEngine)} is reachable.` : (body.message ?? body.error ?? `HTTP ${res.status}`));
   }
 
+  // ---------------------------------------------------------------------------
+  // QR scan auto-detect + route logic
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Classify decoded QR text and route:
+   *   'a2a'     — an A2A peer URL (http(s) base or /.well-known/agent-card)
+   *   'wechat'  — a WeChat/Tencent QR (liteapp.weixin.qq.com or weixin.qq.com)
+   *   'unknown' — unrecognized content
+   */
+  function classifyQr(text: string): 'a2a' | 'wechat' | 'unknown' {
+    const t = text.trim();
+    // WeChat: liteapp.weixin.qq.com or weixin.qq.com in URL
+    if (/weixin\.qq\.com/i.test(t)) return 'wechat';
+    // A2A: well-known agent card URL
+    if (t.includes('/.well-known/agent-card')) return 'a2a';
+    // A2A: any http(s) base URL
+    if (/^https?:\/\//i.test(t)) return 'a2a';
+    return 'unknown';
+  }
+
+  function handleQrDecode(decoded: string) {
+    const kind = classifyQr(decoded);
+    if (kind === 'wechat') {
+      setPeerCardStatus(
+        "This is a WeChat QR — use 'Connect WeChat (iOS)' below (scan it with the WeChat app to bind).",
+      );
+      // Scroll to the WeChat bridge section
+      document.getElementById('wechat-bridge-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (kind === 'unknown') {
+      setPeerCardStatus('Unrecognized QR code.');
+      return;
+    }
+    // A2A path: fill URL + auto-discover
+    const base = decoded.replace(/\/$/, '').replace(/\/\.well-known\/agent-card(\.json)?$/, '');
+    setPeerUrl(base);
+    setPeerCard(null);
+    setPeerCardStatus('Discovering…');
+    fetch(`${base}/.well-known/agent-card.json`)
+      .then(async (res) => {
+        if (!res.ok) { setPeerCardStatus(`HTTP ${res.status}: ${await res.text()}`); return; }
+        const data = await res.json() as AgentCard;
+        setPeerCard(data);
+        setPeerCardStatus(`Found: ${data.name} (A2A ${data.protocolVersion})`);
+      })
+      .catch((err: unknown) => {
+        setPeerCardStatus(err instanceof Error ? err.message : String(err));
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // WeChat connect handlers
+  // ---------------------------------------------------------------------------
+
+  async function startWechatBind() {
+    setWcBindStatus('loading');
+    setWcQrUrl(null);
+    setWcQrId(null);
+    setWcStatusMsg(null);
+    wcPollActive.current = false;
+    try {
+      const res = await fetch('/api/v1/connectors/wechat/qr');
+      const data = await res.json() as { qrcode_id?: string; qrcode_url?: string; error?: string };
+      if (!res.ok || data.error) {
+        setWcBindStatus('error');
+        setWcStatusMsg(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      if (!data.qrcode_id || !data.qrcode_url) {
+        setWcBindStatus('error');
+        setWcStatusMsg('No QR code returned from server.');
+        return;
+      }
+      setWcQrUrl(data.qrcode_url);
+      setWcQrId(data.qrcode_id);
+      setWcBindStatus('waiting');
+      setWcStatusMsg('Scan with WeChat (iOS) to bind.');
+      // Start polling
+      wcPollActive.current = true;
+      void pollWechatStatus(data.qrcode_id);
+    } catch (err: unknown) {
+      setWcBindStatus('error');
+      setWcStatusMsg(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function pollWechatStatus(qrId: string) {
+    // Re-poll until confirmed, expired, or stopped
+    while (wcPollActive.current) {
+      try {
+        const res = await fetch(`/api/v1/connectors/wechat/qr/status?id=${encodeURIComponent(qrId)}`);
+        const data = await res.json() as { status?: string; account_id?: string; user_id?: string; error?: string; redirect_host?: string | null };
+        if (!wcPollActive.current) break;
+
+        if (!res.ok || data.error) {
+          setWcBindStatus('error');
+          setWcStatusMsg(data.error ?? `HTTP ${res.status}`);
+          wcPollActive.current = false;
+          return;
+        }
+
+        const st = data.status ?? 'wait';
+        if (st === 'confirmed') {
+          setWcBindStatus('confirmed');
+          setWcStatusMsg(`Connected ✓ (account: ${data.account_id ?? 'unknown'}) — run serve.sh to start.`);
+          wcPollActive.current = false;
+          return;
+        }
+        if (st === 'scaned' || st === 'scaned_but_redirect') {
+          setWcBindStatus('scanned');
+          setWcStatusMsg('QR scanned — confirm in WeChat…');
+        }
+        if (st === 'expired') {
+          setWcBindStatus('error');
+          setWcStatusMsg('QR code expired — click Connect WeChat again to refresh.');
+          wcPollActive.current = false;
+          return;
+        }
+        // 'wait' — loop back immediately (server already long-polled ~35s)
+      } catch (err: unknown) {
+        if (!wcPollActive.current) break;
+        // Network glitch — wait briefly then retry
+        await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+  }
+
   async function checkTtsHealth() {
     if (ttsEngine === 'off') {
       setTtsStatus('TTS is off.');
@@ -569,8 +706,9 @@ export default function ConnectorsPage() {
         <div className="conn-field">
           <span className="conn-field-label">Connect another desk / agent</span>
           <p className="conn-field-hint">
-            Paste the other desk&apos;s base URL or its full{' '}
-            <code>…/.well-known/agent-card.json</code> URL, then click Connect to discover and connect.
+            Paste a URL <em>or</em> scan/upload a QR code — content is auto-detected and routed.
+            Supports A2A peer URLs and agent-card QR codes. WeChat QRs are identified and directed
+            to the WeChat bind section below.
           </p>
           <input
             className="conn-input"
@@ -579,10 +717,9 @@ export default function ConnectorsPage() {
             placeholder="http://host:port  or  http://host:port/.well-known/agent-card.json"
             autoComplete="off"
           />
-          {/* QR-code upload: decode with jsQR client-side (canvas, no SSR) */}
+          {/* Unified QR scan/upload — auto-detect + route */}
           <p className="conn-field-hint" style={{ marginTop: 6 }}>
-            Or upload their QR code (e.g. screenshot of their{' '}
-            <strong>/me</strong> page):
+            Or upload / scan a QR code (auto-detected):
           </p>
           <input
             type="file"
@@ -592,7 +729,7 @@ export default function ConnectorsPage() {
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (!file) return;
-              // Reset input value so the same file can be re-uploaded
+              // Reset so the same file can be re-uploaded
               event.target.value = '';
               const reader = new FileReader();
               reader.onload = () => {
@@ -611,24 +748,7 @@ export default function ConnectorsPage() {
                       setPeerCardStatus("Couldn't read a QR code in that image.");
                       return;
                     }
-                    const decoded = result.data.trim();
-                    setPeerUrl(decoded);
-                    setPeerCard(null);
-                    setPeerCardStatus(null);
-                    // Auto-discover after setting URL
-                    const base = decoded.replace(/\/$/, '');
-                    if (!base) return;
-                    setPeerCardStatus('Discovering…');
-                    fetch(`${base}/.well-known/agent-card.json`)
-                      .then(async (res) => {
-                        if (!res.ok) { setPeerCardStatus(`HTTP ${res.status}: ${await res.text()}`); return; }
-                        const data = await res.json() as AgentCard;
-                        setPeerCard(data);
-                        setPeerCardStatus(`Found: ${data.name} (A2A ${data.protocolVersion})`);
-                      })
-                      .catch((err: unknown) => {
-                        setPeerCardStatus(err instanceof Error ? err.message : String(err));
-                      });
+                    handleQrDecode(result.data);
                   }).catch(() => { setPeerCardStatus("QR library failed to load."); });
                 };
                 img.onerror = () => { setPeerCardStatus("Couldn't load the selected image."); };
@@ -685,7 +805,7 @@ export default function ConnectorsPage() {
           </p>
 
           {/* OpenClaw / WeChat */}
-          <div className="conn-plugin" style={{ padding: '12px 14px' }}>
+          <div id="wechat-bridge-section" className="conn-plugin" style={{ padding: '12px 14px' }}>
             <div className="conn-plugin-head">
               <div className="conn-plugin-title-wrap">
                 <div className="conn-plugin-title-row">
@@ -696,7 +816,59 @@ export default function ConnectorsPage() {
                   Bridges WeChat contacts and group chats via the ClawBot gateway (<code>scripts/clawbot/</code>). ClawBot forwards messages as iLink events, bridging them into the A2A task flow.
                 </p>
               </div>
-              <span className="conn-plugin-state">In progress</span>
+              {/* Status pill */}
+              <span className={`conn-plugin-state${wcBindStatus === 'confirmed' ? ' is-enabled' : wcBindStatus === 'error' ? ' is-disabled' : ''}`}>
+                {wcBindStatus === 'idle' && 'Not connected'}
+                {wcBindStatus === 'loading' && 'Loading…'}
+                {wcBindStatus === 'waiting' && 'Waiting for scan'}
+                {wcBindStatus === 'scanned' && 'Scan confirmed…'}
+                {wcBindStatus === 'confirmed' && 'Connected'}
+                {wcBindStatus === 'error' && 'Error'}
+              </span>
+            </div>
+
+            {/* QR display */}
+            {wcQrUrl && wcBindStatus !== 'confirmed' && (
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={wcQrUrl}
+                  alt="WeChat bind QR code"
+                  width={200}
+                  height={200}
+                  style={{ borderRadius: 8, border: '1px solid var(--line)', display: 'block' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>
+                  Scan with WeChat (iOS) to bind
+                </span>
+              </div>
+            )}
+
+            <div className="conn-actions" style={{ marginTop: 10 }}>
+              {wcBindStatus !== 'confirmed' && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={wcBindStatus === 'loading' || wcBindStatus === 'waiting' || wcBindStatus === 'scanned'}
+                  onClick={() => { void startWechatBind(); }}
+                >
+                  Connect WeChat (iOS)
+                </button>
+              )}
+              {wcBindStatus === 'confirmed' && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { void startWechatBind(); }}
+                >
+                  Re-bind
+                </button>
+              )}
+              {wcStatusMsg && (
+                <span className={`conn-status${wcBindStatus === 'error' ? ' is-error' : wcBindStatus === 'confirmed' ? ' is-ok' : ''}`}>
+                  {wcStatusMsg}
+                </span>
+              )}
             </div>
           </div>
 
