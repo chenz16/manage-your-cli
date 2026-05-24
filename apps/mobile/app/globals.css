@@ -956,7 +956,7 @@ button, input, textarea, select { font: inherit; }
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: calc(var(--mobile-nav-height) + max(env(safe-area-inset-bottom), 40px));
+  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   background: #ededed;
 }
 .mobile-tab-content-chat {
@@ -1083,9 +1083,9 @@ button, input, textarea, select { font: inherit; }
 .mobile-bottom-nav {
   position: fixed;
   left: 0; right: 0; bottom: 0;
-  height: calc(var(--mobile-nav-height) + max(env(safe-area-inset-bottom), 40px));
+  height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   display: grid; grid-template-columns: repeat(4, 1fr);
-  padding-bottom: max(env(safe-area-inset-bottom), 40px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   border-top: 1px solid #d8d8d8;
   background: #f7f7f7;
   z-index: 40;
@@ -1121,7 +1121,7 @@ button, input, textarea, select { font: inherit; }
 .mobile-chat-viewport,
 .mobile-staff-chat-scroll {
   flex: 1 1 auto; min-height: 0;
-  padding: 14px 12px calc(16px + var(--mobile-nav-height) + max(env(safe-area-inset-bottom), 40px));
+  padding: 14px 12px calc(16px + var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   background: #ededed;
 }
 .mobile-staff-chat-scroll {
@@ -1129,9 +1129,9 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-chat-composer {
   flex: 0 0 auto;
-  padding: 8px 10px max(40px, calc(env(safe-area-inset-bottom) + var(--mobile-keyboard-inset)));
+  padding: 8px 10px max(8px, calc(env(safe-area-inset-bottom, 0px) + var(--mobile-keyboard-inset)));
   background: #f7f7f7;
-  margin-bottom: calc(var(--mobile-nav-height) + max(env(safe-area-inset-bottom), 40px));
+  margin-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
 }
 .mobile-chat-composer .chat-input {
   border-radius: 6px; border-color: transparent;
