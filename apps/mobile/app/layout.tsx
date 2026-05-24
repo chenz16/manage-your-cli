@@ -2,10 +2,10 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './components.css';
 import { BugFab } from './_components/BugFab';
-import { MobileBootstrap } from './_components/MobileBootstrap';
-import { MobileTabBar } from './_components/MobileTabBar';
 import { PhoneStatus } from './_components/PhoneStatus';
 import { ServiceWorkerRegister } from './_components/ServiceWorkerRegister';
+// MobileTabBar + MobileBootstrap removed — superseded by WeizoApp 4-tab shell
+// rendered directly from page.tsx (single-page SPA pattern).
 
 export const metadata: Metadata = {
   // M-L-042 — Align metadata to manifest.json (Chinese-ified in M-L-024) so the
@@ -67,11 +67,9 @@ export default function RootLayout({
           <div className="phone-shell">
             <PhoneStatus />
             <main className="main">{children}</main>
-            <MobileTabBar />
             <BugFab />
           </div>
         </div>
-        <MobileBootstrap />
         <ServiceWorkerRegister />
       </body>
     </html>
