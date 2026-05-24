@@ -419,27 +419,28 @@ export default function ConnectorsPage() {
   if (owner?.hidden_features?.includes('connectors')) redirect('/');
 
   return (
-    <main className="page">
+    <main className="page conn-page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Connectors</p>
-          <h1 className="page-title">Voice &amp; Messaging</h1>
-          <p className="page-subtitle">Connect optional voice, messaging, and social services. CLI agents are created from chat or the Team page — not here.</p>
+          <p className="conn-eyebrow">Connectors</p>
+          <h1 className="page-title">Voice, Messaging &amp; Plugins</h1>
+          <p className="page-subtitle">Connect optional voice, messaging, and social services, and manage MCP plugins. CLI agents are created from chat or the Team page — not here.</p>
         </div>
       </header>
 
-      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760 }}>
-        <div>
-          <p className="eyebrow">Voice</p>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Optional STT and TTS</h2>
-          <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
+      {/* ── 通知 group: Voice ─────────────────────────────────────────── */}
+      <section className="card conn-card">
+        <div className="conn-card-head">
+          <p className="conn-eyebrow">Voice</p>
+          <h2 className="conn-card-title">Speech in &amp; out</h2>
+          <p className="conn-card-hint">
             Voice is off unless you choose an engine. OpenAI keys here are voice-only keys stored with owner config, not chat or runtime tokens.
           </p>
         </div>
 
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Speech-to-Text</h3>
-          <select className="input" value={sttEngine} onChange={(event) => {
+        <div className="conn-field">
+          <span className="conn-field-label">Speech-to-Text</span>
+          <select className="conn-input" value={sttEngine} onChange={(event) => {
             const next = event.target.value as SttEngine;
             setSttEngine(next);
             if (next !== 'off' && next !== 'openai') setSttUrl(STT_DEFAULT_URL[next]);
@@ -449,21 +450,21 @@ export default function ConnectorsPage() {
             ))}
           </select>
           {sttEngine !== 'off' && sttEngine !== 'openai' && (
-            <input className="input" value={sttUrl} onChange={(event) => setSttUrl(event.target.value)} placeholder="http://127.0.0.1:8080" />
+            <input className="conn-input" value={sttUrl} onChange={(event) => setSttUrl(event.target.value)} placeholder="http://127.0.0.1:8080" />
           )}
           {sttEngine === 'openai' && (
-            <input className="input" type="password" value={sttKey} onChange={(event) => setSttKey(event.target.value)} placeholder="OpenAI voice API key" autoComplete="off" />
+            <input className="conn-input" type="password" value={sttKey} onChange={(event) => setSttKey(event.target.value)} placeholder="OpenAI voice API key" autoComplete="off" />
           )}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" onClick={() => saveVoiceConfig('stt')}>Save STT</button>
-            <button type="button" className="btn" onClick={checkSttHealth}>Health Check</button>
+          <div className="conn-actions">
+            <button type="button" className="btn btn-primary" onClick={() => saveVoiceConfig('stt')}>Save STT</button>
+            <button type="button" className="btn btn-secondary" onClick={checkSttHealth}>Health check</button>
+            {sttStatus && <span className="conn-status">{sttStatus}</span>}
           </div>
-          {sttStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{sttStatus}</p>}
         </div>
 
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Text-to-Speech</h3>
-          <select className="input" value={ttsEngine} onChange={(event) => {
+        <div className="conn-field">
+          <span className="conn-field-label">Text-to-Speech</span>
+          <select className="conn-input" value={ttsEngine} onChange={(event) => {
             const next = event.target.value as TtsEngine;
             setTtsEngine(next);
             if (next === 'cosyvoice') setTtsUrl(TTS_DEFAULT_URL.cosyvoice);
@@ -473,245 +474,202 @@ export default function ConnectorsPage() {
             ))}
           </select>
           {ttsEngine === 'cosyvoice' && (
-            <input className="input" value={ttsUrl} onChange={(event) => setTtsUrl(event.target.value)} placeholder="http://127.0.0.1:8770" />
+            <input className="conn-input" value={ttsUrl} onChange={(event) => setTtsUrl(event.target.value)} placeholder="http://127.0.0.1:8770" />
           )}
           {ttsEngine === 'openai' && (
-            <input className="input" type="password" value={ttsKey} onChange={(event) => setTtsKey(event.target.value)} placeholder="OpenAI voice API key" autoComplete="off" />
+            <input className="conn-input" type="password" value={ttsKey} onChange={(event) => setTtsKey(event.target.value)} placeholder="OpenAI voice API key" autoComplete="off" />
           )}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" onClick={() => saveVoiceConfig('tts')}>Save TTS</button>
-            <button type="button" className="btn" onClick={checkTtsHealth}>Health Check</button>
+          <div className="conn-actions">
+            <button type="button" className="btn btn-primary" onClick={() => saveVoiceConfig('tts')}>Save TTS</button>
+            <button type="button" className="btn btn-secondary" onClick={checkTtsHealth}>Health check</button>
+            {ttsStatus && <span className="conn-status">{ttsStatus}</span>}
           </div>
-          {ttsStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{ttsStatus}</p>}
         </div>
       </section>
 
-      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760, marginTop: 18 }}>
-        <div>
-          <p className="eyebrow">Messaging &amp; Social</p>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Message &amp; social channels</h2>
-          <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
+      {/* ── 通知 group: Messaging & Social ────────────────────────────── */}
+      <section className="card conn-card">
+        <div className="conn-card-head">
+          <p className="conn-eyebrow">Messaging &amp; Social</p>
+          <h2 className="conn-card-title">Notification channels</h2>
+          <p className="conn-card-hint">
             Webhook/token-based channels let the desk push notifications. Tokens are owner-scoped, like voice keys.
           </p>
         </div>
 
         {/* Slack */}
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Slack</h3>
+        <div className="conn-field">
+          <span className="conn-field-label">Slack</span>
           <input
-            className="input"
+            className="conn-input"
             value={slackUrl}
             onChange={(event) => setSlackUrl(event.target.value)}
             placeholder="https://hooks.slack.com/services/..."
             autoComplete="off"
           />
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" onClick={() => saveMessagingConfig('slack')}>Save</button>
-            <button type="button" className="btn" onClick={() => sendMessagingTestMsg('slack')}>Send test</button>
+          <div className="conn-actions">
+            <button type="button" className="btn btn-primary" onClick={() => saveMessagingConfig('slack')}>Save</button>
+            <button type="button" className="btn btn-secondary" onClick={() => sendMessagingTestMsg('slack')}>Send test</button>
+            {slackStatus && <span className="conn-status">{slackStatus}</span>}
           </div>
-          {slackStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{slackStatus}</p>}
         </div>
 
         {/* Discord */}
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Discord</h3>
+        <div className="conn-field">
+          <span className="conn-field-label">Discord</span>
           <input
-            className="input"
+            className="conn-input"
             value={discordUrl}
             onChange={(event) => setDiscordUrl(event.target.value)}
             placeholder="https://discord.com/api/webhooks/..."
             autoComplete="off"
           />
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" onClick={() => saveMessagingConfig('discord')}>Save</button>
-            <button type="button" className="btn" onClick={() => sendMessagingTestMsg('discord')}>Send test</button>
+          <div className="conn-actions">
+            <button type="button" className="btn btn-primary" onClick={() => saveMessagingConfig('discord')}>Save</button>
+            <button type="button" className="btn btn-secondary" onClick={() => sendMessagingTestMsg('discord')}>Send test</button>
+            {discordStatus && <span className="conn-status">{discordStatus}</span>}
           </div>
-          {discordStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{discordStatus}</p>}
         </div>
 
         {/* Telegram */}
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Telegram</h3>
+        <div className="conn-field">
+          <span className="conn-field-label">Telegram</span>
           <input
-            className="input"
+            className="conn-input"
             value={telegramToken}
             onChange={(event) => setTelegramToken(event.target.value)}
             placeholder="Bot token (from @BotFather)"
             autoComplete="off"
           />
           <input
-            className="input"
+            className="conn-input"
             value={telegramChatId}
             onChange={(event) => setTelegramChatId(event.target.value)}
             placeholder="Chat ID (numeric)"
             autoComplete="off"
           />
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" onClick={() => saveMessagingConfig('telegram')}>Save</button>
-            <button type="button" className="btn" onClick={() => sendMessagingTestMsg('telegram')}>Send test</button>
+          <div className="conn-actions">
+            <button type="button" className="btn btn-primary" onClick={() => saveMessagingConfig('telegram')}>Save</button>
+            <button type="button" className="btn btn-secondary" onClick={() => sendMessagingTestMsg('telegram')}>Send test</button>
+            {telegramStatus && <span className="conn-status">{telegramStatus}</span>}
           </div>
-          {telegramStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{telegramStatus}</p>}
         </div>
 
         {/* Coming channels (OAuth-required) */}
-        <div style={{ display: 'grid', gap: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 15, color: 'var(--ink-mute)' }}>Coming (OAuth required)</h3>
+        <div className="conn-field">
+          <span className="conn-field-label" style={{ color: 'var(--ink-mute)' }}>Coming soon (OAuth required)</span>
           {(['Gmail', 'Google Meet'] as const).map((name) => (
-            <div
-              key={name}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '10px 12px',
-                border: '1px solid var(--line)',
-                borderRadius: 8,
-                opacity: 0.5,
-              }}
-            >
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{name}</span>
-              <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Coming</span>
+            <div key={name} className="conn-soon">
+              <span className="conn-soon-name">{name}</span>
+              <span className="conn-soon-tag">Coming</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Agent peers (A2A)                                                   */}
-      {/* ------------------------------------------------------------------ */}
-      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760, marginTop: 18 }}>
-        <div>
-          <p className="eyebrow">Agent peers (A2A)</p>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Agent-to-Agent interconnect</h2>
-          <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
+      {/* ── 通知 group: Agent peers (A2A) ─────────────────────────────── */}
+      <section className="card conn-card">
+        <div className="conn-card-head">
+          <p className="conn-eyebrow">Agent peers (A2A)</p>
+          <h2 className="conn-card-title">Agent-to-Agent interconnect</h2>
+          <p className="conn-card-hint">
             Discover and message other A2A-speaking desks. Uses the A2A 0.2.0 standard (agent card + JSON-RPC task protocol).
           </p>
         </div>
 
         {/* This desk's card */}
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>This desk&apos;s card</h3>
-          <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>
+        <div className="conn-field">
+          <span className="conn-field-label">This desk&apos;s card</span>
+          <p className="conn-field-hint">
             Other desks discover you at <code>/.well-known/agent-card.json</code>.
           </p>
           {myCardError && (
-            <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>Error loading card: {myCardError}</p>
+            <p className="conn-status">Error loading card: {myCardError}</p>
           )}
           {myCard && (
-            <div
-              style={{
-                padding: '10px 12px',
-                border: '1px solid var(--line)',
-                borderRadius: 8,
-                display: 'grid',
-                gap: 6,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{myCard.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>A2A {myCard.protocolVersion}</span>
+            <div className="conn-panel">
+              <div className="conn-panel-row">
+                <span className="conn-panel-name">{myCard.name}</span>
+                <span className="conn-panel-meta">A2A {myCard.protocolVersion}</span>
               </div>
               {myCard.skills.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+                <div className="conn-chips">
                   {myCard.skills.map((sk) => (
-                    <span
-                      key={sk.id}
-                      title={sk.id}
-                      style={{
-                        fontSize: 11,
-                        padding: '2px 7px',
-                        borderRadius: 99,
-                        background: 'var(--bg-subtle, rgba(128,128,128,0.12))',
-                        color: 'var(--ink-mute)',
-                      }}
-                    >
-                      {sk.name}
-                    </span>
+                    <span key={sk.id} title={sk.id} className="conn-chip">{sk.name}</span>
                   ))}
                 </div>
               )}
               {myCard.skills.length === 0 && (
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-mute)' }}>No skills/employees registered.</p>
+                <p className="conn-panel-empty">No skills/employees registered.</p>
               )}
             </div>
           )}
           {!myCard && !myCardError && (
-            <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>Loading…</p>
+            <p className="conn-status">Loading…</p>
           )}
         </div>
 
         {/* Ping a peer */}
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Ping a peer</h3>
+        <div className="conn-field">
+          <span className="conn-field-label">Ping a peer</span>
           <input
-            className="input"
+            className="conn-input"
             value={peerUrl}
             onChange={(event) => { setPeerUrl(event.target.value); setPeerCard(null); setPeerCardStatus(null); }}
             placeholder="http://host:port"
             autoComplete="off"
           />
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn" onClick={discoverPeer}>Discover</button>
+          <div className="conn-actions">
+            <button type="button" className="btn btn-secondary" onClick={discoverPeer}>Discover</button>
+            {peerCardStatus && <span className="conn-status">{peerCardStatus}</span>}
           </div>
-          {peerCardStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{peerCardStatus}</p>}
           {peerCard && peerCard.skills.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div className="conn-chips">
               {peerCard.skills.map((sk) => (
-                <span
-                  key={sk.id}
-                  title={sk.id}
-                  style={{
-                    fontSize: 11,
-                    padding: '2px 7px',
-                    borderRadius: 99,
-                    background: 'var(--bg-subtle, rgba(128,128,128,0.12))',
-                    color: 'var(--ink-mute)',
-                  }}
-                >
-                  {sk.name}
-                </span>
+                <span key={sk.id} title={sk.id} className="conn-chip">{sk.name}</span>
               ))}
             </div>
           )}
         </div>
 
         {/* Send test message */}
-        <div style={{ display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Send test message</h3>
+        <div className="conn-field">
+          <span className="conn-field-label">Send test message</span>
           <input
-            className="input"
+            className="conn-input"
             value={pingMsg}
             onChange={(event) => setPingMsg(event.target.value)}
             placeholder="Hello from this desk!"
             autoComplete="off"
           />
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn primary" onClick={sendPingMessage}>Send test message</button>
+          <div className="conn-actions">
+            <button type="button" className="btn btn-primary" onClick={sendPingMessage}>Send test message</button>
+            {pingStatus && <span className="conn-status">{pingStatus}</span>}
           </div>
-          {pingStatus && <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{pingStatus}</p>}
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* 插件 / Plugins (MCP plugin manager)                                 */}
-      {/* ------------------------------------------------------------------ */}
-      <section className="card" style={{ padding: 20, display: 'grid', gap: 20, maxWidth: 760, marginTop: 18 }}>
-        <div>
-          <p className="eyebrow">插件 / Plugins</p>
-          <h2 style={{ margin: 0, fontSize: 18 }}>MCP 插件管理</h2>
-          <p style={{ margin: '6px 0 0', color: 'var(--ink-mute)', fontSize: 13 }}>
-            仅精选白名单插件（curated）。插件是 MCP server = 会在桌面执行代码，只装可信来源。
+      {/* ── 插件 group: Plugins (MCP plugin manager) ──────────────────── */}
+      <section className="card conn-card">
+        <div className="conn-card-head">
+          <p className="conn-eyebrow">插件 · Plugins</p>
+          <h2 className="conn-card-title">MCP 插件管理</h2>
+          <p className="conn-card-hint">
+            扩展桌面能力的精选插件（curated 白名单）。每个插件是一个 MCP server，启用后会在你的桌面运行。
           </p>
         </div>
 
+        <div className="conn-note">
+          <span className="conn-note-icon" aria-hidden>●</span>
+          <span>插件会在桌面执行代码，仅安装来自可信来源的精选插件。标记 <strong>写入 / write</strong> 的能力可以修改数据，请按需启用。</span>
+        </div>
+
         {pluginsError && (
-          <p style={{ margin: 0, color: 'var(--color-warning, #d97706)', fontSize: 13 }}>
-            加载失败: {pluginsError}
-          </p>
+          <p className="conn-error">加载失败: {pluginsError}</p>
         )}
 
         {!pluginsData && !pluginsError && (
-          <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>加载中…</p>
+          <p className="conn-loading">加载中…</p>
         )}
 
         {pluginsData && pluginsData.registry.map((manifest) => {
@@ -720,82 +678,45 @@ export default function ConnectorsPage() {
           const isEnabled = installedEntry?.enabled ?? false;
           const actionStatus = pluginActionStatus[manifest.id];
           const configInputs = pluginConfigInputs[manifest.id] ?? {};
-          const hasWriteCap = manifest.capabilities.some((c) => c.risk === 'write');
 
-          // State label
+          // State label + class
           const stateLabel = !isInstalled
             ? '未安装'
             : isEnabled
-              ? '已安装 · 已启用'
-              : '已安装 · 已停用';
+              ? '已启用'
+              : '已停用';
+          const stateClass = !isInstalled
+            ? ''
+            : isEnabled
+              ? ' is-enabled'
+              : ' is-disabled';
 
           return (
-            <div
-              key={manifest.id}
-              style={{
-                padding: '14px 16px',
-                border: '1px solid var(--line)',
-                borderRadius: 10,
-                display: 'grid',
-                gap: 10,
-              }}
-            >
+            <div key={manifest.id} className="conn-plugin">
               {/* Header row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                <div style={{ display: 'grid', gap: 3, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600 }}>{manifest.name}</span>
+              <div className="conn-plugin-head">
+                <div className="conn-plugin-title-wrap">
+                  <div className="conn-plugin-title-row">
+                    <span className="conn-plugin-name">{manifest.name}</span>
                     {manifest.bundled && (
-                      <span style={{
-                        fontSize: 11, padding: '1px 6px', borderRadius: 99,
-                        background: 'var(--bg-subtle, rgba(128,128,128,0.12))',
-                        color: 'var(--ink-mute)',
-                      }}>
-                        bundled
-                      </span>
-                    )}
-                    {hasWriteCap && (
-                      <span style={{
-                        fontSize: 11, padding: '1px 7px', borderRadius: 99,
-                        background: 'rgba(217, 119, 6, 0.15)',
-                        color: '#d97706',
-                        fontWeight: 600,
-                      }}>
-                        ⚠ write
-                      </span>
+                      <span className="conn-tag">bundled</span>
                     )}
                   </div>
-                  <p style={{ margin: 0, color: 'var(--ink-mute)', fontSize: 13 }}>{manifest.description}</p>
+                  <p className="conn-plugin-desc">{manifest.description}</p>
                 </div>
-                <span style={{
-                  fontSize: 12,
-                  color: isInstalled ? (isEnabled ? 'var(--color-success, #16a34a)' : 'var(--ink-mute)') : 'var(--ink-mute)',
-                  whiteSpace: 'nowrap',
-                  paddingTop: 2,
-                }}>
-                  {stateLabel}
-                </span>
+                <span className={`conn-plugin-state${stateClass}`}>{stateLabel}</span>
               </div>
 
-              {/* Capabilities */}
+              {/* Capabilities — neutral=read, amber=write */}
               {manifest.capabilities.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div className="conn-chips">
                   {manifest.capabilities.map((cap) => (
                     <span
                       key={cap.id}
                       title={cap.description}
-                      style={{
-                        fontSize: 11,
-                        padding: '2px 8px',
-                        borderRadius: 99,
-                        border: '1px solid var(--line)',
-                        color: cap.risk === 'write' ? '#d97706' : 'var(--ink-mute)',
-                        background: cap.risk === 'write'
-                          ? 'rgba(217, 119, 6, 0.08)'
-                          : 'var(--bg-subtle, rgba(128,128,128,0.07))',
-                      }}
+                      className={`conn-chip ${cap.risk === 'write' ? 'is-write' : 'is-read'}`}
                     >
-                      {cap.risk === 'write' ? '✏ ' : '👁 '}{cap.label}
+                      {cap.risk === 'write' ? '写入' : '读取'} · {cap.label}
                     </span>
                   ))}
                 </div>
@@ -803,17 +724,17 @@ export default function ConnectorsPage() {
 
               {/* Config inputs for needsConfig fields (show when not yet installed) */}
               {!isInstalled && manifest.needsConfig.length > 0 && (
-                <div style={{ display: 'grid', gap: 8 }}>
+                <div className="conn-plugin-config">
                   {manifest.needsConfig.map((field) => (
-                    <div key={field.key} style={{ display: 'grid', gap: 4 }}>
-                      <label style={{ fontSize: 12, color: 'var(--ink-mute)', fontWeight: 500 }}>
+                    <div key={field.key} className="conn-field">
+                      <label className="conn-field-label" style={{ fontSize: 13 }}>
                         {field.label}{field.required && ' *'}
                       </label>
                       {field.description && (
-                        <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-mute)' }}>{field.description}</p>
+                        <p className="conn-field-hint">{field.description}</p>
                       )}
                       <input
-                        className="input"
+                        className="conn-input"
                         type={field.secret ? 'password' : 'text'}
                         value={configInputs[field.key] ?? ''}
                         onChange={(e) => {
@@ -831,11 +752,11 @@ export default function ConnectorsPage() {
               )}
 
               {/* Actions */}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div className="conn-actions">
                 {!isInstalled && (
                   <button
                     type="button"
-                    className="btn primary"
+                    className="btn btn-primary"
                     onClick={() => installPlugin(manifest)}
                   >
                     安装
@@ -845,14 +766,14 @@ export default function ConnectorsPage() {
                   <>
                     <button
                       type="button"
-                      className="btn primary"
+                      className="btn btn-primary"
                       onClick={() => togglePlugin(manifest.id, !isEnabled)}
                     >
                       {isEnabled ? '停用' : '启用'}
                     </button>
                     <button
                       type="button"
-                      className="btn"
+                      className="btn btn-secondary"
                       onClick={() => uninstallPlugin(manifest.id)}
                     >
                       卸载
@@ -860,7 +781,7 @@ export default function ConnectorsPage() {
                   </>
                 )}
                 {actionStatus && (
-                  <span style={{ fontSize: 13, color: 'var(--ink-mute)' }}>{actionStatus}</span>
+                  <span className="conn-status">{actionStatus}</span>
                 )}
               </div>
             </div>
