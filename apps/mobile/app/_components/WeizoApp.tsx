@@ -1812,7 +1812,7 @@ function tabTitle(tab: TabKey, selectedStaff: Staff | null): string {
     case 'contacts': return '通讯录';
     case 'work': return '看板';
     case 'me': return '我';
-    default: return '聊天';
+    default: return '微作';
   }
 }
 
@@ -2213,9 +2213,21 @@ export function WeizoApp() {
         onRetry={() => void checkDesktop()}
       />
       <AppHeader
-        title={tabTitle(tab, selectedStaff)}
+        title={
+          tab === 'chats' && activeChat?.kind === 'staff'
+            ? activeChat.staff.name
+            : tabTitle(tab, selectedStaff)
+        }
         left={
-          selectedStaff ? (
+          tab === 'chats' && activeChat?.kind === 'staff' ? (
+            <button
+              type="button"
+              className="mobile-back-button"
+              onClick={() => setActiveChat({ kind: 'owner' })}
+            >
+              ‹ 微作
+            </button>
+          ) : selectedStaff ? (
             <button
               type="button"
               className="mobile-back-button"
