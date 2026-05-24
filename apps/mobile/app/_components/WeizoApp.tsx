@@ -947,11 +947,31 @@ function DelivSection() {
 }
 
 function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
+  const [board, setBoard] = useState<'todo' | 'doing' | 'done'>('todo');
+
+  const BOARD_TABS: Array<{ key: 'todo' | 'doing' | 'done'; label: string }> = [
+    { key: 'todo', label: '待分配' },
+    { key: 'doing', label: '进行中' },
+    { key: 'done', label: '交付' },
+  ];
+
   return (
     <div className="mobile-work">
-      <TodoBacklog onTalkToSecretary={onTalkToSecretary} />
-      <ActiveJobs />
-      <DelivSection />
+      <div className="weizo-board-tabs">
+        {BOARD_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`weizo-board-tab${board === t.key ? ' is-active' : ''}`}
+            onClick={() => setBoard(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {board === 'todo' && <TodoBacklog onTalkToSecretary={onTalkToSecretary} />}
+      {board === 'doing' && <ActiveJobs />}
+      {board === 'done' && <DelivSection />}
     </div>
   );
 }
