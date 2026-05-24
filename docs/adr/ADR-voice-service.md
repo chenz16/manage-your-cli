@@ -24,15 +24,15 @@ The voice service lives entirely on the **desktop** (manage-your-cli, the server
 ## Security
 `/connectors/voice/transcribe` + `/connectors/tts/synthesize` gated by `requireDeviceTokenForRemote` (desktop webview = local-secret/loopback; mobile = device-token). Audio is transient (not persisted server-side beyond transcription). No audio is shipped to any cloud unless the owner picked an OpenAI engine.
 
-## State vs main (gap analysis)
-Already in manage-your-cli (restored #13/#14): STT service (4 engines), TTS service (cosyvoice/openai), transcribe + tts/synthesize + health routes, **desktop ChatSurface voice UX** (mic/voice-mode/read-aloud present).
-**Missing vs main:**
-- TTS: `edge-tts` engine (main's local default) + **chunked TTS** for long text.
+## State vs main (gap analysis — CORRECTED 2026-05-23 after verification)
+Already in manage-your-cli (byte-identical to main): STT service (4 engines), TTS service, transcribe + tts/synthesize + health routes, **desktop ChatSurface voice UX** (mic/voice-mode/read-aloud) AND **chunked TTS** (ChatSurface diff vs main = 0), AND **edge-tts** — `scripts/cosyvoice-server.py` synthesizes via edge-tts under the local-TTS slot (no key, no models); `install-tts-wsl.sh` installs it.
+**V1 (edge-tts + chunked TTS) = ALREADY PRESENT + VERIFIED** (`/health`→`{ok,engine:edge-tts}`, `/synthesize`→200, 12.6 KB MP3 24 kHz). Earlier "missing" note was wrong — it came over with the extraction/restore.
+**Actually missing vs main:**
 - **Mobile voice**: 按住说话 + read-aloud not wired in the mobile app (via proxy).
 - **WeChat voice transcription** (`wechat-voice-transcribe.ts` + the pywxdump Silk path) — not ported.
 
 ## Slice plan
-- **V1 — align desktop TTS to main:** add `edge-tts` engine (local, zero-key default) + chunked TTS + speed control; reconcile the connectors voice/TTS picker. (Desktop, my lane.)
+- **V1 — desktop TTS edge-tts + chunked: ✅ DONE (present + verified).** To use: `bash scripts/install-tts-wsl.sh` → `/connectors` TTS engine = Local, URL `http://127.0.0.1:8770`. Read-aloud then uses edge-tts, chunked.
 - **V2 — mobile voice:** wire 按住说话 (MediaRecorder→desktop `/transcribe` via mobile-runtime) + 🔊 read-aloud (→ `/synthesize`) into the mobile app. (Mobile track / joint.)
 - **V3 — WeChat voice transcription:** desk wechat-daemon: Silk→WAV→faster-whisper→replace `[语音]`; surfaces in conversation + mobile relay. (Desk, ties to wechat-daemon.)
 
