@@ -23,15 +23,33 @@
 
 'use client';
 
-import type { SpeechRecognitionPlugin } from '@capacitor-community/speech-recognition';
-
 // ── Plugin 懒加载（SSR 安全）────────────────────────────────────────────────
+// 不在模块顶层 import 该包 —— 连 `import type` 都会让 Next 静态导出 build 解析
+// 失败（typecheck 过、next build 不过）。改用本地最小接口 + 运行时 dynamic
+// import + 强制转型。
+
+type SpeechRecognitionPlugin = {
+  available(): Promise<{ available: boolean }>;
+  requestPermissions(): Promise<{ speechRecognition: string }>;
+  start(opts: {
+    language?: string;
+    maxResults?: number;
+    prompt?: string;
+    partialResults?: boolean;
+    popup?: boolean;
+  }): Promise<{ matches?: string[] }>;
+  stop(): Promise<void>;
+  addListener(
+    event: 'partialResults',
+    cb: (data: { matches: string[] }) => void,
+  ): Promise<{ remove: () => void }>;
+};
 
 async function getSpeechRecognitionPlugin(): Promise<SpeechRecognitionPlugin | null> {
   if (typeof window === 'undefined') return null;
   try {
     const mod = await import('@capacitor-community/speech-recognition');
-    return mod.SpeechRecognition;
+    return mod.SpeechRecognition as unknown as SpeechRecognitionPlugin;
   } catch {
     return null;
   }
