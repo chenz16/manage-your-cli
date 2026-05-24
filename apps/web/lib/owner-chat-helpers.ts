@@ -77,16 +77,37 @@ function extractWeChatContextBlocks(messages: ChatMessage[]): string[] {
   return blocks.slice(-3);
 }
 
-export function buildOwnerPrompt(userText: string, messages: ChatMessage[]): string {
+export function buildOwnerPrompt(
+  userText: string,
+  messages: ChatMessage[],
+  activeProjectContext?: { name: string; memoryText: string } | null,
+): string {
   const wechatContexts = extractWeChatContextBlocks(messages);
-  if (wechatContexts.length === 0) return userText;
 
-  return [
-    'The user may be asking a follow-up about WeChat messages that were read earlier in this chat.',
-    'Use the WeChat context JSON below as already-read source data. Do not say you cannot read WeChat if the answer is present in this context.',
-    '',
-    ...wechatContexts.map((ctx, i) => `WeChat context ${i + 1}:\n${ctx}`),
-    '',
-    `Current user question:\n${userText}`,
-  ].join('\n');
+  const parts: string[] = [];
+
+  // Phase 1 — active project context injected at the top of the prompt
+  // when the boss has a project selected. One conditional readBossMemory
+  // call (per design doc § 9 item 8). The memory text may be short (just
+  // the stub written at project create time), which is fine — more detail
+  // accumulates as the boss uses writeBossMemory().
+  if (activeProjectContext?.name && activeProjectContext.memoryText.trim()) {
+    parts.push(`## Active project: ${activeProjectContext.name}`, activeProjectContext.memoryText.trim(), '');
+  }
+
+  if (wechatContexts.length > 0) {
+    parts.push(
+      'The user may be asking a follow-up about WeChat messages that were read earlier in this chat.',
+      'Use the WeChat context JSON below as already-read source data. Do not say you cannot read WeChat if the answer is present in this context.',
+      '',
+      ...wechatContexts.map((ctx, i) => `WeChat context ${i + 1}:\n${ctx}`),
+      '',
+      `Current user question:\n${userText}`,
+    );
+    return parts.join('\n');
+  }
+
+  if (parts.length === 0) return userText;
+  parts.push(userText);
+  return parts.join('\n');
 }

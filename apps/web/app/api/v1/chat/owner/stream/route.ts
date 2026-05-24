@@ -1,6 +1,6 @@
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 import { spawn } from 'node:child_process';
-import { getOrCreateSecretaryStaff } from '@holon/core';
+import { getOrCreateSecretaryStaff, readBossMemory, getProject } from '@holon/core';
 import { sendWarmTurn } from '@/lib/warm-agent';
 import { parseJsonRequestBody, extractChatMessages, extractLatestUserText, buildOwnerPrompt } from '@/lib/owner-chat-helpers';
 
@@ -55,11 +55,31 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
+  // Phase 1: active project memory injection (design doc § 9 item 8).
+  // When the client passes `active_project_id`, read its boss-memory scope
+  // and prepend it to the owner prompt as context. Backward-compat: if
+  // the field is absent or the project has no memory, behavior is unchanged.
+  let activeProjectContext: { name: string; memoryText: string } | null = null;
+  const activeProjectId =
+    typeof body === 'object' && body !== null && 'active_project_id' in body
+      ? (body as { active_project_id?: unknown }).active_project_id
+      : undefined;
+  if (typeof activeProjectId === 'string') {
+    const proj = getProject(activeProjectId);
+    if (proj) {
+      const memResult = readBossMemory(`projects/${proj.slug}`);
+      activeProjectContext = {
+        name: proj.name,
+        memoryText: memResult.ok ? memResult.text : '',
+      };
+    }
+  }
+
   const secretary = getOrCreateSecretaryStaff();
   const substrate = secretary.substrate;
   const cwd = substrate.kind === 'cli_agent' ? substrate.cwd : undefined;
   const binary = substrate.kind === 'cli_agent' && substrate.binary ? substrate.binary : 'claude';
-  const ownerPrompt = buildOwnerPrompt(userText, messages);
+  const ownerPrompt = buildOwnerPrompt(userText, messages, activeProjectContext);
 
   // Headless: drive the OFFICIAL CLI non-interactively (claude -p / codex exec) and
   // stream its clean stdout. No TUI screen-scrape. Subscription-only; NO API key.

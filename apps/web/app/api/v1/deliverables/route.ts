@@ -15,6 +15,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   const url = new URL(req.url);
   const originParam = url.searchParams.get('origin');
   const statusParam = url.searchParams.get('status');
+  const projectIdParam = url.searchParams.get('project_id');
   let origin: ReturnType<typeof DeliverableOrigin.parse> | undefined;
   let status: ReturnType<typeof DeliverableStatus.parse> | undefined;
   if (originParam !== null) {
@@ -27,7 +28,10 @@ export async function GET(req: Request): Promise<NextResponse> {
     if (!parsed.success) return NextResponse.json({ error: 'invalid status', got: statusParam }, { status: 400 });
     status = parsed.data;
   }
-  return NextResponse.json(listDeliverables({ origin, status }));
+  // Phase 1: project_id filter — null means no filter; string = filter to project.
+  const query: Parameters<typeof listDeliverables>[0] = { origin, status };
+  if (projectIdParam !== null) query.project_id = projectIdParam;
+  return NextResponse.json(listDeliverables(query));
 }
 
 export const dynamic = 'force-dynamic';
