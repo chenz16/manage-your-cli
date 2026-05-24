@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import type { OwnerAssistant } from '@holon/api-contract';
 import { PullToRefresh } from '../_components/PullToRefresh';
+import { VoiceBugReport } from '../_components/VoiceBugReport';
 import { deskOrigin } from '../_lib/desk-origin';
 import { fetchWithTimeout } from '../_lib/fetch-timeout';
 import { useVisiblePoll } from '../_lib/useVisiblePoll';
@@ -82,6 +83,12 @@ export function MeView() {
                 <span>在桌面端切换人设</span>
                 <span className="m-chev">›</span>
               </a>
+            </div>
+
+            <div className="m-card">
+              <div className="m-card-title">反馈</div>
+              <p className="m-card-body muted">遇到问题？说出来，小秘会帮你记录并跟进。</p>
+              <VoiceBugReport />
             </div>
 
             <BudgetMeter
