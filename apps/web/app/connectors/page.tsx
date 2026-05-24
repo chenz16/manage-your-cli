@@ -119,7 +119,6 @@ export default function ConnectorsPage() {
   const [ttsStatus, setTtsStatus] = useState<string | null>(null);
 
   // A2A state
-  const [myCardError, setMyCardError] = useState<string | null>(null);
   const [peerUrl, setPeerUrl] = useState('');
   const [peerCard, setPeerCard] = useState<AgentCard | null>(null);
   const [peerCardStatus, setPeerCardStatus] = useState<string | null>(null);
@@ -170,10 +169,10 @@ export default function ConnectorsPage() {
       });
       const data = await res.json() as { installed?: InstalledMcpPlugin; error?: string };
       if (!res.ok) {
-        setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: `错误: ${data.error ?? res.status}` }));
+        setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: `Error: ${data.error ?? res.status}` }));
         return;
       }
-      setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: '已安装' }));
+      setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: 'Installed' }));
       fetchPlugins();
     } catch (err: unknown) {
       setPluginActionStatus((prev) => ({ ...prev, [manifest.id]: err instanceof Error ? err.message : String(err) }));
@@ -181,7 +180,7 @@ export default function ConnectorsPage() {
   }
 
   async function togglePlugin(id: string, enabled: boolean) {
-    setPluginActionStatus((prev) => ({ ...prev, [id]: enabled ? '启用中…' : '停用中…' }));
+    setPluginActionStatus((prev) => ({ ...prev, [id]: enabled ? 'Enabling…' : 'Disabling…' }));
     try {
       const res = await fetch(`/api/v1/plugins/${id}`, {
         method: 'PATCH',
@@ -190,10 +189,10 @@ export default function ConnectorsPage() {
       });
       const data = await res.json() as { installed?: InstalledMcpPlugin; error?: string };
       if (!res.ok) {
-        setPluginActionStatus((prev) => ({ ...prev, [id]: `错误: ${data.error ?? res.status}` }));
+        setPluginActionStatus((prev) => ({ ...prev, [id]: `Error: ${data.error ?? res.status}` }));
         return;
       }
-      setPluginActionStatus((prev) => ({ ...prev, [id]: enabled ? '已启用' : '已停用' }));
+      setPluginActionStatus((prev) => ({ ...prev, [id]: enabled ? 'Enabled' : 'Disabled' }));
       fetchPlugins();
     } catch (err: unknown) {
       setPluginActionStatus((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : String(err) }));
@@ -201,12 +200,12 @@ export default function ConnectorsPage() {
   }
 
   async function uninstallPlugin(id: string) {
-    setPluginActionStatus((prev) => ({ ...prev, [id]: '卸载中…' }));
+    setPluginActionStatus((prev) => ({ ...prev, [id]: 'Uninstalling…' }));
     try {
       const res = await fetch(`/api/v1/plugins/${id}`, { method: 'DELETE' });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) {
-        setPluginActionStatus((prev) => ({ ...prev, [id]: `错误: ${data.error ?? res.status}` }));
+        setPluginActionStatus((prev) => ({ ...prev, [id]: `Error: ${data.error ?? res.status}` }));
         return;
       }
       setPluginActionStatus((prev) => ({ ...prev, [id]: '' }));
@@ -221,20 +220,11 @@ export default function ConnectorsPage() {
     fetchPlugins();
   }, [fetchPlugins]);
 
-  // Pre-fill peer URL with own origin; verify agent card is reachable.
+  // Pre-fill peer URL with own origin.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setPeerUrl(window.location.origin);
     }
-    fetch('/.well-known/agent-card.json')
-      .then(async (res) => {
-        if (!res.ok) {
-          setMyCardError(`HTTP ${res.status}: ${await res.text()}`);
-        }
-      })
-      .catch((err: unknown) => {
-        setMyCardError(err instanceof Error ? err.message : String(err));
-      });
   }, []);
 
   useEffect(() => {
@@ -425,7 +415,7 @@ export default function ConnectorsPage() {
         </div>
       </header>
 
-      {/* ── 通知 group: Voice ─────────────────────────────────────────── */}
+      {/* ── Voice ────────────────────────────────────────────────────── */}
       <section className="card conn-card">
         <div className="conn-card-head">
           <p className="conn-eyebrow">Voice</p>
@@ -484,7 +474,7 @@ export default function ConnectorsPage() {
         </div>
       </section>
 
-      {/* ── 通知 group: Messaging & Social ────────────────────────────── */}
+      {/* ── Messaging & Social ────────────────────────────────────────── */}
       <section className="card conn-card">
         <div className="conn-card-head">
           <p className="conn-eyebrow">Messaging &amp; Social</p>
@@ -565,28 +555,28 @@ export default function ConnectorsPage() {
         </div>
       </section>
 
-      {/* ── 对外连接 group: Connect to other agents (A2A) ────────────── */}
+      {/* ── Agent network: Connect to other agents (A2A) ─────────────── */}
       <section className="card conn-card">
         <div className="conn-card-head">
-          <p className="conn-eyebrow">对外连接 · Agent network</p>
-          <h2 className="conn-card-title">连接其他 agent / Connect to other agents</h2>
+          <p className="conn-eyebrow">Agent network</p>
+          <h2 className="conn-card-title">Connect to other agents</h2>
           <p className="conn-card-hint">
-            主动连接外部 agent，创建对外连接器。A2A 0.2.0 标准（agent card + JSON-RPC），支持任意实现了该协议的桌面或服务。
+            Actively connect to external agents. Uses the A2A 0.2.0 standard (agent card + JSON-RPC) — works with any desk or service that implements the protocol.
           </p>
         </div>
 
         {/* ── Primary action: Add peer by agent-card URL ── */}
         <div className="conn-field">
-          <span className="conn-field-label">添加 agent 对端 / Add a peer agent</span>
+          <span className="conn-field-label">Add a peer agent</span>
           <p className="conn-field-hint">
-            粘贴另一个 agent 的地址（base URL 或完整的{' '}
-            <code>…/.well-known/agent-card.json</code> URL），点击 Connect 发现并连接。
+            Paste another agent&apos;s base URL or its full{' '}
+            <code>…/.well-known/agent-card.json</code> URL, then click Connect to discover and connect.
           </p>
           <input
             className="conn-input"
             value={peerUrl}
             onChange={(event) => { setPeerUrl(event.target.value); setPeerCard(null); setPeerCardStatus(null); }}
-            placeholder="http://host:port  或  http://host:port/.well-known/agent-card.json"
+            placeholder="http://host:port  or  http://host:port/.well-known/agent-card.json"
             autoComplete="off"
           />
           <div className="conn-actions">
@@ -613,7 +603,7 @@ export default function ConnectorsPage() {
         {/* ── Test message to connected peer ── */}
         {peerCard && (
           <div className="conn-field">
-            <span className="conn-field-label">发送测试消息 / Send test message</span>
+            <span className="conn-field-label">Send test message</span>
             <input
               className="conn-input"
               value={pingMsg}
@@ -630,9 +620,9 @@ export default function ConnectorsPage() {
 
         {/* ── Vendor bridges (informational, honest status) ── */}
         <div className="conn-field">
-          <span className="conn-field-label">外部桥接 / Vendor bridges</span>
+          <span className="conn-field-label">Vendor bridges</span>
           <p className="conn-field-hint">
-            非 A2A 原生的外部系统需要适配器桥接。以下为已规划的桥接方案及当前进展：
+            External systems that are not natively A2A need an adapter bridge. Planned bridges and their current status:
           </p>
 
           {/* OpenClaw / WeChat */}
@@ -644,10 +634,10 @@ export default function ConnectorsPage() {
                   <span className="conn-tag">via ClawBot</span>
                 </div>
                 <p className="conn-plugin-desc">
-                  通过 ClawBot 网关桥接微信联系人和群聊（<code>scripts/clawbot/</code>）。ClawBot 以 iLink 形式转发消息，桥接到 A2A task 流程。
+                  Bridges WeChat contacts and group chats via the ClawBot gateway (<code>scripts/clawbot/</code>). ClawBot forwards messages as iLink events, bridging them into the A2A task flow.
                 </p>
               </div>
-              <span className="conn-plugin-state">接入中</span>
+              <span className="conn-plugin-state">In progress</span>
             </div>
           </div>
 
@@ -659,66 +649,36 @@ export default function ConnectorsPage() {
                   <span className="conn-plugin-name">Hermes (HTTP API)</span>
                 </div>
                 <p className="conn-plugin-desc">
-                  通过 HTTP 适配器将 Hermes API 接入 A2A 协议。需要实现一个轻量 HTTP adapter 将 Hermes 请求转译为 A2A task。
+                  Connects the Hermes HTTP API to the A2A protocol via a lightweight HTTP adapter that translates Hermes requests into A2A tasks.
                 </p>
               </div>
-              <span className="conn-plugin-state">规划中</span>
+              <span className="conn-plugin-state">Planned</span>
             </div>
           </div>
-        </div>
-
-        {/* ── Your outward address (one-liner, minimized) ── */}
-        <div className="conn-field">
-          <span className="conn-field-label" style={{ color: 'var(--ink-mute)', fontSize: 13, fontWeight: 500 }}>
-            你的对外地址 / Your address
-          </span>
-          <div className="conn-panel" style={{ padding: '10px 14px' }}>
-            <div className="conn-panel-row" style={{ flexWrap: 'wrap', gap: 8 }}>
-              <code style={{ fontSize: 12, color: 'var(--ink-soft)', wordBreak: 'break-all', flex: 1 }}>
-                {typeof window !== 'undefined' ? window.location.origin : ''}/.well-known/agent-card.json
-              </code>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ fontSize: 12, padding: '3px 10px', flexShrink: 0 }}
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    void navigator.clipboard.writeText(`${window.location.origin}/.well-known/agent-card.json`);
-                  }
-                }}
-              >
-                Copy
-              </button>
-            </div>
-            <p className="conn-panel-empty" style={{ marginTop: 4 }}>别人用它来连接你 — 把这个地址发给对方粘贴到上方输入框。</p>
-          </div>
-          {myCardError && (
-            <p className="conn-status" style={{ fontSize: 12 }}>Agent card error: {myCardError}</p>
-          )}
         </div>
       </section>
 
-      {/* ── 插件 group: Plugins (MCP plugin manager) ──────────────────── */}
+      {/* ── Plugins (MCP plugin manager) ──────────────────────────────── */}
       <section className="card conn-card">
         <div className="conn-card-head">
-          <p className="conn-eyebrow">插件 · Plugins</p>
-          <h2 className="conn-card-title">MCP 插件管理</h2>
+          <p className="conn-eyebrow">Plugins</p>
+          <h2 className="conn-card-title">MCP plugin manager</h2>
           <p className="conn-card-hint">
-            扩展桌面能力的精选插件（curated 白名单）。每个插件是一个 MCP server，启用后会在你的桌面运行。
+            Curated plugins that extend desktop capabilities. Each plugin is an MCP server that runs on your desk when enabled.
           </p>
         </div>
 
         <div className="conn-note">
           <span className="conn-note-icon" aria-hidden>●</span>
-          <span>插件会在桌面执行代码，仅安装来自可信来源的精选插件。标记 <strong>写入 / write</strong> 的能力可以修改数据，请按需启用。</span>
+          <span>Plugins execute code on the desktop — only install from trusted, curated sources. Capabilities marked <strong>write</strong> can modify data; enable only as needed.</span>
         </div>
 
         {pluginsError && (
-          <p className="conn-error">加载失败: {pluginsError}</p>
+          <p className="conn-error">Load failed: {pluginsError}</p>
         )}
 
         {!pluginsData && !pluginsError && (
-          <p className="conn-loading">加载中…</p>
+          <p className="conn-loading">Loading…</p>
         )}
 
         {pluginsData && pluginsData.registry.map((manifest) => {
@@ -730,10 +690,10 @@ export default function ConnectorsPage() {
 
           // State label + class
           const stateLabel = !isInstalled
-            ? '未安装'
+            ? 'Not installed'
             : isEnabled
-              ? '已启用'
-              : '已停用';
+              ? 'Installed · Enabled'
+              : 'Installed · Disabled';
           const stateClass = !isInstalled
             ? ''
             : isEnabled
@@ -765,7 +725,7 @@ export default function ConnectorsPage() {
                       title={cap.description}
                       className={`conn-chip ${cap.risk === 'write' ? 'is-write' : 'is-read'}`}
                     >
-                      {cap.risk === 'write' ? '写入' : '读取'} · {cap.label}
+                      {cap.risk === 'write' ? 'write' : 'read'} · {cap.label}
                     </span>
                   ))}
                 </div>
@@ -781,9 +741,9 @@ export default function ConnectorsPage() {
                     onClick={() => setPluginSetupOpen((prev) => ({ ...prev, [manifest.id]: !prev[manifest.id] }))}
                     aria-expanded={!!pluginSetupOpen[manifest.id]}
                   >
-                    如何连接 / Setup
+                    Setup
                     <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--ink-mute)' }}>
-                      {pluginSetupOpen[manifest.id] ? '▴ 收起' : '▾ 展开'}
+                      {pluginSetupOpen[manifest.id] ? '▴ Collapse' : '▾ Expand'}
                     </span>
                   </button>
                   {pluginSetupOpen[manifest.id] && (
@@ -833,7 +793,7 @@ export default function ConnectorsPage() {
                     className="btn btn-primary"
                     onClick={() => installPlugin(manifest)}
                   >
-                    安装
+                    Install
                   </button>
                 )}
                 {isInstalled && (
@@ -843,14 +803,14 @@ export default function ConnectorsPage() {
                       className="btn btn-primary"
                       onClick={() => togglePlugin(manifest.id, !isEnabled)}
                     >
-                      {isEnabled ? '停用' : '启用'}
+                      {isEnabled ? 'Disable' : 'Enable'}
                     </button>
                     <button
                       type="button"
                       className="btn btn-secondary"
                       onClick={() => uninstallPlugin(manifest.id)}
                     >
-                      卸载
+                      Uninstall
                     </button>
                   </>
                 )}

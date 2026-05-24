@@ -7,6 +7,7 @@ import { PersonaPicker } from './PersonaPicker';
 import { FolderPicker } from './FolderPicker';
 import { AuthorizationsSection } from './AuthorizationsSection';
 import { ConnectPhoneSection } from './ConnectPhoneSection';
+import { MyAgentCardSection } from './MyAgentCardSection';
 import { BugQueue } from './BugQueue';
 import { LanguageSwitcher } from '../../_components/LanguageSwitcher';
 import { primeOwner } from '../../../lib/hooks/useOwner';
@@ -387,6 +388,10 @@ export function MeClient({
          * longer rendered here. */}
 
         <ConnectPhoneSection />
+
+        {/* My Agent Card — the desk's own A2A identity, analogous to WeChat "My QR code".
+         * Belongs in /me (config) not /connectors (outward connections). */}
+        <MyAgentCardSection />
 
         {/* Authorizations · 2026-05-20: restored inline after /integrations
          * route was reverted per owner directive 'nav 简单点 后面 mobile 迁移'.
