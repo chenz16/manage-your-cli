@@ -3,8 +3,8 @@
 import { redirect } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, DragEvent, ClipboardEvent } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
-import { MyAgentCardSection } from './_components/MyAgentCardSection';
 import { ConnectPhoneSection } from './_components/ConnectPhoneSection';
+import { MyAgentCardSection } from './_components/MyAgentCardSection';
 
 type MessagingChannel = 'slack' | 'discord' | 'telegram';
 
@@ -137,6 +137,8 @@ export default function ConnectorsPage() {
   const wcPollActive = useRef(false);
   // Pre-loaded bound status — fetched on mount from /api/v1/connectors/wechat/status
   const [wcPreloaded, setWcPreloaded] = useState<{ connected: boolean; accountId?: string } | null>(null);
+  // Account ID from a fresh bind (confirmed during this session)
+  const [wcFreshAccountId, setWcFreshAccountId] = useState<string | null>(null);
 
   // Messaging state
   const [slackUrl, setSlackUrl] = useState('');
@@ -515,10 +517,11 @@ export default function ConnectorsPage() {
     setWcQrUrl(null);
     setWcQrId(null);
     setWcStatusMsg(null);
+    setWcFreshAccountId(null);
     wcPollActive.current = false;
     try {
       const res = await fetch('/api/v1/connectors/wechat/qr');
-      const data = await res.json() as { qrcode_id?: string; qrcode_url?: string; error?: string };
+      const data = await res.json() as { qrcode_id?: string; qrcode_url?: string; qrcode_scan_url?: string; error?: string };
       if (!res.ok || data.error) {
         setWcBindStatus('error');
         setWcStatusMsg(data.error ?? `HTTP ${res.status}`);
@@ -560,7 +563,8 @@ export default function ConnectorsPage() {
         const st = data.status ?? 'wait';
         if (st === 'confirmed') {
           setWcBindStatus('confirmed');
-          setWcStatusMsg(`Connected ✓ (account: ${data.account_id ?? 'unknown'}) — run serve.sh to start.`);
+          setWcFreshAccountId(data.account_id ?? null);
+          setWcStatusMsg(`Connected — account ${data.account_id ?? 'unknown'}`);
           wcPollActive.current = false;
           return;
         }
@@ -608,6 +612,9 @@ export default function ConnectorsPage() {
           <p className="page-subtitle">Optional services your Secretary and employees can use — each category is described below. CLI agents are created from chat or the Team page, not here.</p>
         </div>
       </header>
+
+      {/* ── Phone pairing ─────────────────────────────────────────────── */}
+      <ConnectPhoneSection />
 
       {/* ── Voice ────────────────────────────────────────────────────── */}
       <section className="card conn-card">
@@ -903,56 +910,81 @@ export default function ConnectorsPage() {
               {/* Status pill */}
               <span className={`conn-plugin-state${wcBindStatus === 'confirmed' ? ' is-enabled' : wcBindStatus === 'error' ? ' is-disabled' : ''}`}>
                 {wcBindStatus === 'idle' && 'Not connected'}
-                {wcBindStatus === 'loading' && 'Loading…'}
+                {wcBindStatus === 'loading' && 'Loading QR…'}
                 {wcBindStatus === 'waiting' && 'Waiting for scan'}
-                {wcBindStatus === 'scanned' && 'Scan confirmed…'}
+                {wcBindStatus === 'scanned' && 'Scanned — confirming…'}
                 {wcBindStatus === 'confirmed' && 'Connected'}
                 {wcBindStatus === 'error' && 'Error'}
               </span>
             </div>
 
-            {/* QR display */}
-            {wcQrUrl && wcBindStatus !== 'confirmed' && (
-              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* QR display + instructions — shown while waiting or scanned */}
+            {wcQrUrl && (wcBindStatus === 'waiting' || wcBindStatus === 'scanned') && (
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={wcQrUrl}
-                  alt="WeChat bind QR code"
-                  width={200}
-                  height={200}
-                  style={{ borderRadius: 8, border: '1px solid var(--line)', display: 'block' }}
+                  alt="WeChat iLink bot-binding QR code"
+                  width={240}
+                  height={240}
+                  style={{ borderRadius: 10, border: '2px solid var(--line)', display: 'block', background: '#fff' }}
                 />
+                <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}>
+                  <li style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Open <strong>WeChat</strong> on your phone.</li>
+                  <li style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Tap the <strong>QR scan</strong> icon (top-right of Chats).</li>
+                  <li style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Point your camera at the code above and tap <strong>Confirm</strong> to bind this bot.</li>
+                </ol>
                 <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>
-                  Scan with WeChat (iOS) to bind
+                  {wcBindStatus === 'waiting'
+                    ? 'Waiting for scan… QR expires in ~5 minutes. Use Refresh QR if it expires.'
+                    : 'QR scanned — confirm binding in the WeChat popup on your phone.'}
                 </span>
               </div>
             )}
 
-            {/* Bound account info — shown when already connected (pre-loaded from status endpoint) */}
-            {wcPreloaded?.connected && wcBindStatus === 'confirmed' && !wcQrUrl && (
+            {/* Bound account info — shown when connected (either fresh bind or pre-loaded on page open) */}
+            {wcBindStatus === 'confirmed' && (
               <div className="conn-panel" style={{ marginTop: 10 }}>
                 <div className="conn-panel-row">
                   <span className="conn-panel-name">
                     Connected · WeChat account{' '}
                     <code style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
-                      {wcPreloaded.accountId ?? 'unknown'}
+                      {/* Prefer account ID from fresh bind; fall back to pre-loaded on page open */}
+                      {wcFreshAccountId ?? wcPreloaded?.accountId ?? 'unknown'}
                     </code>
                   </span>
                 </div>
+                <p style={{ fontSize: 12, color: 'var(--ink-mute)', margin: '6px 0 0 0' }}>
+                  Run <code style={{ fontFamily: 'ui-monospace, monospace' }}>bash scripts/clawbot/serve.sh</code> on the desk to start forwarding messages.
+                </p>
               </div>
             )}
 
-            <div className="conn-actions" style={{ marginTop: 10 }}>
-              {wcBindStatus !== 'confirmed' && (
+            <div className="conn-actions" style={{ marginTop: 12 }}>
+              {/* Primary: start bind (idle / error states) */}
+              {(wcBindStatus === 'idle' || wcBindStatus === 'error') && (
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={wcBindStatus === 'loading' || wcBindStatus === 'waiting' || wcBindStatus === 'scanned'}
                   onClick={() => { void startWechatBind(); }}
                 >
                   Connect WeChat (iOS)
                 </button>
               )}
+
+              {/* Refresh QR: available while waiting/scanned so user can get a new code if it expires */}
+              {(wcBindStatus === 'waiting' || wcBindStatus === 'scanned' || wcBindStatus === 'loading') && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={wcBindStatus === 'loading'}
+                  onClick={() => { void startWechatBind(); }}
+                >
+                  {wcBindStatus === 'loading' ? 'Loading…' : 'Refresh QR'}
+                </button>
+              )}
+
+              {/* Re-bind: once already connected */}
               {wcBindStatus === 'confirmed' && (
                 <button
                   type="button"
@@ -962,7 +994,8 @@ export default function ConnectorsPage() {
                   Re-bind
                 </button>
               )}
-              {wcStatusMsg && !wcPreloaded?.connected && (
+
+              {wcStatusMsg && (
                 <span className={`conn-status${wcBindStatus === 'error' ? ' is-error' : wcBindStatus === 'confirmed' ? ' is-ok' : ''}`}>
                   {wcStatusMsg}
                 </span>

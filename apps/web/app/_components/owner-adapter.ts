@@ -15,7 +15,6 @@
 
 import type { ChatModelAdapter, ThreadMessageLike } from '@assistant-ui/react';
 import { reloadForLanguageChange, type ExplicitLang } from './language-reload';
-import { getActiveProjectId } from '../../lib/hooks/useProjects';
 
 const STORAGE_KEY = 'holon.chatMessages';
 
@@ -280,19 +279,12 @@ export function makeOwnerAdapter(): ChatModelAdapter {
       // the cancelled-footer so the partial bubble keeps its content + shows
       // a clear "I stopped" affordance, instead of vanishing or rendering as
       // an unmarked truncation.
-      // Phase 1 follow-up: include the currently selected project id so the
-      // server-side Secretary prompt injection (route.ts § "active project
-      // memory injection") picks it up. null = no active project → server
-      // behavior unchanged (backward-compat for single-project / no-project
-      // bosses).
-      const activeProjectId = getActiveProjectId();
-
       let res: Response;
       try {
         res = await fetch('/api/v1/chat/owner/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: payload, active_project_id: activeProjectId }),
+          body: JSON.stringify({ messages: payload }),
           signal: abortSignal,
         });
       } catch (err) {

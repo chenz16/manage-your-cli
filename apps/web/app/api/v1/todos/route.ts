@@ -1,17 +1,21 @@
 /**
- * GET /api/v1/todos — list owner's personal work queue items.
+ * GET  /api/v1/todos — list boss-backlog todos (todo-store, SQLite-backed).
+ * POST /api/v1/todos — add a new todo. Body: { text, priority?, due_date? }
  *
- * Supports `?project_id=<id>` filter (Phase 1).
+ * Supports `?project_id=<id>` query param (Phase 1 compat; todos currently
+ * don't have project_id, so the param is accepted and ignored).
+ *
  * Auth posture: requireDeviceTokenForRemote (same as /api/v1/deliverables).
- *
- * The work queue is the owner's personal task list (WorkQueueItem);
- * distinct from staff jobs. Lives in `my_work_queue` fixture field.
  */
 
 import { NextResponse } from 'next/server';
-import { listTodos } from '@holon/core';
+import { listTodos, addTodo } from '@holon/core';
+import { AddTodoBody } from '@holon/api-contract';
 import { requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 
+export const dynamic = 'force-dynamic';
+
+/** GET /api/v1/todos — list all todos, newest first. */
 export async function GET(req: Request): Promise<NextResponse> {
   const auth = requireDeviceTokenForRemote(req);
   if (!auth.ok) {
@@ -21,14 +25,39 @@ export async function GET(req: Request): Promise<NextResponse> {
     );
   }
 
-  const url = new URL(req.url);
-  const projectIdParam = url.searchParams.get('project_id');
-  // null param = return all; string = filter to project
-  const input: Parameters<typeof listTodos>[0] = {};
-  if (projectIdParam !== null) input.project_id = projectIdParam;
+  // project_id filter accepted for API compat; todo-store items don't carry
+  // project_id yet (future extension point).
+  const _url = new URL(req.url);
+  const _projectId = _url.searchParams.get('project_id');
+  void _projectId; // reserved for future use
 
-  const items = listTodos(input);
+  const items = listTodos();
   return NextResponse.json({ items });
 }
 
-export const dynamic = 'force-dynamic';
+/** POST /api/v1/todos — add a new todo. Body: { text: string, priority?, due_date? } */
+export async function POST(req: Request): Promise<NextResponse> {
+  const auth = requireDeviceTokenForRemote(req);
+  if (!auth.ok) {
+    return NextResponse.json(
+      { error: 'device authentication required', code: auth.code },
+      { status: auth.status },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
+  }
+  const parsed = AddTodoBody.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'text (string, min 1) required', issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+  const todo = addTodo(parsed.data.text, parsed.data.priority, parsed.data.due_date ?? null);
+  return NextResponse.json(todo, { status: 201 });
+}

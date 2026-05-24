@@ -13,11 +13,13 @@
   },
   "dependencies": {
     "@assistant-ui/react": "^0.14.5",
+    "@capacitor-community/text-to-speech": "^8.0.0",
     "@capacitor/android": "^6.2.0",
     "@capacitor/core": "^6.2.0",
     "@capacitor/ios": "^6.2.0",
     "@holon/api-contract": "workspace:*",
     "@holon/core": "workspace:*",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.460.0",
     "next": "15.5.18",
     "react": "19.2.0",

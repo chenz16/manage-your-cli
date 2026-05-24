@@ -6,8 +6,6 @@ import {
   consolidateMemory,
   createAgent,
   createAgentSchema,
-  createProjectTool,
-  createProjectSchema,
   dispatch,
   dispatchSchema,
   listLiveAgents,
@@ -112,20 +110,6 @@ export function buildServer(): McpServer {
       inputSchema: {},
     },
     async () => toolResult(await consolidateMemory()),
-  );
-
-  server.registerTool(
-    'create_project',
-    {
-      title: 'Create project',
-      description:
-        'Create a new project by name (natural language: "create project X" / "建项目 X"). ' +
-        'Auto-slugifies the name, creates the in-memory store entry, and scaffolds the ' +
-        'boss-memory scope so context is available in future turns. ' +
-        'Returns { id, name, slug }.',
-      inputSchema: createProjectSchema,
-    },
-    async ({ name, color }) => toolResult(await createProjectTool(name, color)),
   );
 
   return server;

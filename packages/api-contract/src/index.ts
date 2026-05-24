@@ -15,6 +15,7 @@ export * from './entities/recent-event.js';
 export * from './entities/owner-assistant.js';
 export * from './entities/skill.js';
 export * from './entities/project.js';
+export * from './entities/todo.js';
 
 export * from './endpoints/members.js';
 export * from './endpoints/chat.js';

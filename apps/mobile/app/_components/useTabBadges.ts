@@ -26,15 +26,17 @@ export function useTabBadges(): TabBadges {
         // M-L-066 — `/api/v1/jobs` is shared with TodayStrip via the dedupe
         // cache so the strip's 15s poll and this 30s poll coalesce when they
         // land in the same TTL window.
-        const [missionsRes, jobsRes] = await Promise.all([
-          deskFetch<{ items?: MissionLike[] }>('/api/v1/missions?state=queued'),
+        // /inbound badge now reads /api/v1/todos (pending count) — the old
+        // /api/v1/missions endpoint doesn't exist on the CLI desktop BFF.
+        const [todosRes, jobsRes] = await Promise.all([
+          deskFetch<{ items?: MissionLike[] }>('/api/v1/todos'),
           deskFetch<{ items?: JobLike[] }>('/api/v1/jobs'),
         ]);
         if (cancelled) return;
-        const missions = missionsRes.ok ? (missionsRes.data ?? { items: [] }) : { items: [] };
+        const todos = todosRes.ok ? (todosRes.data ?? { items: [] }) : { items: [] };
         const jobs = jobsRes.ok ? (jobsRes.data ?? { items: [] }) : { items: [] };
         if (cancelled) return;
-        const inbound = (missions.items ?? []).filter((m) => m.state === 'queued').length;
+        const inbound = (todos.items ?? []).filter((m) => m.state === 'pending').length;
         const today = (jobs.items ?? []).filter(
           (j) => j.status === 'queued' || j.status === 'running',
         ).length;

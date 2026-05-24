@@ -100,6 +100,95 @@ else
   npx cap sync android 2>&1 | tail -5 || fail "cap sync android"
 fi
 
+# ---------- 2.5/6 · patch AndroidManifest.xml (CAMERA + RECORD_AUDIO) ----------
+# Idempotent: each permission is inserted only if not already present.
+# Insert right before the first <application line so the XML remains valid.
+MANIFEST="$APP_DIR/android/app/src/main/AndroidManifest.xml"
+[ -f "$MANIFEST" ] || fail "AndroidManifest.xml not found at $MANIFEST (cap add/sync must have failed)"
+
+log "2.5/6 patching AndroidManifest.xml — camera + audio permissions"
+
+patch_manifest_line() {
+  local line="$1"
+  if ! grep -qF "$line" "$MANIFEST"; then
+    # Insert the line immediately before the first <application line.
+    sed -i "/<application/i\\    $line" "$MANIFEST"
+    log "  inserted: $line"
+  else
+    log "  already present: $line"
+  fi
+}
+
+patch_manifest_line '<uses-permission android:name="android.permission.CAMERA" />'
+patch_manifest_line '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
+# Capacitor's WebChromeClient.onPermissionRequest grants WebView AUDIO_CAPTURE
+# (getUserMedia audio) only when BOTH RECORD_AUDIO and MODIFY_AUDIO_SETTINGS are
+# held. Without this, mic is granted at the OS level but getUserMedia still throws
+# NotAllowedError. Required for the 微作 voice-input button.
+patch_manifest_line '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
+patch_manifest_line '<uses-feature android:name="android.hardware.camera" android:required="false" />'
+
+# Patch android:usesCleartextTraffic="true" into the <application> tag so
+# CapacitorHttp native requests to http:// (LAN desk) are not blocked by
+# Android's cleartext-traffic policy. Idempotent: only adds if not present.
+log "2.5/6 patching AndroidManifest.xml — usesCleartextTraffic"
+if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
+  # Capacitor scaffolds the tag as `<application` alone on its own (indented)
+  # line with attributes on the following lines. Insert the attribute right
+  # after `<application` on that line. SINGLE substitution only — a second
+  # cascading `s/<application /.../` would re-match the space this one adds and
+  # duplicate the attribute (invalid XML → manifest-merge build failure).
+  sed -i -E 's/^([[:space:]]*)<application[[:space:]]*$/\1<application android:usesCleartextTraffic="true"/' "$MANIFEST"
+  grep -q 'usesCleartextTraffic' "$MANIFEST" \
+    || fail "usesCleartextTraffic patch did not take — check sed invocation"
+  log "  inserted: android:usesCleartextTraffic=\"true\""
+else
+  log "  already present: android:usesCleartextTraffic"
+fi
+
+# Patch android:windowSoftInputMode="adjustResize" on the MainActivity <activity>
+# tag so the Android WebView (and thus the visual viewport) shrinks when the
+# soft keyboard opens. Without this the keyboard overlays the chat composer and
+# env(keyboard-inset-height) / visualViewport.height stay wrong.
+# Idempotent: only patches if windowSoftInputMode is not already set.
+log "2.5/6 patching AndroidManifest.xml — windowSoftInputMode=adjustResize"
+if ! grep -q 'windowSoftInputMode' "$MANIFEST"; then
+  # Capacitor scaffolds a single <activity line for MainActivity; insert the
+  # attribute on that same line. The sed pattern anchors to the activity element
+  # that contains android:name= to avoid matching other <activity> tags.
+  sed -i 's/\(<activity[^>]*android:name="[^"]*MainActivity[^"]*"\)/\1\n            android:windowSoftInputMode="adjustResize"/' "$MANIFEST" \
+    || fail "windowSoftInputMode sed failed"
+  grep -q 'windowSoftInputMode' "$MANIFEST" \
+    || fail "windowSoftInputMode patch did not take — check sed invocation"
+  log "  inserted: android:windowSoftInputMode=\"adjustResize\""
+else
+  log "  already present: android:windowSoftInputMode"
+fi
+
+# Hard verification — build must not proceed without the permission.
+grep -q 'android.permission.CAMERA' "$MANIFEST" \
+  || fail "CAMERA permission still absent in $MANIFEST after patching — check sed invocation"
+log "  manifest verified: CAMERA present"
+
+# ---------- 2.6/6 · bump Gradle wrapper to 8.9 (JDK-21 / BouncyCastle 1.79 compat) ----------
+# Capacitor scaffolds gradle-8.2.1 which fails with "Unsupported class file major
+# version 65" when BouncyCastle 1.79 (pulled by the TTS plugin) is on the classpath
+# under JDK 21. Gradle 8.9 resolves this. Patch is idempotent: only rewrite if the
+# version is not already 8.9.
+GRADLE_WRAPPER="$APP_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+[ -f "$GRADLE_WRAPPER" ] || fail "gradle-wrapper.properties not found at $GRADLE_WRAPPER"
+
+if grep -q 'gradle-8\.9-' "$GRADLE_WRAPPER"; then
+  log "2.6/6 Gradle wrapper already at 8.9 — no change needed"
+else
+  log "2.6/6 bumping Gradle wrapper to 8.9"
+  sed -i 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-all.zip|' \
+    "$GRADLE_WRAPPER"
+  grep -q 'gradle-8\.9-' "$GRADLE_WRAPPER" \
+    || fail "Gradle wrapper bump to 8.9 did not take — check sed invocation"
+  log "  gradle-wrapper.properties distributionUrl → gradle-8.9-all.zip"
+fi
+
 # ---------- 3/6 · assets (icon + splash from resources/) ----------
 if [ -f "$APP_DIR/resources/icon.svg" ]; then
   log "3/6 @capacitor/assets generate (icon + splash from resources/)"

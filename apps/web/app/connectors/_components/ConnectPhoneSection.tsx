@@ -1,142 +1,180 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-interface PairStartResponse {
+interface PendingRequest {
+  requestId: string;
   code: string;
+  deviceName: string;
+  createdAt: string;
   expires_at: string;
-  lan_url: string;
-  qr_payload: string;
-  lan_candidates?: string[];
 }
 
-/**
- * Inner content for the "Connect Phone" card on /connectors.
- * The surrounding card/eyebrow/title shell is provided by the parent page;
- * this component renders only the pairing UI fields.
- */
-export function ConnectPhoneSection(): React.ReactElement {
-  const [pairing, setPairing] = useState<PairStartResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+interface PendingResponse {
+  pending: PendingRequest[];
+}
 
-  async function startPairing(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      const resp = await fetch('/api/v1/pair/start', { method: 'POST' });
-      const data = await resp.json() as PairStartResponse | { error?: string; code?: string };
-      if (!resp.ok) {
-        const err = data as { error?: string; code?: string };
-        throw new Error(`${err.code ?? 'pair_start_failed'}: ${err.error ?? resp.status}`);
-      }
-      setPairing(data as PairStartResponse);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
+const POLL_INTERVAL_MS = 2000;
+
+export function ConnectPhoneSection() {
+  const [requests, setRequests] = useState<PendingRequest[]>([]);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [polling, setPolling] = useState(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopPolling() {
+    setPolling(false);
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
   }
 
-  const qrSrc = pairing
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(pairing.qr_payload)}`
-    : null;
-  const alternativeLanCandidates = pairing?.lan_candidates?.filter((ip) => !pairing.lan_url.includes(`//${ip}:`)) ?? [];
+  function startPolling() {
+    setPollError(null);
+    setPolling(true);
+  }
+
+  async function pollPending() {
+    try {
+      const res = await fetch('/api/v1/pair/pending', { cache: 'no-store' });
+      if (!res.ok) {
+        if (res.status === 403) {
+          // Not on loopback — stop polling, show message.
+          stopPolling();
+          setPollError(
+            'Phone pairing requires opening the desk at localhost (e.g. http://localhost:3000). ' +
+            'Remote access to this page cannot display pairing codes.',
+          );
+          return;
+        }
+        setPollError(`Polling failed: HTTP ${res.status}`);
+        return;
+      }
+      const data = await res.json() as PendingResponse;
+      const list = Array.isArray(data.pending) ? data.pending : [];
+      // Filter out expired on the client side (belt-and-suspenders)
+      const now = Date.now();
+      const live = list.filter((r) => new Date(r.expires_at).getTime() > now);
+      setRequests(live);
+      setPollError(null);
+    } catch (err: unknown) {
+      setPollError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  useEffect(() => {
+    if (!polling) return;
+    void pollPending();
+    intervalRef.current = setInterval(() => { void pollPending(); }, POLL_INTERVAL_MS);
+    return () => {
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [polling]);
+
+  function formatCode(code: string): string {
+    // Display 4-digit code with spaces for readability: "1 2 3 4"
+    return code.split('').join(' ');
+  }
 
   return (
-    <div className="conn-field">
-      <div className="conn-actions">
-        <button type="button" className="btn btn-primary" onClick={() => { void startPairing(); }} disabled={busy}>
-          {busy ? 'Starting…' : 'Start pairing'}
-        </button>
+    <section className="card conn-card">
+      <div className="conn-card-head">
+        <p className="conn-eyebrow">Mobile</p>
+        <h2 className="conn-card-title">Waiting for phone</h2>
+        <p className="conn-card-hint">
+          On your phone (微作), tap <strong>请求连接</strong>. A 4-digit code will appear here.
+          Read it off the screen and type it into the phone to complete pairing.
+          The code expires in 2 minutes.
+        </p>
       </div>
 
-      {error && (
-        <div role="alert" className="conn-error" style={{ marginTop: 12 }}>
-          {error}
+      {pollError && !polling && (
+        <div className="conn-note" style={{ borderColor: 'var(--red, #e0533a)' }}>
+          <span className="conn-note-icon" aria-hidden>●</span>
+          <span>{pollError}</span>
         </div>
       )}
 
-      {pairing && (
-        <div style={{
-          marginTop: 16,
-          display: 'grid',
-          gridTemplateColumns: '180px minmax(0, 1fr)',
-          gap: 16,
-          alignItems: 'start',
-        }}>
-          {qrSrc && (
-            // External QR rendering keeps this pass dependency-free; the BFF pair flow is local.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={qrSrc}
-              alt="Pairing QR code"
-              width={180}
-              height={180}
-              style={{ border: '1px solid var(--line)', borderRadius: 8, background: '#fff' }}
-            />
-          )}
-          <div style={{ minWidth: 0 }}>
-            <div style={{
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: 32,
-              fontWeight: 700,
-              letterSpacing: 0,
-              lineHeight: 1,
-              marginBottom: 8,
-            }}>
-              {pairing.code}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--ink-mute)', lineHeight: 1.5 }}>
-              Expires at {new Date(pairing.expires_at).toLocaleTimeString()}.
-            </div>
-            <code style={{
-              display: 'block',
-              marginTop: 8,
-              padding: 8,
-              borderRadius: 6,
-              background: 'var(--bg-alt, #f7f7f5)',
-              color: 'var(--ink-mute)',
-              fontSize: 11,
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'anywhere',
-            }}>
-              {pairing.lan_url}
-            </code>
-            {alternativeLanCandidates.length > 0 && (
-              <div style={{
-                marginTop: 10,
-                fontSize: 12,
-                color: 'var(--ink-mute)',
-                lineHeight: 1.5,
-              }}>
-                <div>If your phone cannot reach this, try:</div>
-                <div style={{
-                  marginTop: 4,
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                }}>
-                  {alternativeLanCandidates.map((ip) => (
-                    <code
-                      key={ip}
-                      style={{
-                        padding: '3px 6px',
-                        borderRadius: 6,
-                        background: 'var(--bg-alt, #f7f7f5)',
-                        color: 'var(--ink-mute)',
-                        fontSize: 11,
-                      }}
-                    >
-                      {ip}
-                    </code>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+      {pollError && polling && (
+        <p className="conn-status" style={{ color: 'var(--ink-mute)' }}>
+          Poll error: {pollError}
+        </p>
+      )}
+
+      {!pollError && polling && requests.length === 0 && (
+        <div className="conn-field">
+          <p style={{ fontSize: 13, color: 'var(--ink-mute)', margin: 0 }}>
+            Waiting for a phone to request pairing…
+          </p>
         </div>
       )}
-    </div>
+
+      {requests.map((req) => {
+        const expiresMs = new Date(req.expires_at).getTime() - Date.now();
+        const expiresSec = Math.max(0, Math.floor(expiresMs / 1000));
+        return (
+          <div
+            key={req.requestId}
+            className="conn-panel"
+            style={{ marginBottom: 12, padding: '16px 20px' }}
+          >
+            <div className="conn-panel-row" style={{ marginBottom: 8 }}>
+              <span className="conn-panel-name">
+                Phone &ldquo;{req.deviceName}&rdquo; wants to connect
+              </span>
+              <span className="conn-panel-meta">expires in {expiresSec}s</span>
+            </div>
+            <div
+              style={{
+                fontFamily: 'ui-monospace, monospace',
+                fontSize: 40,
+                fontWeight: 700,
+                letterSpacing: '0.2em',
+                color: 'var(--ink)',
+                textAlign: 'center',
+                padding: '12px 0',
+                background: 'var(--surface-raise, rgba(0,0,0,0.04))',
+                borderRadius: 8,
+                margin: '4px 0 8px',
+              }}
+              aria-label={`Pairing code: ${formatCode(req.code)}`}
+            >
+              {formatCode(req.code)}
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--ink-mute)', margin: 0, textAlign: 'center' }}>
+              Enter this code on the phone to pair
+            </p>
+          </div>
+        );
+      })}
+
+      <div className="conn-actions">
+        {polling ? (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={stopPolling}
+          >
+            Stop watching
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={startPolling}
+          >
+            Start watching
+          </button>
+        )}
+        <span className="conn-status" style={{ color: 'var(--ink-mute)' }}>
+          {polling ? 'Polling every 2s…' : 'Paused'}
+        </span>
+      </div>
+    </section>
   );
 }

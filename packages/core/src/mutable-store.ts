@@ -290,6 +290,11 @@ export function markJobFailed(id: string, error: string): Job | null {
   return j;
 }
 
+/** Hard-delete a job from the in-memory store. Returns true if found + deleted. */
+export function deleteJob(id: string): boolean {
+  return S.jobs.delete(id);
+}
+
 /* ── Worker-produced deliverables ─────────────────────────────────── */
 
 export function createDeliverable(input: Deliverable): Deliverable {
@@ -304,6 +309,11 @@ export function listMutableDeliverables(): Deliverable[] {
 
 export function getMutableDeliverable(id: string): Deliverable | null {
   return S.deliverables.get(id) ?? null;
+}
+
+/** Hard-delete a deliverable from the in-memory mutable store. Returns true if found + deleted. */
+export function deleteMutableDeliverable(id: string): boolean {
+  return S.deliverables.delete(id);
 }
 
 /* ── Owner-assistant field overrides (for /me inline edit) ────────── */

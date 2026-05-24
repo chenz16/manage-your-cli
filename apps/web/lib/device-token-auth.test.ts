@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let tmpRoot: string;
 let savedOpenDemo: string | undefined;
+let savedLocalSecret: string | undefined;
 
 beforeEach(() => {
   vi.resetModules();
@@ -15,7 +16,9 @@ beforeEach(() => {
   // silently turn every reject-case below into a pass. Save + clear it so each
   // test asserts the gate's real behavior; restore in afterEach.
   savedOpenDemo = process.env.HOLON_OPEN_DEMO;
+  savedLocalSecret = process.env.HOLON_LOCAL_SHARED_SECRET;
   delete process.env.HOLON_OPEN_DEMO;
+  delete process.env.HOLON_LOCAL_SHARED_SECRET;
 });
 
 afterEach(async () => {
@@ -24,6 +27,8 @@ afterEach(async () => {
   delete process.env.HOLON_DB_PATH;
   if (savedOpenDemo === undefined) delete process.env.HOLON_OPEN_DEMO;
   else process.env.HOLON_OPEN_DEMO = savedOpenDemo;
+  if (savedLocalSecret === undefined) delete process.env.HOLON_LOCAL_SHARED_SECRET;
+  else process.env.HOLON_LOCAL_SHARED_SECRET = savedLocalSecret;
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
@@ -69,6 +74,21 @@ describe('device token auth', () => {
       headers: { host: '192.168.1.20:3000', 'x-holon-device-token': claimed.device_token },
     }));
     expect(valid).toEqual({ ok: true, mode: 'device_token' });
+  });
+
+  it('accepts the local shared secret for trusted internal remote callers', async () => {
+    process.env.HOLON_LOCAL_SHARED_SECRET = 'local-secret-for-tests';
+    const auth = await import('./device-token-auth');
+
+    const missing = auth.requireDeviceTokenForRemote(new Request('http://192.168.1.20:3000/api/v1/deliverables', {
+      headers: { host: '192.168.1.20:3000' },
+    }));
+    expect(missing).toEqual({ ok: false, status: 401, code: 'missing_device_token' });
+
+    const valid = auth.requireDeviceTokenForRemote(new Request('http://192.168.1.20:3000/api/v1/deliverables', {
+      headers: { host: '192.168.1.20:3000', 'x-holon-local-secret': 'local-secret-for-tests' },
+    }));
+    expect(valid).toEqual({ ok: true, mode: 'local_secret' });
   });
 
   it('HOLON_OPEN_DEMO=1 opens the gate for an otherwise-rejected remote request (escape hatch)', async () => {

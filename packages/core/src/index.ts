@@ -8,6 +8,7 @@ export type { Fixtures } from './fixture-store.js';
 export {
   clearMutableStore,
   listJobs,
+  deleteJob,
   type OwnerAssistantPatch,
   type StaffPatch,
 } from './mutable-store.js';
@@ -179,6 +180,7 @@ export {
 export {
   listDeliverables,
   getDeliverable,
+  deleteDeliverable,
   type ListDeliverablesQueryInput,
 } from './deliverables-service.js';
 
@@ -208,9 +210,9 @@ export {
   type BugStatus,
 } from './bug-watcher.js';
 
-// Phase 1 — todos service (project_id filter support)
+// Phase 1 — WorkQueueItem todos service (fixture-backed, project_id filter)
 export {
-  listTodos,
+  listTodos as listWorkQueueTodos,
   type ListTodosInput,
 } from './todos-service.js';
 
@@ -226,3 +228,19 @@ export {
   type CreateProjectInput,
   type UpdateProjectInput,
 } from './project-store.js';
+
+// Boss backlog — 待分配 todo store (SQLite-backed, mutable)
+export {
+  listTodos,
+  addTodo,
+  updateTodo,
+  deleteTodo,
+  _resetTodoStoreForTest,
+} from './todo-store.js';
+
+// Claude token-usage stats (local log parser)
+export {
+  readClaudeUsage,
+  readClaudeUsageByAgent,
+  type ClaudeUsage,
+} from './usage-stats.js';

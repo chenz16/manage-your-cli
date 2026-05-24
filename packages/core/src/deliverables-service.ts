@@ -18,7 +18,7 @@ import {
 } from '@holon/api-contract';
 import { z } from 'zod';
 import { loadFixtures } from './fixture-store.js';
-import { listMutableDeliverables, getMutableDeliverable } from './mutable-store.js';
+import { listMutableDeliverables, getMutableDeliverable, deleteMutableDeliverable } from './mutable-store.js';
 
 /** Phase 1: extended query type with optional project_id filter. */
 export type ListDeliverablesQueryInput = z.input<typeof ListDeliverablesQuerySchema> & {
@@ -55,4 +55,13 @@ export function getDeliverable(id: string): GetDeliverableResponse | null {
   const d = fx.deliverables.find((x) => x.id === id);
   if (!d) return null;
   return GetDeliverableResponseSchema.parse({ deliverable: d });
+}
+
+/**
+ * Hard-delete a deliverable. Mutable-store entries are deleted directly.
+ * Fixture entries cannot be removed from disk at runtime, so this only
+ * operates on the mutable layer; fixture-backed deliverables return false.
+ */
+export function deleteDeliverable(id: string): boolean {
+  return deleteMutableDeliverable(id);
 }

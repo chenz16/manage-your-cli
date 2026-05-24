@@ -13,15 +13,15 @@
  * Upstream fail: 502 { error: "upstream_error", message: string }
  * Parse fail:    502 { error: "parse_error", message: string }
  *
- * Auth: loopback-guarded (same posture as /api/v1/audit/emit). The transcript
- * endpoint may use an owner-configured voice key but never exposes it. The
+ * Auth: loopback/local-secret/device-token gated, with same-origin desktop UI
+ * allowed. The transcript endpoint may use owner-configured voice engines but never exposes keys. The
  * service resolves it internally and discards it after the HTTP call. (Engineering Rule #4: classify
  * errors; Rule #8: no plaintext key in response or logs.)
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { transcribeAudio } from '@holon/core';
-import { requireLoopback } from '../../../../../../lib/loopback-guard';
+import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 
 // True when the request is the Holon UI calling its OWN BFF (Origin host ===
 // Host header). Needed for the WSL web build served at https://<wsl-ip>:3443,
@@ -44,15 +44,13 @@ function isSameOriginRequest(req: Request): boolean {
   }
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  // Allow loopback OR a same-origin browser request (the Holon UI calling its
-  // own BFF). Cross-origin / other-LAN-host requests are still rejected.
-  const loop = requireLoopback(req);
-  if (!loop.ok && !isSameOriginRequest(req)) {
-    return NextResponse.json(
-      { error: 'forbidden', message: 'This endpoint requires loopback or same-origin.', reason: loop.reason },
-      { status: 403 },
-    );
+export async function POST(req: NextRequest): Promise<Response> {
+  // Accept loopback/local-secret/device-token via the shared mobile gate.
+  // Same-origin keeps the desktop web chat working when served through the
+  // local HTTPS/LAN proxy; cross-origin phone requests still need a device token.
+  const auth = requireDeviceTokenForRemote(req);
+  if (!auth.ok && !isSameOriginRequest(req)) {
+    return deviceAuthErrorResponse(auth);
   }
 
   // Parse body.

@@ -3,14 +3,12 @@ import {
   bossMemoryRoot,
   captureCliOutput,
   createCliAgentStaff,
-  createProject,
   dispatchMemoryConsolidationTask,
   dispatchCliTask,
   getCliStatus,
   killCliSession,
   launchCliSession,
   listStaffMerged,
-  loadFixtures,
   looksLikeBareShell,
   readBossMemory,
   readBossMemoryLog,
@@ -27,7 +25,6 @@ export const TOOL_NAMES = [
   'read_memory',
   'write_memory',
   'consolidate_memory',
-  'create_project',
 ] as const;
 
 export const dispatchSchema = {
@@ -57,11 +54,6 @@ export const readMemorySchema = {
 export const writeMemorySchema = {
   scope: z.string().min(1).describe('Boss-memory scope such as decisions, roster, or project/foo.'),
   text: z.string().min(1).describe('Memory note to append.'),
-};
-
-export const createProjectSchema = {
-  name: z.string().min(1).describe('Display name for the new project. Auto-slugified for memory scope.'),
-  color: z.string().optional().describe('Optional CSS color string (e.g. "#4f9cf9") for the project pill.'),
 };
 
 interface ToolError {
@@ -208,32 +200,6 @@ export async function writeMemory(scope: string, text: string): Promise<unknown>
 export async function consolidateMemory(): Promise<unknown> {
   try {
     return dispatchMemoryConsolidationTask();
-  } catch (err) {
-    return classifyError(err);
-  }
-}
-
-/**
- * Create a project via natural language ("create project X" / "建项目 X").
- * Delegates to the same core path as POST /api/v1/projects:
- *   createProject() (project-store) + writeBossMemory() (boss-memory scaffold).
- * Returns { id, name, slug } — thin enough for the Secretary to confirm back.
- */
-export async function createProjectTool(name: string, color?: string): Promise<unknown> {
-  try {
-    const fx = loadFixtures();
-    const desk_id = fx.primary_desk_id;
-    const project = createProject({
-      desk_id,
-      name: name.trim(),
-      ...(color ? { color } : {}),
-    });
-    // Mirror the boss-memory scaffold from POST /api/v1/projects.
-    writeBossMemory(`projects/${project.slug}`, `Project: ${project.name}\nCreated: ${project.created_at}\n`);
-    return {
-      ok: true,
-      project: { id: project.id, name: project.name, slug: project.slug, color: project.color },
-    };
   } catch (err) {
     return classifyError(err);
   }

@@ -39,9 +39,11 @@ type Tab = {
 // M-L-047 — trailing-slash hrefs so Capacitor's static-asset server resolves
 // `/chat/` → `/chat/index.html` (trailingSlash:true export). isActive()
 // normalizes both sides so the active-tab signal survives the slash form.
+// Tab 2 is now 今日 → /today/ (boss backlog 待分配 + jobs). /inbound
+// still exists as an alias but is no longer the primary nav entry.
 const TABS: ReadonlyArray<Tab> = [
   { href: '/chat/',    label: '工作台', icon: MessageSquare, iconActive: MessageSquareDot, badgeKey: 'today' },
-  { href: '/inbound/', label: '收件',   icon: Inbox,         badgeKey: 'inbound' },
+  { href: '/today/',   label: '今日',   icon: Inbox,         badgeKey: 'inbound' },
   { href: '/staff/',   label: '成员',   icon: Users,         iconActive: UsersRound },
   { href: '/more/',    label: '更多',   icon: LayoutList },
 ];

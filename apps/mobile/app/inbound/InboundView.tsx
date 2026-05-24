@@ -1,30 +1,20 @@
 'use client';
 
-// M-L-012 — /inbound mobile surface. Read-only V1 view of peer missions
-// awaiting owner approval. Per docs/mobile-architecture-principles.md
-// Principle 1 (thin client): no Accept/Reject here, that's V2 + desk-only.
-// Deep-link CTA to desk /inbound for triage.
+// M-L-012 — /inbound mobile surface. V2: repointed to the boss-backlog
+// /api/v1/todos (status=pending) now that 待分配 supersedes the old missions
+// inbox. The former /api/v1/missions + ListMissionsResponse (never existed on
+// the CLI desktop BFF) are removed; this component is now a thin alias into
+// the same todo store that TodayView leads with.
 
 import { useCallback, useState } from 'react';
-import type { Mission } from '@holon/api-contract';
-
-// ListMissionsResponse is not in api-contract — use an inline type
-type ListMissionsResponse = { items: Mission[] };
+import type { Todo } from '@holon/api-contract';
 import { PullToRefresh } from '../_components/PullToRefresh';
-import { deskOrigin } from '../_lib/desk-origin';
-import { fetchWithTimeout } from '../_lib/fetch-timeout';
+import { holonApiFetch } from '../_lib/mobile-runtime';
 import { useVisiblePoll } from '../_lib/useVisiblePoll';
-
-const DESK_ORIGIN = deskOrigin();
-
-// V1 mobile shows missions still waiting on the owner (queued). Other
-// states (accepted/in_progress/blocked/...) belong on /today or the
-// desk-side inbound view.
-const AWAITING_STATES: ReadonlyArray<Mission['state']> = ['queued'];
 
 type LoadState =
   | { status: 'loading' }
-  | { status: 'ok'; items: Mission[]; fetched_at: string }
+  | { status: 'ok'; items: Todo[]; fetched_at: string }
   | { status: 'error'; message: string };
 
 export function InboundView() {
@@ -32,104 +22,75 @@ export function InboundView() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetchWithTimeout('/api/v1/missions?state=queued');
-      if (!r.ok) throw new Error(`GET /api/v1/missions → ${r.status}`);
-      const body = (await r.json()) as ListMissionsResponse;
-      const items = [...body.items]
-        .filter((m) => AWAITING_STATES.includes(m.state))
-        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+      const r = await holonApiFetch('/api/v1/todos');
+      if (!r.ok) throw new Error(`GET /api/v1/todos → ${r.status}`);
+      const body = (await r.json()) as { items?: Todo[] };
+      const items = (body.items ?? [])
+        .filter((t) => t.status === 'pending')
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
       setState({ status: 'ok', items, fetched_at: new Date().toLocaleTimeString() });
     } catch (e) {
       setState({ status: 'error', message: e instanceof Error ? e.message : String(e) });
     }
   }, []);
 
-  // M-L-025 — auto-poll like /today + /staff. 10s cadence: peer missions
-  // arrive much less frequently than internal jobs, so polling slower is
-  // fine and saves desk-BFF round-trips. M-L-065 — gated on visibility so
-  // the poll pauses while the phone is locked / app backgrounded.
   useVisiblePoll(load, 10000);
 
   return (
     <PullToRefresh onRefresh={load}>
-    <div className="mobile-shell">
-      <header className="mobile-header">
-        <div className="mobile-brand">收件</div>
-        <div className="mobile-subtitle">
-          {state.status === 'ok'
-            ? `${state.items.length} 待主人确认 · 只读 · 桌面端 /inbound 处理`
-            : state.status === 'loading' ? 'loading…' : 'error'}
-        </div>
-      </header>
-
-      <section className="mobile-section">
-        {state.status === 'loading' && (
-          <div className="m-card"><p className="muted">加载 /api/v1/missions…</p></div>
-        )}
-
-        {state.status === 'error' && (
-          <div className="m-card">
-            <p>读取桌面 BFF 失败</p>
-            <p className="muted">{state.message}</p>
-            <button type="button" className="m-btn" onClick={() => void load()}>重试</button>
+      <div className="mobile-shell">
+        <header className="mobile-header">
+          <div className="mobile-brand">收件</div>
+          <div className="mobile-subtitle">
+            {state.status === 'ok'
+              ? `${state.items.length} 待分配`
+              : state.status === 'loading' ? 'loading…' : 'error'}
           </div>
-        )}
+        </header>
 
-        {state.status === 'ok' && state.items.length === 0 && (
-          // M-L-009 work-tool empty-state pattern: explain trigger + one
-          // concrete next-action chip that deep-links to the desk surface.
-          <div className="m-card m-empty-card">
-            <div className="m-empty-title">暂无收件请求</div>
-            <p className="m-empty-hint">
-              V1 期间这里展示其他 desk 经主人确认后接收的工作 · V2 解锁同伴协作
-            </p>
-            <a
-              className="m-empty-chip"
-              href={`${DESK_ORIGIN}/inbound`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span>在桌面端查看 /inbound</span>
-              <span className="m-chev">›</span>
-            </a>
-          </div>
-        )}
+        <section className="mobile-section">
+          {state.status === 'loading' && (
+            <div className="m-card"><p className="muted">加载待分配…</p></div>
+          )}
 
-        {state.status === 'ok' && state.items.length > 0 && (
-          <>
-            <div className="m-list">
-              {state.items.map((m) => <InboundCard key={m.id} m={m} />)}
+          {state.status === 'error' && (
+            <div className="m-card">
+              <p>读取失败</p>
+              <p className="muted">{state.message}</p>
+              <button type="button" className="m-btn" onClick={() => void load()}>重试</button>
             </div>
-            <a
-              className="m-empty-chip m-inbound-cta"
-              href={`${DESK_ORIGIN}/inbound`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span>在桌面端查看 /inbound · 接受 / 拒绝</span>
-              <span className="m-chev">›</span>
-            </a>
-            <div className="muted m-card-footnote">Last polled {state.fetched_at}</div>
-          </>
-        )}
-      </section>
-    </div>
-    </PullToRefresh>
-  );
-}
+          )}
 
-function InboundCard({ m }: { m: Mission }) {
-  const ts = m.created_at ? m.created_at.slice(0, 10) : '';
-  return (
-    <article className="m-card m-inbound-card" data-mission-id={m.id}>
-      <div className="m-inbound-top">
-        <span className="m-inbound-state">待确认</span>
-        <span className="m-inbound-form">{m.form}</span>
-        <span className="m-deliv-grow" />
-        {ts && <span className="m-deliv-ts">{ts}</span>}
+          {state.status === 'ok' && state.items.length === 0 && (
+            <div className="m-card m-empty-card">
+              <div className="m-empty-title">暂无待分配的活</div>
+              <p className="m-empty-hint">在"今日"标签里添加要派的活</p>
+              <a className="m-empty-chip" href="/today/">
+                <span>去今日</span>
+                <span className="m-chev">›</span>
+              </a>
+            </div>
+          )}
+
+          {state.status === 'ok' && state.items.length > 0 && (
+            <>
+              <div className="m-list">
+                {state.items.map((t) => (
+                  <article key={t.id} className="m-card m-inbound-card">
+                    <div className="m-inbound-top">
+                      <span className="m-inbound-state">待分配</span>
+                      <span className="m-deliv-grow" />
+                      <span className="m-deliv-ts">{t.created_at.slice(0, 10)}</span>
+                    </div>
+                    <div className="m-card-title">{t.text}</div>
+                  </article>
+                ))}
+              </div>
+              <div className="muted m-card-footnote">Last polled {state.fetched_at}</div>
+            </>
+          )}
+        </section>
       </div>
-      <div className="m-card-title">{m.title}</div>
-      <div className="m-card-sub">来自 {m.sender_display_name}</div>
-    </article>
+    </PullToRefresh>
   );
 }

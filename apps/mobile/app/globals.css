@@ -150,6 +150,16 @@ button, input, textarea, select { font: inherit; }
   padding-bottom: 0;
 }
 
+/* M-L-FIX2: WeChat 4-tab shell owns all scrolling internally (.mobile-tab-content
+   is the scroll container). The outer .main must NOT scroll — if it does, Android
+   WebView can move the position:fixed bottom nav with the page, making the tab bar
+   appear to scroll instead of staying pinned. Lock .main to its flex-allocated
+   height and remove its own scroll + bottom-padding. */
+.main:has(.mobile-wechat-shell) {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
 .bottom-tabs {
   position: absolute;
   right: 0;
@@ -824,3 +834,1298 @@ button, input, textarea, select { font: inherit; }
   .t-strip-dot-running { animation: none; }
 }
 
+/* ─── Weizo 微作 — WeChat 4-tab shell (ported from holon-engineering mobile/android) ─ */
+
+.mobile-app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mobile-static-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-wechat-shell {
+  --mobile-nav-height: 64px;
+  --mobile-keyboard-inset: env(keyboard-inset-height, 0px);
+  color: var(--ink);
+  background: #ededed;
+  /* M-L-FIX2: fill the height allocated by the parent flex container and prevent
+     any overflow from escaping (which would cause the viewport/body to scroll and
+     drag the position:fixed tab bar on Android WebView). */
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mobile-static-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) 14px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  position: relative;
+}
+
+.mobile-static-title {
+  margin: 2px 0 0;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.mobile-wechat-header {
+  min-height: 52px;
+  padding: max(10px, env(safe-area-inset-top)) 14px 10px;
+  justify-content: center;
+  background: #f7f7f7;
+}
+
+.mobile-wechat-header .mobile-static-title {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.mobile-connection-banner {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-bottom: 1px solid #e0b4b4;
+  background: #fff2f2;
+  color: #a12f2f;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+.mobile-connection-banner:disabled { color: #b86b6b; }
+
+/* Not-paired banner: amber tint, flex row, action link on the right */
+.mobile-not-paired-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  background: #fffbeb;
+  border-bottom-color: #e6c96b;
+  color: #7a5a00;
+}
+.mobile-not-paired-action {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--gold-ink);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mobile-header-left,
+.mobile-header-right {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  width: 92px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.mobile-header-left { left: 10px; justify-content: flex-start; }
+.mobile-header-right { right: 10px; justify-content: flex-end; }
+
+.mobile-back-button,
+.mobile-back-row {
+  border: 0;
+  background: transparent;
+  color: #1f7a44;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 4px;
+}
+
+/* Tab content area */
+.mobile-tab-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  background: #ededed;
+}
+.mobile-tab-content-chat {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+/* Chat panel */
+.mobile-chat-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #ededed;
+  height: 100%;
+}
+
+/* Recipient switcher */
+.mobile-recipient-switcher {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 45;
+  padding: 8px 10px;
+  border-bottom: 1px solid #dedede;
+  background: #f7f7f7;
+}
+.mobile-recipient-button {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #e1e1e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  padding: 6px 10px;
+  font: inherit;
+  text-align: left;
+}
+.mobile-recipient-button:active,
+.mobile-recipient-option:active { background: #f4f4f4; }
+.mobile-recipient-avatar {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  background: #e8f3ec; color: #1f7a44;
+  font-size: 15px; font-weight: 700;
+}
+.mobile-recipient-avatar-owner { background: #2e7d52; color: #fff; }
+.mobile-recipient-text {
+  min-width: 0; flex: 1 1 auto;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.mobile-recipient-name {
+  color: #111; font-size: 14px; font-weight: 650; line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-recipient-role {
+  color: #777; font-size: 11.5px; line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-recipient-caret { flex: 0 0 auto; color: #777; font-size: 16px; line-height: 1; }
+.mobile-recipient-menu {
+  position: absolute; left: 10px; right: 10px; top: calc(100% - 6px);
+  max-height: min(320px, 52vh); overflow-y: auto;
+  border: 1px solid #dedede; border-radius: 8px;
+  background: #fff; box-shadow: 0 12px 30px rgba(0,0,0,.13);
+  z-index: 50;
+}
+.mobile-recipient-option {
+  width: 100%; min-height: 48px;
+  display: flex; align-items: center; gap: 9px;
+  border: 0; border-bottom: 1px solid #f0f0f0;
+  background: #fff; color: var(--ink);
+  padding: 8px 10px; font: inherit; text-align: left;
+}
+.mobile-recipient-option[aria-selected="true"] { background: #eef7f1; }
+
+.mobile-chat-error {
+  flex: 0 0 auto; margin: 8px 10px 0;
+}
+
+/* Contacts / staff list */
+.mobile-list {
+  display: flex; flex-direction: column; background: #fff;
+}
+.mobile-row {
+  width: 100%; min-height: 64px;
+  display: flex; align-items: center; gap: 12px;
+  border: 0; border-bottom: 1px solid #ececec;
+  background: #fff; color: var(--ink);
+  padding: 10px 14px; text-align: left; font: inherit;
+}
+.mobile-row:active { background: #f4f4f4; }
+.mobile-avatar {
+  width: 42px; height: 42px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  background: #e8f3ec; color: #1f7a44; font-size: 21px;
+}
+.mobile-avatar-owner {
+  background: #2e7d52; color: #fff; font-size: 17px; font-weight: 700;
+}
+.mobile-row-main {
+  min-width: 0; flex: 1 1 auto;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.mobile-row-title {
+  font-size: 15.5px; font-weight: 600; color: #111;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-row-sub {
+  font-size: 12.5px; line-height: 1.35; color: #777;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-row-action { flex: 0 0 auto; color: #8a8a8a; font-size: 12px; }
+
+/* Bottom nav */
+.mobile-bottom-nav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid #d8d8d8;
+  background: #f7f7f7;
+  z-index: 40;
+}
+.mobile-tab-button {
+  border: 0; background: transparent; color: #777;
+  font: inherit; font-size: 11px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px;
+}
+.mobile-tab-button.is-active { color: #1f7a44; }
+.mobile-tab-icon { font-size: 21px; line-height: 1; }
+.mobile-tab-icon-wrap {
+  position: relative;
+  display: inline-flex; width: 28px; height: 24px;
+  align-items: center; justify-content: center;
+}
+.mobile-tab-badge {
+  position: absolute; top: -5px; right: -9px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border: 1px solid #f7f7f7; border-radius: 999px;
+  background: #e33a32; color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 14px; text-align: center;
+}
+
+/* Chat thread + composer (WeChat-shell overrides) */
+.mobile-chat-thread,
+.mobile-staff-chat {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  background: #ededed;
+}
+/* M-L-KBD1: .mobile-chat-viewport is the message list scroll container.
+   overflow-y:auto is required so scrollTop manipulation works.
+   Bottom padding accounts for nav-height + SAI so messages don't hide
+   under the composer/nav when at-rest (keyboard closed). */
+.mobile-chat-viewport,
+.mobile-staff-chat-scroll {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px calc(16px + var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  background: #ededed;
+  /* Ensure smooth momentum scroll on iOS WebView */
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-staff-chat-scroll {
+  display: flex; flex-direction: column; gap: 12px;
+}
+/* M-L-KBD1: composer sits directly above the bottom nav.
+   With interactiveWidget=resizes-content the viewport shrinks when the
+   keyboard opens, so env(keyboard-inset-height) is 0 in that mode.
+   We keep the var for environments where resizes-content is not
+   supported (older iOS). The bottom margin places composer above the
+   fixed bottom nav regardless of keyboard state. */
+.mobile-chat-composer {
+  flex: 0 0 auto;
+  padding: 8px 10px max(8px, calc(env(safe-area-inset-bottom, 0px) + var(--mobile-keyboard-inset)));
+  background: #f7f7f7;
+  margin-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+}
+.mobile-chat-composer .chat-input {
+  border-radius: 6px; border-color: transparent;
+  min-height: 36px; background: #fff;
+}
+.mobile-chat-composer .chat-send {
+  width: 36px; height: 36px; background: #1f7a44;
+}
+.mobile-voice-control,
+.mobile-tts {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.mobile-voice-button,
+.mobile-tts-button {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #202124;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  font-size: 16px;
+  touch-action: none;
+}
+.mobile-voice-button.is-recording {
+  background: #e33a32;
+  border-color: #e33a32;
+  color: #fff;
+}
+.mobile-tts-button {
+  width: 28px; height: 28px;
+  font-size: 13px;
+  margin-left: 6px;
+  align-self: flex-end;
+}
+.mobile-tts-button.is-playing {
+  background: #1f7a44;
+  border-color: #1f7a44;
+  color: #fff;
+}
+.mobile-voice-hint,
+.mobile-tts-hint {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  max-width: 210px;
+  width: max-content;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(32, 33, 36, 0.92);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+.mobile-tts-hint {
+  left: auto;
+  right: 0;
+}
+.mobile-mention-menu {
+  position: absolute; left: 10px; right: 10px;
+  bottom: calc(54px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset));
+  margin-bottom: 0; border-radius: 8px; z-index: 50;
+}
+
+/* Empty / error panels */
+.mobile-empty-panel,
+.mobile-error {
+  margin: 12px; padding: 14px;
+  border-radius: 8px; background: #fff;
+  color: #777; font-size: 13px;
+}
+.mobile-error { color: #9a2f2f; background: #fff4f4; }
+
+/* Staff profile */
+.mobile-staff-profile {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+}
+.mobile-staff-profile-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "avatar name" "avatar role";
+  column-gap: 12px; row-gap: 3px;
+  align-items: center;
+  padding: 14px; border-radius: 8px; background: #fff;
+}
+.mobile-staff-profile-avatar { grid-area: avatar; width: 48px; height: 48px; }
+.mobile-staff-profile-name {
+  grid-area: name; min-width: 0; color: #111;
+  font-size: 18px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-staff-profile-role {
+  grid-area: role; min-width: 0; color: #777; font-size: 13px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-config-list {
+  margin: 0; border-radius: 8px; overflow: hidden; background: #fff;
+}
+.mobile-config-list div {
+  display: grid; grid-template-columns: 98px 1fr; gap: 12px;
+  padding: 12px 14px; border-bottom: 1px solid #ececec;
+}
+.mobile-config-list div:last-child { border-bottom: 0; }
+.mobile-config-list dt { color: #777; font-size: 13px; }
+.mobile-config-list dd { min-width: 0; margin: 0; color: #111; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.mobile-config-block { white-space: pre-wrap; }
+.mobile-primary-action {
+  width: 100%; height: 44px; border: 0; border-radius: 8px;
+  background: #1f7a44; color: #fff; font: inherit; font-weight: 700;
+}
+
+/* 看板 / work tracker */
+.mobile-work {
+  display: flex; flex-direction: column; gap: 0; padding: 0 0 14px;
+}
+.mobile-work-section { background: #fff; }
+
+/* 看板 segmented sub-tabs */
+.weizo-board-tabs {
+  display: flex; flex-direction: row;
+  background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
+  padding: 0;
+}
+.weizo-board-tab {
+  flex: 1; height: 40px;
+  border: 0; background: transparent;
+  font: inherit; font-size: 14px; font-weight: 500;
+  color: #666; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.weizo-board-tab.is-active {
+  color: #1f7a44; font-weight: 700;
+  border-bottom: 2px solid #1f7a44;
+  background: #fff;
+}
+.mobile-section-heading {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 12px 14px 8px; border-bottom: 1px solid #ececec;
+}
+.mobile-section-heading h2 { margin: 0; font-size: 16px; line-height: 1.25; }
+.mobile-section-heading span { color: #777; font-size: 12px; }
+.mobile-job-list { display: flex; flex-direction: column; }
+.mobile-job-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "status title" ". sub";
+  column-gap: 10px; row-gap: 4px;
+  padding: 12px 14px; border-bottom: 1px solid #ececec;
+}
+.mobile-job-status {
+  grid-area: status; align-self: start;
+  min-width: 52px; padding: 2px 6px; border-radius: 4px;
+  background: #edf6f0; color: #1f7a44; font-size: 11px; text-align: center;
+}
+.mobile-job-status-queued   { background: #f1f1f1; color: #686868; }
+.mobile-job-status-running  { background: #edf6f0; color: #1f7a44; }
+.mobile-job-status-completed{ background: #eef3fb; color: #315f9a; }
+.mobile-job-status-failed   { background: #fff4f4; color: #9a2f2f; }
+.mobile-job-title {
+  grid-area: title; min-width: 0; color: #111;
+  font-size: 14px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-job-sub { grid-area: sub; color: #777; font-size: 12px; line-height: 1.35; }
+
+/* 待分配 lead section (Weizo boss backlog) */
+.weizo-kanban-lead { border-left: 4px solid #1f7a44; }
+.weizo-todo-compose {
+  display: flex; gap: 8px; padding: 10px 14px;
+  border-bottom: 1px solid #ececec;
+}
+.weizo-todo-input {
+  flex: 1; min-height: 36px; padding: 6px 10px;
+  border: 1px solid #e1e1e1; border-radius: 6px;
+  background: #fff; font: inherit; font-size: 14px; color: #111;
+}
+.weizo-todo-input:focus { outline: none; border-color: #1f7a44; }
+.weizo-todo-add {
+  min-width: 40px; height: 36px; border: 0; border-radius: 6px;
+  background: #1f7a44; color: #fff; font: inherit; font-size: 13px; font-weight: 700;
+}
+.weizo-todo-add:disabled { opacity: 0.5; }
+.weizo-todo-row { grid-template-areas: "status title" ". sub"; }
+.weizo-todo-status { min-width: 52px; background: #f1f1f1; color: #686868; }
+.weizo-todo-actions {
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.weizo-todo-action {
+  border: 1px solid #dedede; border-radius: 4px;
+  background: #fff; color: #1f7a44;
+  font: inherit; font-size: 11px; padding: 2px 7px; cursor: pointer;
+}
+.weizo-todo-action:active { background: #edf6f0; }
+.weizo-todo-del { color: #9a2f2f; border-color: #f0d0d0; }
+.weizo-todo-del:active { background: #fff4f4; }
+.weizo-priority-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 22px; padding: 0 6px;
+  border-radius: 4px; border: none;
+  color: #fff; font: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; user-select: none; flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+.weizo-priority-tag:active { opacity: 0.75; }
+/* Due date pill + compact date picker */
+.weizo-todo-due {
+  display: inline-flex; align-items: center;
+  font-size: 11px; color: #686868; white-space: nowrap;
+}
+.weizo-todo-datelabel {
+  position: relative; display: inline-flex; align-items: center;
+  overflow: hidden;
+}
+.weizo-todo-dateinput {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; padding: 0; border: none;
+}
+
+/* ─── 看板 v2 — redesigned kanban cards ─────────────────────────────────── */
+
+/* Pulse dot animation for 运行中 status */
+@keyframes weizo-kanban-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.7); }
+}
+
+/* Priority color bar (left edge of todo card) */
+.weizo-kanban-priority-bar {
+  width: 4px;
+  border-radius: 2px 0 0 2px;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+.weizo-kanban-priority-bar-high   { background: #e0533a; }
+.weizo-kanban-priority-bar-medium { background: #d4952a; }
+.weizo-kanban-priority-bar-low    { background: #9a9a9a; }
+
+/* Aging line ⏳已挂N天 */
+.weizo-kanban-aging {
+  font-size: 11px;
+  color: #9a6a3a;
+  white-space: nowrap;
+}
+
+/* Sample badge chip */
+.weizo-kanban-sample-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #f5e9d0;
+  color: #8a6418;
+  border: 1px solid #e6d4a8;
+  flex-shrink: 0;
+}
+
+/* Sample card = slightly muted */
+.weizo-kanban-sample-card {
+  opacity: 0.88;
+}
+
+/* ── Todo card ── */
+.weizo-kanban-todo-card {
+  display: flex;
+  flex-direction: row;
+  border-bottom: 1px solid #ececec;
+  background: #fff;
+  overflow: hidden;
+}
+
+.weizo-kanban-todo-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 13px 10px;
+}
+
+.weizo-kanban-todo-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.weizo-kanban-todo-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weizo-kanban-todo-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.weizo-kanban-todo-actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 2px;
+}
+
+/* Primary action (💬 对话小秘) */
+.weizo-kanban-cta {
+  background: #edf6f0 !important;
+  color: #1f7a44 !important;
+  border-color: #c0ddc8 !important;
+  font-weight: 600 !important;
+}
+
+/* ── In-progress job card ── */
+.weizo-kanban-job-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 13px 10px;
+  border-bottom: 1px solid #ececec;
+  background: #fff;
+}
+
+.weizo-kanban-job-row1 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.weizo-kanban-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #e0e8f8;
+  color: #2a4a8a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.weizo-kanban-job-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #222;
+  flex-shrink: 0;
+}
+
+.weizo-kanban-elapsed {
+  font-size: 11px;
+  color: #777;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.weizo-kanban-job-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weizo-kanban-job-latest {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weizo-kanban-job-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.weizo-kanban-action-btn {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid #dedede;
+  border-radius: 6px;
+  background: #f7f7f7;
+  color: #333;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.weizo-kanban-action-btn:active { background: #eee; }
+.weizo-kanban-action-btn:disabled { opacity: 0.55; cursor: default; }
+
+.weizo-kanban-action-primary {
+  background: #1f7a44;
+  color: #fff;
+  border-color: #1f7a44;
+}
+.weizo-kanban-action-primary:active { background: #176034; }
+.weizo-kanban-action-primary:disabled { background: #7ab899; border-color: #7ab899; }
+
+/* ── Status pills ── */
+.weizo-kanban-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  letter-spacing: 0.1px;
+}
+
+.weizo-kanban-status-running {
+  background: #e0f4e8;
+  color: #1a5e34;
+}
+
+.weizo-kanban-status-queued {
+  background: #f0f0f0;
+  color: #555;
+}
+
+.weizo-kanban-status-stuck {
+  background: #fff0ee;
+  color: #c0392b;
+}
+
+/* Review status pills */
+.weizo-kanban-review-pending {
+  background: #fff6e0;
+  color: #8a6418;
+  border: 1px solid #e6d4a8;
+}
+
+.weizo-kanban-review-seen {
+  background: #f2f2f2;
+  color: #888;
+}
+
+/* Pulsing green dot for 运行中 */
+.weizo-kanban-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2e7d52;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: weizo-kanban-pulse 1.6s ease-in-out infinite;
+}
+
+/* ── Deliverable card ── */
+.weizo-kanban-deliv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 13px 10px;
+  border-bottom: 1px solid #ececec;
+  background: #fff;
+}
+
+.weizo-kanban-deliv-row1 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.weizo-kanban-deliv-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.weizo-kanban-deliv-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weizo-kanban-deliv-meta {
+  font-size: 12px;
+  color: #777;
+  line-height: 1.35;
+}
+
+.weizo-kanban-deliv-excerpt {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Respect prefers-reduced-motion for the pulse dot */
+@media (prefers-reduced-motion: reduce) {
+  .weizo-kanban-pulse-dot { animation: none; }
+}
+
+/* Deliverables (de-emphasized) */
+.weizo-deliverables-section { opacity: 0.82; }
+.mobile-deliverables { display: flex; flex-direction: column; gap: 8px; padding: 0; }
+.mobile-deliverable-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "status title" ". sub";
+  column-gap: 10px; row-gap: 4px;
+  width: 100%; border: 0; border-bottom: 1px solid #ececec;
+  background: #fff; padding: 13px 14px; text-align: left; font: inherit;
+}
+.mobile-deliverable-status {
+  grid-area: status; align-self: start;
+  min-width: 42px; padding: 2px 6px; border-radius: 4px;
+  background: #edf6f0; color: #1f7a44; font-size: 11px; text-align: center;
+}
+.mobile-deliverable-title { grid-area: title; font-size: 15px; font-weight: 600; color: #111; }
+.mobile-deliverable-sub {
+  grid-area: sub; min-width: 0; color: #777; font-size: 12.5px; line-height: 1.35;
+}
+.mobile-deliverable-detail {
+  margin: 0 10px 14px; padding: 16px; border-radius: 8px; background: #fff;
+}
+.mobile-deliverable-detail h2 { margin: 4px 0 14px; font-size: 19px; line-height: 1.25; }
+.mobile-detail-kicker { color: #777; font-size: 12px; }
+.mobile-deliverable-body {
+  font-size: 13.5px; line-height: 1.65; overflow-wrap: anywhere;
+  white-space: pre-wrap; background: none; border: 0; margin: 0; padding: 0;
+  font-family: inherit;
+}
+
+/* 我 — me tab */
+.mobile-me {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+}
+.mobile-me-profile {
+  min-height: 72px; display: flex; align-items: center; gap: 12px;
+  padding: 14px; border-radius: 8px; background: #fff;
+}
+.mobile-me-section {
+  background: #fff; border-radius: 8px; padding: 13px 14px;
+}
+.mobile-me-label { color: #777; font-size: 12px; margin-bottom: 5px; }
+.mobile-me-value { color: #111; font-size: 14px; overflow-wrap: anywhere; }
+.mobile-me-note { margin-top: 8px; color: #777; font-size: 12.5px; line-height: 1.45; }
+
+/* Persona change */
+.mobile-persona-current-card { display: flex; align-items: center; gap: 12px; }
+.mobile-persona-current-copy {
+  min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column;
+}
+.mobile-persona-current-copy .mobile-me-note {
+  margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-persona-change {
+  flex: 0 0 auto; min-height: 34px;
+  border: 1px solid #d8e8dd; border-radius: 999px;
+  background: #edf6f0; color: #1f7a44;
+  padding: 0 14px; font: inherit; font-size: 13px; font-weight: 600;
+}
+.mobile-persona-backdrop { align-items: flex-end; padding: 12px; }
+.mobile-persona-sheet {
+  width: 100%; max-width: 520px;
+  max-height: min(78vh, 620px);
+  border-radius: 14px 14px 10px 10px;
+  padding: 14px; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.mobile-persona-sheet-header { flex: 0 0 auto; margin-bottom: 8px; }
+.mobile-persona-sheet-title { margin: 0; color: #111; font-size: 16px; }
+.mobile-persona-list {
+  display: flex; flex-direction: column; gap: 6px;
+  overflow-y: auto; padding-right: 2px;
+}
+.mobile-persona-button {
+  width: 100%; min-height: 54px;
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid #ececec; border-radius: 8px;
+  background: #fff; color: #111;
+  padding: 8px 10px; text-align: left; font: inherit;
+}
+.mobile-persona-icon { flex: 0 0 auto; width: 24px; text-align: center; }
+.mobile-persona-button.is-active { border-color: #1f7a44; background: #edf6f0; }
+.mobile-persona-button:disabled { opacity: 0.72; }
+.mobile-persona-text {
+  min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px;
+}
+.mobile-persona-text span {
+  font-size: 13.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-persona-text small {
+  color: #777; font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-persona-current { flex: 0 0 auto; color: #1f7a44; font-size: 12px; }
+
+/* Integrations section */
+.mobile-intg-list { display: flex; flex-direction: column; margin-top: 4px; }
+.mobile-intg-row {
+  width: 100%; min-height: 44px;
+  display: flex; align-items: center; gap: 10px;
+  border: 0; border-top: 1px solid #f0f0f0; border-radius: 0;
+  background: transparent; padding: 8px 0; font: inherit; text-align: left;
+  cursor: pointer; color: #111;
+}
+.mobile-intg-row:first-child { border-top: 0; }
+.mobile-intg-row:active { background: #f8f8f8; }
+.mobile-intg-icon { flex: 0 0 auto; width: 24px; text-align: center; font-size: 16px; }
+.mobile-intg-name { flex: 1 1 auto; font-size: 14px; }
+.mobile-intg-pill-wrap { flex: 0 0 auto; }
+.mobile-intg-chevron { flex: 0 0 auto; color: #b0b0b0; font-size: 16px; margin-left: 2px; }
+.mobile-intg-pill {
+  display: inline-block; font-size: 11px; border-radius: 999px;
+  padding: 2px 8px; white-space: nowrap;
+}
+.mobile-intg-pill-connected { background: #edf6f0; color: #1f7a44; }
+.mobile-intg-pill-disconnected { background: #f2f2f2; color: #9a9a9a; }
+.mobile-intg-pill-neutral { background: #f0f4ff; color: #4a6fa8; }
+.mobile-intg-backdrop { align-items: flex-end; padding: 12px; }
+.mobile-intg-sheet {
+  width: 100%; max-width: 520px;
+  border-radius: 14px 14px 10px 10px;
+  padding: 16px;
+}
+.mobile-intg-sheet-title { margin: 0; font-size: 16px; color: #111; }
+.mobile-intg-hint {
+  margin: 12px 0 4px; font-size: 13.5px; color: #555; line-height: 1.5;
+}
+.mobile-intg-field-label { display: block; color: #666; font-size: 12px; margin-bottom: 5px; }
+.mobile-intg-input {
+  width: 100%; min-height: 38px; border: 1px solid #d0d0d0; border-radius: 8px;
+  padding: 0 10px; font: inherit; font-size: 13.5px; color: #111;
+  background: #fafafa; box-sizing: border-box;
+}
+.mobile-intg-input:focus { outline: none; border-color: #1a73e8; background: #fff; }
+.mobile-intg-input:disabled { opacity: 0.6; }
+.mobile-intg-sheet-actions {
+  display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end;
+}
+
+/* CLI usage list — read-only, muted */
+.weizo-clilist { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.weizo-clilist-row {
+  display: flex; align-items: baseline; gap: 6px;
+  color: var(--ink-mute, #999); font-size: 13.5px;
+}
+.weizo-clilist-dot { flex: 0 0 auto; font-size: 10px; color: var(--ink-mute, #999); }
+.weizo-clilist-label { flex: 0 0 auto; color: var(--ink-mute, #888); font-size: 13.5px; }
+.weizo-clilist-tokens { flex: 1 1 auto; color: var(--ink-mute, #aaa); font-size: 12px; }
+.weizo-clilist-note { margin-top: 6px; color: var(--ink-mute, #bbb); font-size: 11px; line-height: 1.4; }
+
+/* Agent bar chart — proportional horizontal bars, read-only/muted */
+.weizo-agentbar-section {
+  display: flex; flex-direction: column; gap: 7px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--line, #e8e8e8);
+}
+.weizo-agentbar-title {
+  font-size: 11px; font-weight: 600; color: var(--ink-3, #9a9a9a);
+  letter-spacing: 0.3px; text-transform: uppercase; margin-bottom: 2px;
+}
+.weizo-agentbar-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.weizo-agentbar-label {
+  flex: 0 0 auto; min-width: 72px; max-width: 120px;
+  font-size: 12px; color: var(--ink-3, #888);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.weizo-agentbar-track {
+  flex: 1 1 auto; height: 8px;
+  background: var(--paper-2, #f0ede4);
+  border-radius: 4px; overflow: hidden;
+}
+.weizo-agentbar-fill {
+  height: 100%;
+  background: var(--ink-4, #c8c4bc);
+  border-radius: 4px;
+  min-width: 4px;
+  transition: width 300ms ease;
+}
+
+/* Feedback + disconnect */
+.mobile-feedback-button {
+  width: 100%; min-height: 48px; border: 0; border-radius: 8px;
+  background: #fff; color: #111; padding: 0 14px; font: inherit; font-size: 15px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.mobile-feedback-backdrop { align-items: flex-end; padding: 12px; }
+.mobile-feedback-modal { max-width: 520px; max-height: min(88vh, 720px); border-radius: 12px; padding: 16px; }
+.mobile-feedback-title { margin: 0; color: #111; font-size: 16px; }
+.mobile-feedback-label { display: block; margin-top: 12px; color: #666; font-size: 12px; }
+.mobile-feedback-textarea { min-height: 132px; font-size: 14px; }
+.mobile-feedback-file { width: 100%; margin-top: 8px; color: #555; font-size: 12px; }
+.mobile-feedback-actions {
+  display: flex; align-items: center; gap: 8px; margin-top: 14px;
+}
+.mobile-feedback-result { min-width: 0; flex: 1 1 auto; color: #666; font-size: 12px; overflow-wrap: anywhere; }
+.mobile-feedback-cancel,
+.mobile-feedback-submit { min-height: 38px; padding: 0 14px; border: 0; border-radius: 8px; font: inherit; }
+.mobile-feedback-cancel { background: #f3f3f3; color: #333; }
+.mobile-feedback-submit { background: #111; color: #fff; }
+.mobile-feedback-submit:disabled,
+.mobile-feedback-cancel:disabled { opacity: 0.55; }
+
+.mobile-disconnect-button {
+  width: 100%; min-height: 44px; border: 0; border-radius: 8px;
+  background: #fff; color: #bf3d32; font: inherit; font-size: 15px;
+}
+
+/* Pairing screen */
+.mobile-pairing-shell {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 22px; background: var(--paper);
+}
+.mobile-pairing-panel {
+  width: min(100%, 420px);
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 22px; border: 1px solid var(--line); border-radius: 8px;
+  background: #fff; box-shadow: 0 12px 34px rgba(26, 26, 24, 0.08);
+}
+.mobile-pairing-kicker {
+  color: var(--ink-3); font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.mobile-pairing-title { margin: 4px 0 0; font-size: 24px; line-height: 1.15; }
+.mobile-pairing-field {
+  display: flex; flex-direction: column; gap: 7px;
+  font-size: 13px; font-weight: 650; color: var(--ink-2);
+}
+.mobile-pairing-field input {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--paper); color: var(--ink);
+  padding: 12px 13px; font: inherit; font-size: 15px; font-weight: 500;
+}
+.mobile-pairing-error {
+  border: 1px solid rgba(192, 57, 43, 0.22);
+  border-radius: 8px; background: rgba(192, 57, 43, 0.08);
+  color: var(--red); padding: 10px 12px; font-size: 13px; line-height: 1.4;
+}
+.mobile-pairing-submit {
+  min-height: 44px; border: 1px solid var(--ink); border-radius: 8px;
+  background: var(--ink); color: #fff; font: inherit; font-size: 15px; font-weight: 700;
+}
+.mobile-pairing-submit:disabled { opacity: 0.68; }
+
+/* @-mention menu extras */
+.mention-avatar {
+  width: 22px; display: inline-flex; justify-content: center; flex: 0 0 auto;
+}
+.mention-name { font-weight: 600; font-size: 13.5px; }
+.mention-role { font-size: 12px; color: var(--ink-3); }
+.mention-empty {
+  padding: 10px 12px; color: var(--ink-3); font-size: 13px;
+}
+
+
+/* ── Desktop preview: frame the phone app to a centered phone-width column so the
+   fixed bottom nav doesn't span the full desktop window. No effect on a real
+   phone (viewport ≤ frame width). ── */
+@media (min-width: 480px) {
+  .mobile-app-shell {
+    max-width: 430px;
+    margin: 0 auto;
+    border-inline: 1px solid #d8d8d8;
+    box-shadow: 0 0 28px rgba(0, 0, 0, 0.10);
+  }
+  .mobile-bottom-nav {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+  }
+  .mobile-mention-menu { max-width: 410px; margin: 0 auto; }
+}
+
+/* Composer: make the 小秘/staff input fill the row (was sizing too small). */
+.mobile-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.mobile-chat-composer .chat-input {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* Desktop preview: phones reserve ~40px for the home-indicator/safe-area, but on
+   a desktop browser that's dead space ("超平"). Kill it ≥480px. */
+@media (min-width: 480px) {
+  .mobile-bottom-nav {
+    height: var(--mobile-nav-height);
+    padding-bottom: 6px;
+  }
+  .mobile-chat-viewport,
+  .mobile-staff-chat-scroll {
+    padding-bottom: calc(16px + var(--mobile-nav-height));
+  }
+  .mobile-chat-composer {
+    margin-bottom: var(--mobile-nav-height);
+  }
+}
+
+/* Send button = round green circle (holon's proven look). Was a 36px square = "一坨绿色". */
+.mobile-chat-composer .chat-send {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; border: none; padding: 0;
+  font-size: 16px;
+}
+
+/* ── Phone-frame v2 (robust): make .mobile-app-shell a `transform` containing
+   block so the position:fixed bottom nav is pinned to the FRAME, not the
+   viewport. The base left:0;right:0;bottom:0 now means "the 430px frame edges",
+   so the 4 tabs sit exactly across the phone column. No centering math. ── */
+@media (min-width: 480px) {
+  .mobile-app-shell {
+    max-width: 430px;
+    margin: 0 auto;
+    height: 100vh;
+    transform: translateZ(0);
+    overflow: hidden;
+  }
+  .mobile-bottom-nav {
+    left: 0;
+    right: 0;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+}
+
+/* ── SwipeToDelete — WeChat/iOS-style reveal-red-删除 ─────────────────────────
+   .weizo-swipe-wrap   : overflow-hidden clip layer (hides the action behind)
+   .weizo-swipe-card   : the actual card; translateX follows the finger
+   .weizo-swipe-action : 80px red 删除 button, revealed as card slides left
+   .weizo-swipe-deleting: triggers the "fly left + collapse" exit animation
+──────────────────────────────────────────────────────────────────────────── */
+.weizo-swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  /* Clip the red action so it doesn't show before swipe */
+}
+.weizo-swipe-card {
+  position: relative;
+  z-index: 1;
+  /* transition applied inline via JS for snappy drag + snap */
+  will-change: transform;
+  touch-action: pan-y; /* allow vertical scroll by default; JS locks on diagonal */
+  background: transparent; /* card itself must have its own bg */
+}
+.weizo-swipe-card.is-snapping {
+  transition: transform 0.18s ease;
+}
+.weizo-swipe-action {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 80px;
+  display: flex; align-items: center; justify-content: center;
+  background: #e0533a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: none;
+  border-radius: 0 8px 8px 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.weizo-swipe-action:active { background: #c94330; }
+
+/* Exit animation: slide fully left and collapse height */
+@keyframes weizo-swipe-exit {
+  0%   { transform: translateX(-80px); max-height: 200px; opacity: 1; }
+  40%  { transform: translateX(-105%); max-height: 200px; opacity: 0.7; }
+  100% { transform: translateX(-105%); max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+}
+.weizo-swipe-wrap.is-deleting {
+  animation: weizo-swipe-exit 0.30s ease forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ─── Connection mirror — Agent Card QR + channel rows + plugins ─────────── */
+.mobile-connector-qr-wrap {
+  display: flex; justify-content: center; padding: 8px 0 6px;
+}
+.mobile-connector-qr-img {
+  border-radius: 10px; border: 1px solid #e8e8e8;
+  display: block; max-width: 180px; height: auto;
+}
+.mobile-connector-url-copy {
+  width: 100%; min-height: 36px;
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid #e8e8e8; border-radius: 8px;
+  background: #fafafa; padding: 6px 10px;
+  font: inherit; cursor: pointer; color: #555;
+  margin-top: 6px; text-align: left;
+}
+.mobile-connector-url-copy:active { background: #f0f0f0; }
+.mobile-connector-url-text {
+  flex: 1 1 auto; font-size: 11px; color: #555;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mobile-connector-url-copy-icon { flex: 0 0 auto; font-size: 14px; color: #999; }
+.mobile-connector-channel-row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 36px; padding: 4px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 4px;
+}
+.mobile-connector-plugin-list {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 4px;
+}
+.mobile-connector-plugin-row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 30px; border-top: 1px solid #f0f0f0; padding: 4px 0;
+}
+.mobile-connector-plugin-row:first-child { border-top: 0; }
+.mobile-connector-plugin-dot { flex: 0 0 auto; font-size: 10px; }
+.mobile-connector-plugin-name { flex: 1 1 auto; font-size: 13.5px; color: #111; }
+.mobile-connector-plugin-status { flex: 0 0 auto; font-size: 11px; color: #777; }
+
+/* 扫码连接 */
+.mobile-scan-connect-btn {
+  width: 100%; min-height: 44px; border: 1px solid var(--line, #e2e2df);
+  border-radius: 8px; background: #fff; color: #111; padding: 0 14px;
+  font: inherit; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+}
+.mobile-scan-connect-btn:active { background: #f5f5f3; }
+.mobile-scan-connect-icon { font-size: 18px; line-height: 1; }
+.mobile-scan-connect-result {
+  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  background: #f5f5f3; font-size: 13px; color: #444;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mobile-scan-connect-hint { line-height: 1.5; }
+.mobile-scan-connect-url {
+  word-break: break-all; color: #1a56db; font-size: 12px;
+}
+.mobile-scan-connect-reset {
+  align-self: flex-start; border: 0; border-radius: 6px;
+  background: #e2e2df; color: #555; padding: 4px 10px;
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.mobile-scan-connect-reset:active { background: #d4d4d0; }
