@@ -128,8 +128,10 @@ patch_manifest_line '<uses-feature android:name="android.hardware.camera" androi
 # Android's cleartext-traffic policy. Idempotent: only adds if not present.
 log "2.5/6 patching AndroidManifest.xml — usesCleartextTraffic"
 if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
-  # Insert the attribute into the opening <application ...> tag on the same line.
-  sed -i 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
+  # Capacitor scaffolds the tag as `<application` alone on its own (indented)
+  # line with attributes on the following lines, so match `<application` at
+  # end-of-line; also handle the rarer single-line `<application ` form.
+  sed -i -E 's/^([[:space:]]*)<application[[:space:]]*$/\1<application android:usesCleartextTraffic="true"/; s/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
   grep -q 'usesCleartextTraffic' "$MANIFEST" \
     || fail "usesCleartextTraffic patch did not take — check sed invocation"
   log "  inserted: android:usesCleartextTraffic=\"true\""
