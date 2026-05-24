@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invalidateOwner, useOwner } from '../../lib/hooks/useOwner';
+import { MyAgentCardSection } from './_components/MyAgentCardSection';
 
 type MessagingChannel = 'slack' | 'discord' | 'telegram';
 
@@ -712,6 +713,10 @@ export default function ConnectorsPage() {
           <p className="conn-field-hint">Gmail is now available as an MCP plugin in the Plugins section below.</p>
         </div>
       </section>
+
+      {/* ── My Agent Card — inbound A2A address (your QR code for peers) ─
+           Renders as a peer card; component brings its own card shell. */}
+      <MyAgentCardSection />
 
       {/* ── Agent network: Connect to other agents (A2A) ─────────────── */}
       <section className="card conn-card">
