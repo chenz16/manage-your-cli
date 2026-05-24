@@ -188,3 +188,11 @@ export {
   listBugsWithStatus, reprocessBug,
   type BugStatus,
 } from './bug-watcher.js';
+
+// Boss backlog — 待分配 todo store
+export {
+  listTodos,
+  addTodo,
+  updateTodo,
+  deleteTodo,
+} from './todo-store.js';
