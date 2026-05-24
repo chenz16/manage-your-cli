@@ -3,9 +3,16 @@
  *
  * Native Android impl in the built APK; Web Speech API fallback in browser preview.
  * hybrid edge-tts deferred — no desk dependency here.
+ *
+ * IMPORTANT: the plugin touches `window` at module-load time, so it is imported
+ * DYNAMICALLY (client-side, on first use). A top-level static import crashes
+ * Next.js SSR with "window is not defined" (every page → HTTP 500).
  */
 
-import { TextToSpeech } from '@capacitor-community/text-to-speech';
+async function getTextToSpeech() {
+  const mod = await import('@capacitor-community/text-to-speech');
+  return mod.TextToSpeech;
+}
 
 /**
  * Speak text using the on-device TTS engine.
@@ -13,6 +20,7 @@ import { TextToSpeech } from '@capacitor-community/text-to-speech';
  */
 export async function speak(text: string): Promise<void> {
   try {
+    const TextToSpeech = await getTextToSpeech();
     await TextToSpeech.speak({
       text,
       lang: 'zh-CN',
@@ -37,6 +45,7 @@ export async function speak(text: string): Promise<void> {
  */
 export async function stop(): Promise<void> {
   try {
+    const TextToSpeech = await getTextToSpeech();
     await TextToSpeech.stop();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
