@@ -439,20 +439,20 @@ function AttachmentPreviewBar({
   );
 }
 
-// ── Native STT availability cache (checked once per mount) ───────────────────
-// Stored outside the component so it persists across re-renders without
-// triggering extra effects. null = not yet probed; true/false = result.
-let nativeSttAvailableCache: boolean | null = null;
+// ── Native STT state (no pre-probe needed — permission-first try-anyway) ─────
+// nativeSttGaveUpCache = true only after start() itself throws NO_RECOGNIZER,
+// meaning the device genuinely has no recognizer. Persists across re-renders.
+let nativeSttGaveUpCache = false;
 
 function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: string) => void }) {
   const [state, setState] = useState<RecordingState>('idle');
   const [hint, setHint] = useState('');
   // partial text shown while native STT is listening
   const [partialText, setPartialText] = useState('');
-  // whether native STT is available on this device (probed once on mount)
-  const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(nativeSttAvailableCache);
+  // true once start() itself confirmed no recognizer on device
+  const [nativeGaveUp, setNativeGaveUp] = useState(nativeSttGaveUpCache);
 
-  // Fallback (desk-transcribe) refs — kept so the fallback path still works.
+  // Fallback (desk-transcribe) refs — used only when native is confirmed absent.
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -461,18 +461,9 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   // Track whether native STT is in flight so stop() can cancel it.
   const nativeSttActiveRef = useRef(false);
 
-  // Probe native availability once on mount.
-  useEffect(() => {
-    if (nativeSttAvailableCache !== null) return;
-    void nativeStt.isAvailable().then((v) => {
-      nativeSttAvailableCache = v;
-      setNativeAvailable(v);
-    });
-  }, []);
-
   function showHint(message: string) {
     setHint(message);
-    window.setTimeout(() => setHint((current) => (current === message ? '' : current)), 3500);
+    window.setTimeout(() => setHint((current) => (current === message ? '' : current)), 4500);
   }
 
   function deliverTranscript(text: string) {
@@ -481,6 +472,8 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   }
 
   // ── PRIMARY: native on-device STT ─────────────────────────────────────────
+  // Permission-first; attempt start() even when available()=false (Samsung/AOSP
+  // devices often report false but the recognizer actually works).
 
   async function startNativeStt(ev: PointerEvent<HTMLButtonElement>) {
     ev.preventDefault();
@@ -490,13 +483,15 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
     setHint('');
     setPartialText('');
 
-    // Ensure permission before starting.
+    // ① Permission check — STOP here if denied; never fall back for a permission problem.
     const perm = await nativeStt.requestPermission();
     if (perm !== 'granted') {
-      showHint('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
+      showHint('麦克风/语音权限被拒，请在 设置→应用→微作→权限 里允许');
+      setState('idle');
       return;
     }
 
+    // ② Start — even if available() says false; some devices still work.
     setState('recording');
     nativeSttActiveRef.current = true;
     try {
@@ -507,25 +502,31 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
       });
       nativeSttActiveRef.current = false;
       setPartialText('');
+      setState('idle');
       if (!text) {
         showHint('没有听清，请再试一次。');
-        setState('idle');
         return;
       }
       deliverTranscript(text);
     } catch (err) {
       nativeSttActiveRef.current = false;
       setPartialText('');
+      setState('idle');
       const msg = err instanceof Error ? err.message : String(err);
       if (msg === 'PERMISSION_DENIED') {
-        showHint('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
-      } else {
-        // Native STT failed — fall through to desk-transcribe fallback.
+        // Permission revoked between request and start (race) — treat same as denied.
+        showHint('麦克风/语音权限被拒，请在 设置→应用→微作→权限 里允许');
+      } else if (msg === 'NO_RECOGNIZER') {
+        // Device has no speech recognizer at all — mark permanently and fall back.
+        nativeSttGaveUpCache = true;
+        setNativeGaveUp(true);
+        showHint('没找到语音识别器，请在 设置→通用管理→语言和输入→语音输入 启用「Google 语音输入」');
+        // After showing the message, also attempt desk fallback silently.
         await startDeskTranscribeFallback(ev);
-        return;
+      } else {
+        // Other native error — show the actual message.
+        showHint(msg || '语音识别失败，请重试。');
       }
-    } finally {
-      setState('idle');
     }
   }
 
@@ -538,7 +539,7 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
     }
   }
 
-  // ── FALLBACK: getUserMedia + desk-transcribe ──────────────────────────────
+  // ── FALLBACK: getUserMedia + desk-transcribe (only when native confirmed absent) ──
 
   function cleanupStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -556,7 +557,10 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
     const data = await res.json().catch(() => ({})) as TranscribeResponse;
     if (!res.ok) throw new Error(data.message ?? `转写失败 (${res.status})`);
     if (data.error) {
-      if (data.error === 'no_stt_provider') throw new Error('桌面端还没有配置语音识别。');
+      if (data.error === 'no_stt_provider') {
+        // Make clear: the problem started with the device, not with the desk.
+        throw new Error('手机语音识别不可用，且桌面未配置 STT');
+      }
       throw new Error(data.message ?? data.error);
     }
     const text = typeof data.text === 'string' ? data.text.trim() : '';
@@ -642,28 +646,29 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   }
 
   // ── Unified press / release handlers ─────────────────────────────────────
+  // Always try native first unless we have confirmed the device has no recognizer.
 
   function onPointerDown(ev: PointerEvent<HTMLButtonElement>) {
-    if (nativeAvailable) {
-      void startNativeStt(ev);
-    } else {
+    if (nativeGaveUp) {
       void startDeskTranscribeFallback(ev);
+    } else {
+      void startNativeStt(ev);
     }
   }
 
   function onPointerUp(ev: PointerEvent<HTMLButtonElement>) {
-    if (nativeAvailable) {
-      stopNativeStt(ev);
-    } else {
+    if (nativeGaveUp) {
       releaseDeskPointer(ev);
+    } else {
+      stopNativeStt(ev);
     }
   }
 
   // ── Hint text during recording ────────────────────────────────────────────
 
-  const recordingHint = nativeAvailable
-    ? (partialText || '正在聆听…')
-    : '正在录音，松开转写';
+  const recordingHint = nativeGaveUp
+    ? '正在录音，松开转写'
+    : (partialText || '正在聆听…');
 
   return (
     <div className="mobile-voice-control">

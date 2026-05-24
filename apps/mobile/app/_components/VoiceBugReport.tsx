@@ -184,24 +184,23 @@ export function VoiceBugReport() {
     setOpen(true);
   }
 
-  // ── Start recording — native STT primary, desk-transcribe fallback ────────
+  // ── Start recording — permission-first, always try native; fall back only
+  //    when start() itself confirms no recognizer on device ──────────────────
   async function startRecording() {
-    const nativeAvail = await nativeStt.isAvailable();
-    if (nativeAvail) {
-      await startNativeRecording();
-    } else {
-      await startDeskRecording();
+    // ① Request permission first, before availability check.
+    const perm = await nativeStt.requestPermission();
+    if (perm !== 'granted') {
+      setPhase('error');
+      setStatusMsg('麦克风/语音权限被拒，请在 设置→应用→微作→权限 里允许');
+      return;
     }
+    // ② Attempt native — even if available() would say false (some Samsung/AOSP
+    //    devices report false but the recognizer actually works).
+    await startNativeRecording();
   }
 
   // ── Native STT path ──────────────────────────────────────────────────────
   async function startNativeRecording() {
-    const perm = await nativeStt.requestPermission();
-    if (perm !== 'granted') {
-      setPhase('error');
-      setStatusMsg('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
-      return;
-    }
     setPhase('recording');
     setStatusMsg('正在聆听… 点击停止');
     try {
@@ -222,11 +221,17 @@ export function VoiceBugReport() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg === 'PERMISSION_DENIED') {
+        // Permission revoked between request and start (race) — treat same as denied.
         setPhase('error');
-        setStatusMsg('语音识别权限被拒绝，请在系统设置中允许麦克风权限。');
+        setStatusMsg('麦克风/语音权限被拒，请在 设置→应用→微作→权限 里允许');
+      } else if (msg === 'NO_RECOGNIZER') {
+        // Device genuinely has no speech recognizer.
+        setPhase('error');
+        setStatusMsg('没找到语音识别器，请在 设置→通用管理→语言和输入→语音输入 启用「Google 语音输入」');
       } else {
-        // Native failed — try desk-transcribe fallback silently.
-        await startDeskRecording();
+        // Other native error — show the actual error, then offer desk fallback.
+        setPhase('error');
+        setStatusMsg(msg || '语音识别失败，请重试');
       }
     }
   }
@@ -312,7 +317,7 @@ export function VoiceBugReport() {
       const data = await res.json() as { text?: string; error?: string; message?: string };
       if (data.error === 'no_stt_provider') {
         setPhase('error');
-        setStatusMsg('未配置语音转文字服务（请在桌面端配置 OpenAI key）');
+        setStatusMsg('手机语音识别不可用，且桌面未配置 STT');
         return;
       }
       if (data.error) throw new Error(data.message ?? data.error);

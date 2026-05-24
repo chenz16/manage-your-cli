@@ -105,11 +105,13 @@ export interface ListenOptions {
  *   3. plugin.start() resolves 时包含最终 matches 数组
  *   4. resolve 最终文本（trim 后）
  *
- * @throws Error  如果权限被拒（message='PERMISSION_DENIED'）或识别器启动失败
+ * @throws Error  如果权限被拒（message='PERMISSION_DENIED'）
+ * @throws Error  如果识别器不存在（message='NO_RECOGNIZER'）
+ * @throws Error  其他原生错误（message = 实际错误信息）
  */
 export async function listen(opts: ListenOptions = {}): Promise<string> {
   const plugin = await getSpeechRecognitionPlugin();
-  if (!plugin) throw new Error('设备不支持原生语音识别。');
+  if (!plugin) throw new Error('NO_RECOGNIZER');
 
   const lang = opts.language ?? 'zh-CN';
   const wantPartial = typeof opts.onPartial === 'function';
@@ -146,7 +148,7 @@ export async function listen(opts: ListenOptions = {}): Promise<string> {
       maxResults: 1,
       prompt: '请说话…',
       partialResults: wantPartial,
-      popup: false,
+      popup: false,               // 保持紧凑按钮，不弹系统弹窗
     }).then((result: { matches?: string[] }) => {
       const text = result.matches?.[0] ?? '';
       settle(text.trim());
@@ -154,6 +156,9 @@ export async function listen(opts: ListenOptions = {}): Promise<string> {
       const msg = err instanceof Error ? err.message : String(err);
       if (/permission|denied|not.*allow/i.test(msg)) {
         settle(new Error('PERMISSION_DENIED'));
+      } else if (/not.*available|no.*recogni[sz]|unavailable|recognition.*not.*support/i.test(msg)) {
+        // Samsung / AOSP 设备在 available()=false 时 start() 抛此类错误
+        settle(new Error('NO_RECOGNIZER'));
       } else {
         settle(new Error(msg || '语音识别失败。'));
       }
