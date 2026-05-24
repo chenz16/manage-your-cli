@@ -48,6 +48,76 @@ import {
 import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/device-tts';
 import { deskOrigin } from '../_lib/desk-origin';
 
+// ─── Chat auto-scroll hook ────────────────────────────────────────────────────
+//
+// useChatAutoScroll — "stick to bottom unless user scrolled up" pattern.
+// Returns a ref to attach to the scroll container.
+//
+// Scroll triggers:
+//   - on every `deps` change (new messages, streamed tokens) — only if
+//     already near bottom ("stick to bottom") or if forceNext.current is set
+//   - imperatively via scrollToBottom() — used on send / focus / keyboard open
+//
+// SSR safe: all DOM access is inside effects / event listeners (never at
+// module load time). visualViewport is guarded behind typeof checks.
+
+function useChatAutoScroll<T extends HTMLElement>(deps: ReadonlyArray<unknown>) {
+  const scrollRef = useRef<T>(null);
+  const stuckRef = useRef(true);     // true = at bottom (stick mode)
+  const forceRef = useRef(false);    // true = force-scroll on next render regardless
+
+  // Scroll the container to the very bottom.
+  const scrollToBottom = useCallback((smooth = false) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+    stuckRef.current = true;
+  }, []);
+
+  // On scroll: update stuckRef so we know whether the user has scrolled up.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    function onScroll() {
+      if (!el) return;
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stuckRef.current = distFromBottom < 80;
+    }
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // On deps change: scroll only if stuck or forced.
+  useEffect(() => {
+    if (stuckRef.current || forceRef.current) {
+      forceRef.current = false;
+      scrollToBottom();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, scrollToBottom]);
+
+  // On visualViewport resize (keyboard open/close on Android/iOS).
+  // Force-scroll to bottom so the latest message stays visible.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+    function onVVChange() {
+      scrollToBottom();
+    }
+    window.visualViewport.addEventListener('resize', onVVChange);
+    window.visualViewport.addEventListener('scroll', onVVChange);
+    return () => {
+      window.visualViewport!.removeEventListener('resize', onVVChange);
+      window.visualViewport!.removeEventListener('scroll', onVVChange);
+    };
+  }, [scrollToBottom]);
+
+  return { scrollRef, scrollToBottom, forceRef };
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StreamEvent {
@@ -573,6 +643,53 @@ function ComposerSeeder({ seed, onSeedConsumed }: { seed: string | null; onSeedC
   return null;
 }
 
+/**
+ * OwnerChatVvScroller — rendered inside the chat thread; listens to
+ * visualViewport resize/scroll (soft keyboard opening on Android/iOS) and
+ * force-scrolls the .mobile-chat-viewport container to bottom.
+ * Also handles input focus events on the composer textarea.
+ *
+ * assistant-ui's ThreadPrimitive.Viewport has its own auto-scroll for new
+ * messages.  This component adds only the keyboard-open trigger which
+ * assistant-ui does not cover.
+ *
+ * SSR-safe: all DOM access is inside useEffect (never at module load).
+ */
+function OwnerChatVvScroller() {
+  useEffect(() => {
+    function scrollOwnerViewport() {
+      const el = document.querySelector<HTMLElement>('.mobile-chat-thread .mobile-chat-viewport');
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    // visualViewport resize = keyboard open/close
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scrollOwnerViewport);
+      window.visualViewport.addEventListener('scroll', scrollOwnerViewport);
+    }
+
+    // Also scroll when the chat input receives focus (tap into composer)
+    function onFocusIn(ev: FocusEvent) {
+      const target = ev.target as HTMLElement | null;
+      if (target?.classList.contains('chat-input')) {
+        // Small delay so the keyboard has started to open before we scroll
+        window.setTimeout(scrollOwnerViewport, 120);
+      }
+    }
+    document.addEventListener('focusin', onFocusIn);
+
+    return () => {
+      if (typeof window !== 'undefined' && window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', scrollOwnerViewport);
+        window.visualViewport.removeEventListener('scroll', scrollOwnerViewport);
+      }
+      document.removeEventListener('focusin', onFocusIn);
+    };
+  }, []);
+  return null;
+}
+
 function MobileOwnerChat({
   staff,
   seed,
@@ -594,6 +711,7 @@ function MobileOwnerChat({
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ComposerSeeder seed={seed} onSeedConsumed={onSeedConsumed} />
+      {mounted && <OwnerChatVvScroller />}
       <ThreadPrimitive.Root className="chat-thread mobile-chat-thread">
         <ThreadPrimitive.Viewport className="chat-viewport mobile-chat-viewport">
           <ThreadPrimitive.Empty>
@@ -631,6 +749,10 @@ function StaffChat({ staff }: { staff: Staff }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
+  // Auto-scroll: stick to bottom unless user scrolled up.
+  // deps = [messages, sending] so every new message / "正在回复…" indicator scrolls down.
+  const { scrollRef, scrollToBottom, forceRef } = useChatAutoScroll<HTMLDivElement>([messages, sending]);
+
   async function send() {
     const content = text.trim();
     if (!content || sending) return;
@@ -639,6 +761,8 @@ function StaffChat({ staff }: { staff: Staff }) {
     setText('');
     setError('');
     setSending(true);
+    // Force scroll on send regardless of scroll position
+    forceRef.current = true;
     try {
       const res = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staff.id)}/chat`, {
         method: 'POST',
@@ -659,7 +783,7 @@ function StaffChat({ staff }: { staff: Staff }) {
 
   return (
     <div className="mobile-staff-chat">
-      <div className="mobile-chat-viewport mobile-staff-chat-scroll">
+      <div ref={scrollRef} className="mobile-chat-viewport mobile-staff-chat-scroll">
         {messages.length === 0 ? (
           <div className="chat-empty">
             <div className="chat-empty-title">{staff.name}</div>
@@ -691,6 +815,7 @@ function StaffChat({ staff }: { staff: Staff }) {
               void send();
             }
           }}
+          onFocus={() => { forceRef.current = true; scrollToBottom(); }}
           placeholder={`发消息给 ${staff.name}…`}
           autoFocus
         />

@@ -1118,15 +1118,28 @@ button, input, textarea, select { font: inherit; }
   display: flex; flex-direction: column;
   background: #ededed;
 }
+/* M-L-KBD1: .mobile-chat-viewport is the message list scroll container.
+   overflow-y:auto is required so scrollTop manipulation works.
+   Bottom padding accounts for nav-height + SAI so messages don't hide
+   under the composer/nav when at-rest (keyboard closed). */
 .mobile-chat-viewport,
 .mobile-staff-chat-scroll {
   flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
   padding: 14px 12px calc(16px + var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   background: #ededed;
+  /* Ensure smooth momentum scroll on iOS WebView */
+  -webkit-overflow-scrolling: touch;
 }
 .mobile-staff-chat-scroll {
-  display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
 }
+/* M-L-KBD1: composer sits directly above the bottom nav.
+   With interactiveWidget=resizes-content the viewport shrinks when the
+   keyboard opens, so env(keyboard-inset-height) is 0 in that mode.
+   We keep the var for environments where resizes-content is not
+   supported (older iOS). The bottom margin places composer above the
+   fixed bottom nav regardless of keyboard state. */
 .mobile-chat-composer {
   flex: 0 0 auto;
   padding: 8px 10px max(8px, calc(env(safe-area-inset-bottom, 0px) + var(--mobile-keyboard-inset)));

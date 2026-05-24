@@ -146,6 +146,25 @@ else
   log "  already present: android:usesCleartextTraffic"
 fi
 
+# Patch android:windowSoftInputMode="adjustResize" on the MainActivity <activity>
+# tag so the Android WebView (and thus the visual viewport) shrinks when the
+# soft keyboard opens. Without this the keyboard overlays the chat composer and
+# env(keyboard-inset-height) / visualViewport.height stay wrong.
+# Idempotent: only patches if windowSoftInputMode is not already set.
+log "2.5/6 patching AndroidManifest.xml — windowSoftInputMode=adjustResize"
+if ! grep -q 'windowSoftInputMode' "$MANIFEST"; then
+  # Capacitor scaffolds a single <activity line for MainActivity; insert the
+  # attribute on that same line. The sed pattern anchors to the activity element
+  # that contains android:name= to avoid matching other <activity> tags.
+  sed -i 's/\(<activity[^>]*android:name="[^"]*MainActivity[^"]*"\)/\1\n            android:windowSoftInputMode="adjustResize"/' "$MANIFEST" \
+    || fail "windowSoftInputMode sed failed"
+  grep -q 'windowSoftInputMode' "$MANIFEST" \
+    || fail "windowSoftInputMode patch did not take — check sed invocation"
+  log "  inserted: android:windowSoftInputMode=\"adjustResize\""
+else
+  log "  already present: android:windowSoftInputMode"
+fi
+
 # Hard verification — build must not proceed without the permission.
 grep -q 'android.permission.CAMERA' "$MANIFEST" \
   || fail "CAMERA permission still absent in $MANIFEST after patching — check sed invocation"

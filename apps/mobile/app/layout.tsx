@@ -38,6 +38,11 @@ export const viewport: Viewport = {
   userScalable: true,
   viewportFit: 'cover',
   themeColor: '#F8F6EF',
+  // M-L-KBD1 — interactiveWidget=resizes-content makes the browser resize the
+  // visual viewport (and layout) when the soft keyboard opens, rather than
+  // overlaying it. This populates env(keyboard-inset-height) and shrinks the
+  // chat scroll area so the composer stays visible above the keyboard.
+  interactiveWidget: 'resizes-content',
 };
 
 // M-L-005 — Root layout: app-shell (dark gutter on desktop, paper on
