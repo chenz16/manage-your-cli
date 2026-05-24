@@ -1709,39 +1709,60 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-function CliUsageSection({ data }: { data: CliUsageResponse | null }) {
-  if (!data) return null;
-  const agents = Array.isArray(data.agents) ? data.agents : [];
+// ─── Token 用量 — drill-in detail view ───────────────────────────────────────
+
+function UsageDetail({ onBack }: { onBack: () => void }) {
+  const [data, setData] = useState<CliUsageResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    holonApiFetch('/api/v1/usage', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<CliUsageResponse> : Promise.resolve(null))
+      .then((d) => { setData(d); })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const agents = data && Array.isArray(data.agents) ? data.agents : [];
+
   return (
-    <div className="mobile-me-section">
-      <div className="mobile-me-label">使用中的 CLI</div>
-      <div className="weizo-clilist">
-        {data.clis.map((cli) => (
-          <div key={cli.binary} className="weizo-clilist-row">
-            <span className="weizo-clilist-dot">{cli.in_use ? '●' : '○'}</span>
-            <span className="weizo-clilist-label">{cli.label}</span>
-            {cli.usage && (
-              <span className="weizo-clilist-tokens">
-                今日 ~{fmtTokens(cli.usage.today_tokens)} · 本周 ~{fmtTokens(cli.usage.week_tokens)} tokens
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-      {agents.length > 0 && (
-        <div className="weizo-clilist weizo-clilist-agents">
-          <div className="weizo-clilist-agents-title">各 agent 用量(含 sub-agent)</div>
-          {agents.map((a) => (
-            <div key={a.id} className="weizo-clilist-row weizo-clilist-row-muted">
-              <span className="weizo-clilist-label weizo-clilist-label-muted">{a.name}</span>
-              <span className="weizo-clilist-tokens weizo-clilist-tokens-muted">
-                总计 ~{fmtTokens(a.total_tokens)} · 今日 ~{fmtTokens(a.today_tokens)}
-              </span>
+    <div className="mobile-me">
+      <button type="button" className="mobile-back-row" onClick={onBack}>‹ 返回</button>
+      <div className="mobile-me-section">
+        <div className="mobile-me-label">Token 用量</div>
+        {loading && !data && <div className="mobile-me-note">加载中…</div>}
+        {data && (
+          <>
+            <div className="weizo-clilist">
+              {data.clis.map((cli) => (
+                <div key={cli.binary} className="weizo-clilist-row">
+                  <span className="weizo-clilist-dot">{cli.in_use ? '●' : '○'}</span>
+                  <span className="weizo-clilist-label">{cli.label}</span>
+                  {cli.usage && (
+                    <span className="weizo-clilist-tokens">
+                      今日 ~{fmtTokens(cli.usage.today_tokens)} · 本周 ~{fmtTokens(cli.usage.week_tokens)} · 总计 ~{fmtTokens(cli.usage.total_tokens)}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-      <div className="weizo-clilist-note">{data.note}</div>
+            {agents.length > 0 && (
+              <div className="weizo-clilist weizo-clilist-agents">
+                <div className="weizo-clilist-agents-title">各 agent 用量(含 sub-agent)</div>
+                {agents.map((a) => (
+                  <div key={a.id} className="weizo-clilist-row weizo-clilist-row-muted">
+                    <span className="weizo-clilist-label weizo-clilist-label-muted">{a.name}</span>
+                    <span className="weizo-clilist-tokens weizo-clilist-tokens-muted">
+                      总计 ~{fmtTokens(a.total_tokens)} · 今日 ~{fmtTokens(a.today_tokens)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="weizo-clilist-note">{data.note}</div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -2163,6 +2184,7 @@ function MeTab({
   const [error, setError] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [cliUsage, setCliUsage] = useState<CliUsageResponse | null>(null);
+  const [usageOpen, setUsageOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -2232,6 +2254,17 @@ function MeTab({
   const personaName = activePersona ? `${activePersona.icon} ${activePersona.name}` : ownerRole;
   const personaSummary = activePersona?.tagline || activePersona?.industry || ownerIntro || ownerRole;
 
+  if (usageOpen) {
+    return <UsageDetail onBack={() => setUsageOpen(false)} />;
+  }
+
+  const todaySummary = cliUsage
+    ? (() => {
+        const total = cliUsage.clis.reduce((sum, c) => sum + (c.usage?.today_tokens ?? 0), 0);
+        return total > 0 ? `今日 ~${fmtTokens(total)}` : null;
+      })()
+    : null;
+
   return (
     <div className="mobile-me">
       <div className="mobile-me-profile">
@@ -2265,7 +2298,11 @@ function MeTab({
         {loading && <div className="mobile-me-note">加载人设…</div>}
       </div>
       <IntegrationsSection meData={meData} onRefresh={() => void load()} />
-      <CliUsageSection data={cliUsage} />
+      <button type="button" className="mobile-feedback-button" onClick={() => setUsageOpen(true)}>
+        <span>Token 用量</span>
+        {todaySummary && <span className="weizo-clilist-tokens" style={{ marginRight: 4 }}>{todaySummary}</span>}
+        <span>›</span>
+      </button>
       <div className="mobile-me-section">
         <div className="mobile-me-label">应用版本</div>
         <div className="mobile-me-value">微作 Weizo 0.1.0</div>
