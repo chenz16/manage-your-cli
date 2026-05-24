@@ -1802,12 +1802,7 @@ function Contacts({
         <div className={`ptr-spinner${refreshing ? ' ptr-spinner-spin' : ''}`}
           style={{ transform: refreshing ? undefined : `rotate(${progress * 270}deg)` }} />
       </div>
-      {/* Refresh bar */}
-      <div className="contacts-refresh-bar">
-        <button type="button" className="contacts-refresh-btn" onClick={onRefresh} disabled={refreshing} aria-label="刷新通讯录">
-          {refreshing ? '刷新中…' : '刷新'}
-        </button>
-      </div>
+      {/* 刷新条已去掉 —— 下拉即刷新(ptr-indicator)+ 切到通讯录自动刷新 */}
       {staff.length === 0 ? (
         <div className="mobile-empty-panel">还没有员工。</div>
       ) : staff.map((s) => (
