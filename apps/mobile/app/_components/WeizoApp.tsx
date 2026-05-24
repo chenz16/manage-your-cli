@@ -1016,70 +1016,6 @@ function isOverdue(iso: string): boolean {
   return iso <= todayLocalIso();
 }
 
-// ─── 看板 — sample data (always-visible mock) ──────────────────────────────
-
-interface SampleTodo {
-  id: string;
-  text: string;
-  priority: TodoPriority;
-  due_label: string | null; // display string, e.g. '今天(逾期)' / '5-28'
-  age_days: number;         // for ⏳已挂N天
-  overdue: boolean;
-  isSample: true;
-}
-
-const SAMPLE_TODOS: SampleTodo[] = [
-  { id: 's1', text: '重构登录到 OAuth', priority: 'high',   due_label: '今天(逾期)', age_days: 3, overdue: true,  isSample: true },
-  { id: 's2', text: '写 Q3 邮件营销初稿',   priority: 'medium', due_label: '5-28',       age_days: 1, overdue: false, isSample: true },
-  { id: 's3', text: '整理竞品资料',          priority: 'low',    due_label: null,          age_days: 6, overdue: false, isSample: true },
-];
-
-interface SampleJob {
-  id: string;
-  assignee: string;        // emoji/initial for avatar
-  name: string;
-  jobStatus: 'running' | 'queued' | 'stuck';
-  elapsed: string | null;  // e.g. '12分'
-  title: string;
-  latest: string;          // latest activity or wait reason
-  latestPrefix: '最新' | '等待';
-  isSample: true;
-}
-
-const SAMPLE_JOBS: SampleJob[] = [
-  {
-    id: 'sj1', assignee: '赵', name: '小赵', jobStatus: 'running', elapsed: '12分',
-    title: '重构登录到 OAuth',
-    latest: '正在写单元测试…', latestPrefix: '最新',
-    isSample: true,
-  },
-  {
-    id: 'sj2', assignee: '钱', name: '小钱', jobStatus: 'queued', elapsed: null,
-    title: '爬取竞品定价',
-    latest: 'CLI 被小赵占用', latestPrefix: '等待',
-    isSample: true,
-  },
-];
-
-interface SampleDeliverable {
-  id: string;
-  title: string;
-  reviewStatus: 'pending' | 'seen';
-  when: string;
-  who: string;
-  excerpt: string;
-  isSample: true;
-}
-
-const SAMPLE_DELIVERABLES: SampleDeliverable[] = [
-  {
-    id: 'sd1', title: 'OAuth 迁移方案', reviewStatus: 'pending',
-    when: '2小时前', who: '小赵',
-    excerpt: '3 文件改动 + 测试，建议合并。',
-    isSample: true,
-  },
-];
-
 // ─── 看板 — work tracker (待办 LEAD) ───────────────────────────────────────
 
 function AgingLine({ days }: { days: number }) {
@@ -1092,10 +1028,6 @@ function AgingLine({ days }: { days: number }) {
 
 function PriorityBar({ priority }: { priority: TodoPriority }) {
   return <span className={`weizo-kanban-priority-bar weizo-kanban-priority-bar-${priority}`} aria-hidden="true" />;
-}
-
-function SampleBadge() {
-  return <span className="weizo-kanban-sample-badge">样例</span>;
 }
 
 function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
@@ -1226,12 +1158,10 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
     }
   }
 
-  const showSamples = !loading && items.length === 0;
-
   return (
     <section className="mobile-work-section weizo-kanban-lead" aria-label="待办">
       <div className="mobile-section-heading">
-        <h2>待办 · {showSamples ? SAMPLE_TODOS.length : items.length}</h2>
+        <h2>待办 · {items.length}</h2>
       </div>
       <div className="weizo-todo-compose">
         <input
@@ -1255,8 +1185,8 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
       </div>
       {error && <div className="mobile-error">{error}</div>}
       {loading && items.length === 0 && <div className="mobile-empty-panel">加载中…</div>}
+      {!loading && items.length === 0 && <div className="mobile-empty-panel">暂无待办任务</div>}
       <div className="mobile-job-list">
-        {/* Real todos */}
         {items.map((todo) => {
           const priority = todo.priority ?? 'medium';
           const ageDays = todo.created_at
@@ -1347,47 +1277,6 @@ function TodoBacklog({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
             </div>
           );
         })}
-        {/* Sample todos (shown when no real data) */}
-        {showSamples && SAMPLE_TODOS.map((s) => (
-          <div key={s.id} className="weizo-kanban-todo-card weizo-kanban-sample-card">
-            <PriorityBar priority={s.priority} />
-            <div className="weizo-kanban-todo-body">
-              <div className="weizo-kanban-todo-titlerow">
-                <span
-                  className="weizo-priority-tag"
-                  style={{ background: PRIORITY_COLOR[s.priority] }}
-                >
-                  {PRIORITY_LABEL[s.priority]}
-                </span>
-                <span
-                  className="weizo-kanban-todo-title"
-                  style={{ color: PRIORITY_TEXT_COLOR[s.priority] }}
-                >
-                  {s.text}
-                </span>
-                <SampleBadge />
-              </div>
-              <div className="weizo-kanban-todo-meta">
-                {s.due_label && (
-                  <span
-                    className="weizo-todo-due"
-                    style={s.overdue ? { color: '#e0533a' } : undefined}
-                  >
-                    📅 {s.due_label}
-                  </span>
-                )}
-                <AgingLine days={s.age_days} />
-              </div>
-              <div className="weizo-kanban-todo-actions">
-                <button type="button" className="weizo-todo-action weizo-kanban-cta" disabled>
-                  💬 对话小秘
-                </button>
-                <button type="button" className="weizo-todo-action" disabled>✓</button>
-                <button type="button" className="weizo-todo-action weizo-todo-del" disabled>🗑</button>
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -1445,17 +1334,15 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
     return `${mins}分`;
   }
 
-  const showSamples = !loading && items.length === 0;
-
   return (
     <section className="mobile-work-section" aria-label="进行中">
       <div className="mobile-section-heading">
-        <h2>进行中 · {showSamples ? SAMPLE_JOBS.length : items.length}</h2>
+        <h2>进行中 · {items.length}</h2>
       </div>
       {loading && items.length === 0 && <div className="mobile-empty-panel">加载中…</div>}
+      {!loading && items.length === 0 && !error && <div className="mobile-empty-panel">暂无进行中的任务</div>}
       {error && <div className="mobile-error">任务加载失败：{error}</div>}
       <div className="mobile-job-list">
-        {/* Real jobs */}
         {items.map((job) => {
           const jobStatus: 'running' | 'queued' | 'stuck' =
             job.status === 'running' ? 'running' : 'queued';
@@ -1488,24 +1375,6 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
             </div>
           );
         })}
-        {/* Sample jobs */}
-        {showSamples && SAMPLE_JOBS.map((s) => (
-          <div key={s.id} className="weizo-kanban-job-card weizo-kanban-sample-card">
-            <div className="weizo-kanban-job-row1">
-              <AssigneeAvatar initial={s.assignee} />
-              <span className="weizo-kanban-job-name">{s.name}</span>
-              <JobStatusPill status={s.jobStatus} />
-              {s.elapsed && <span className="weizo-kanban-elapsed">⏱ 已跑{s.elapsed}</span>}
-              <SampleBadge />
-            </div>
-            <div className="weizo-kanban-job-title">{s.title}</div>
-            <div className="weizo-kanban-job-latest">{s.latestPrefix}：{s.latest}</div>
-            <div className="weizo-kanban-job-actions">
-              <button type="button" className="weizo-kanban-action-btn" disabled>查看实时</button>
-              <button type="button" className="weizo-kanban-action-btn weizo-kanban-action-primary" disabled>去对话</button>
-            </div>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -1581,17 +1450,15 @@ function DelivSection() {
     );
   }
 
-  const showSamples = !loading && items.length === 0;
-
   return (
     <section className="mobile-work-section weizo-deliverables-section" aria-label="交付">
       <div className="mobile-section-heading">
-        <h2>交付 · {showSamples ? SAMPLE_DELIVERABLES.length : items.length}</h2>
+        <h2>交付 · {items.length}</h2>
       </div>
       {loading && items.length === 0 && <div className="mobile-empty-panel">加载中…</div>}
+      {!loading && items.length === 0 && !error && <div className="mobile-empty-panel">还没有交付</div>}
       {error && <div className="mobile-error">加载失败：{error}</div>}
       <div className="mobile-job-list">
-        {/* Real deliverables */}
         {items.map((d) => {
           const reviewStatus: 'pending' | 'seen' =
             d.status === 'accepted' || d.status === 'rejected' ? 'seen' : 'pending';
@@ -1620,26 +1487,6 @@ function DelivSection() {
             </div>
           );
         })}
-        {/* Sample deliverables */}
-        {showSamples && SAMPLE_DELIVERABLES.map((s) => (
-          <div key={s.id} className="weizo-kanban-deliv-card weizo-kanban-sample-card">
-            <div className="weizo-kanban-deliv-row1">
-              <span className="weizo-kanban-deliv-icon">📄</span>
-              <span className="weizo-kanban-deliv-title">{s.title}</span>
-              <DelivReviewPill status={s.reviewStatus} />
-              <SampleBadge />
-            </div>
-            <div className="weizo-kanban-deliv-meta">
-              🕐 {s.when} · 👤 {s.who}
-            </div>
-            <div className="weizo-kanban-deliv-excerpt">{s.excerpt}</div>
-            <div className="weizo-kanban-job-actions">
-              <button type="button" className="weizo-kanban-action-btn weizo-kanban-action-primary" disabled>
-                查看交付
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -1723,7 +1570,12 @@ function UsageDetail({ onBack }: { onBack: () => void }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const agents = data && Array.isArray(data.agents) ? data.agents : [];
+  const agents = useMemo(() => {
+    const raw = data && Array.isArray(data.agents) ? data.agents : [];
+    return [...raw].sort((a, b) => b.total_tokens - a.total_tokens);
+  }, [data]);
+
+  const maxAgentTokens = agents.length > 0 ? (agents[0]?.total_tokens ?? 1) : 1;
 
   return (
     <div className="mobile-me">
@@ -1747,16 +1599,19 @@ function UsageDetail({ onBack }: { onBack: () => void }) {
               ))}
             </div>
             {agents.length > 0 && (
-              <div className="weizo-clilist weizo-clilist-agents">
-                <div className="weizo-clilist-agents-title">各 agent 用量(含 sub-agent)</div>
-                {agents.map((a) => (
-                  <div key={a.id} className="weizo-clilist-row weizo-clilist-row-muted">
-                    <span className="weizo-clilist-label weizo-clilist-label-muted">{a.name}</span>
-                    <span className="weizo-clilist-tokens weizo-clilist-tokens-muted">
-                      总计 ~{fmtTokens(a.total_tokens)} · 今日 ~{fmtTokens(a.today_tokens)}
-                    </span>
-                  </div>
-                ))}
+              <div className="weizo-agentbar-section">
+                <div className="weizo-agentbar-title">各 agent 用量(含 sub-agent)</div>
+                {agents.map((a) => {
+                  const pct = maxAgentTokens > 0 ? Math.max(2, Math.round((a.total_tokens / maxAgentTokens) * 100)) : 2;
+                  return (
+                    <div key={a.id} className="weizo-agentbar-row">
+                      <span className="weizo-agentbar-label">{a.name}</span>
+                      <div className="weizo-agentbar-track" aria-label={`${a.name} 总计 ${fmtTokens(a.total_tokens)} tokens`}>
+                        <div className="weizo-agentbar-fill" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <div className="weizo-clilist-note">{data.note}</div>

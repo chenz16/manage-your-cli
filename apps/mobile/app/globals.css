@@ -1777,6 +1777,37 @@ button, input, textarea, select { font: inherit; }
 .weizo-clilist-tokens { flex: 1 1 auto; color: var(--ink-mute, #aaa); font-size: 12px; }
 .weizo-clilist-note { margin-top: 6px; color: var(--ink-mute, #bbb); font-size: 11px; line-height: 1.4; }
 
+/* Agent bar chart — proportional horizontal bars, read-only/muted */
+.weizo-agentbar-section {
+  display: flex; flex-direction: column; gap: 7px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--line, #e8e8e8);
+}
+.weizo-agentbar-title {
+  font-size: 11px; font-weight: 600; color: var(--ink-3, #9a9a9a);
+  letter-spacing: 0.3px; text-transform: uppercase; margin-bottom: 2px;
+}
+.weizo-agentbar-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.weizo-agentbar-label {
+  flex: 0 0 auto; min-width: 72px; max-width: 120px;
+  font-size: 12px; color: var(--ink-3, #888);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.weizo-agentbar-track {
+  flex: 1 1 auto; height: 8px;
+  background: var(--paper-2, #f0ede4);
+  border-radius: 4px; overflow: hidden;
+}
+.weizo-agentbar-fill {
+  height: 100%;
+  background: var(--ink-4, #c8c4bc);
+  border-radius: 4px;
+  min-width: 4px;
+  transition: width 300ms ease;
+}
+
 /* Feedback + disconnect */
 .mobile-feedback-button {
   width: 100%; min-height: 48px; border: 0; border-radius: 8px;
