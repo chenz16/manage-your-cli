@@ -23,3 +23,4 @@ export * from './endpoints/deliverables.js';
 
 export { registry } from './registry.js';
 export * from './manifests/connectors.js';
+export * from './manifests/plugins.js';

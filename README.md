@@ -97,6 +97,37 @@ flowchart LR
 **internet of agents**. The Secretary is the hub: it coordinates your local team and
 is the single gateway out to other people's agents (over the **A2A** standard).
 
+### Two orthogonal axes: shell vs gateway
+
+Every connection above is "agent ↔ agent," but they differ on **two independent
+axes** — don't conflate them:
+
+- **Shell (tmux)** — a *local* wrapper that makes a CLI agent **watchable +
+  driveable**. Local overhead (screen scrape), no network. The Secretary runs
+  **without** a shell (warm stream → fast); employees run **inside** a tmux shell
+  (so you can supervise them).
+- **Gateway** — *network* transport to a **remote** party (A2A peers, the
+  WeChat/iLink bridge, the mobile thin-client). Decides whether the agent is local
+  or remote.
+
+|                      | no shell                   | tmux shell              |
+|----------------------|----------------------------|-------------------------|
+| **local**            | Secretary (fastest, ~1s)   | Employee (supervisable) |
+| **remote (gateway)** | A2A peer · WeChat · mobile  | —                       |
+
+**Create vs connect.** Internal agents are **created live** by the Secretary
+(`create_agent`) — you own their lifecycle (warm Secretary / tmux employees).
+External agents already exist; you **connect** to them (A2A handshake) — no spawn
+cost, but manual setup and not yours.
+
+**Is the gateway too slow? No — not for agent chat.** LLM generation takes
+*seconds*; a gateway hop is *tens of milliseconds* — noise next to the model's
+thinking time. The real latency is **cold-start**, which is why the Secretary is
+kept *warm*. So: keep the hot path (you ↔ Secretary) **local + warm** (no gateway,
+no shell); give employees a **tmux shell** (supervision); reach inherently-remote
+agents over a **gateway** (latency is fine). Don't drop a gateway to "go faster" —
+keep agents warm instead.
+
 ## The 6 core pieces
 
 | # | Piece | What it is |

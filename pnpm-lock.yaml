@@ -112,6 +112,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
       next:
         specifier: 15.5.18
         version: 15.5.18(@playwright/test@1.60.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)

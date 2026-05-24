@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# WeChat ClawBot QR Login
-# Usage: ./scripts/clawbot/login.sh
+# scripts/clawbot/login.sh — Bind a WeChat account via QR scan (one-time setup).
 #
-# Fetches a real QR from Tencent's iLink endpoint, renders it in the terminal,
-# then polls until the owner scans + confirms with WeChat iOS.
-# On success, token is saved to ~/.claude/channels/wechat/account.json (mode 0600).
+# Runs `wechat-clawbot-cc setup`, which:
+#   1. Fetches a QR code from the iLink bot service.
+#   2. Displays it as ASCII art in the terminal (requires `qrcode` Python pkg).
+#   3. Waits for you to scan it with your WeChat app (iOS, mainland China account).
+#   4. Saves the bound bot_token + account_id to ~/.claude/channels/wechat/account.json.
 #
-# Powered by: wechat-clawbot (nightsailer/wechat-clawbot, MIT)
-# Idempotent: re-running always fetches a fresh QR (prompts if existing creds found).
+# Usage:
+#   bash scripts/clawbot/login.sh
+#
+# After this succeeds, run serve.sh to start the message gateway.
 
 set -euo pipefail
 
-if ! command -v wechat-clawbot-cc &>/dev/null; then
-  echo "[clawbot] wechat-clawbot-cc not found — installing..."
-  pip install wechat-clawbot --quiet
-fi
-
+echo "[clawbot/login] Starting WeChat QR bind via wechat-clawbot-cc ..."
 exec wechat-clawbot-cc setup

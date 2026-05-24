@@ -21,6 +21,16 @@ export {
 
 export { getOwner, updateOwner, applyPersona } from './owner-config-service.js';
 export { getEffectiveLanguage } from './owner-language.js';
+export {
+  listRegistry,
+  listInstalled,
+  installPlugin,
+  setPluginEnabled,
+  uninstallPlugin,
+  mcpPluginId,
+  type InstalledMcpPlugin,
+  type McpPluginConfig,
+} from './plugin-store.js';
 
 export {
   createStaff,

@@ -1,8 +1,11 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Staff } from '@holon/api-contract';
+import type { McpPluginInstallSpec, Staff } from '@holon/api-contract';
+import { MCP_PLUGIN_REGISTRY, findMcpPluginManifest } from '@holon/api-contract';
+import { getOwner } from './owner-config-service.js';
+import { mcpPluginId } from './plugin-store.js';
 
 function warnMemoryScaffold(action: string, err: unknown): void {
   const code = err && typeof err === 'object' && 'code' in err ? ` ${(err as { code?: string }).code}` : '';
@@ -15,6 +18,14 @@ function writeFileIfAbsent(path: string, content: string): void {
     writeFileSync(path, content, { flag: 'wx' });
   } catch (err) {
     if (err && typeof err === 'object' && 'code' in err && err.code === 'EEXIST') return;
+    warnMemoryScaffold(`write ${path}`, err);
+  }
+}
+
+function writeFileBestEffort(path: string, content: string): void {
+  try {
+    writeFileSync(path, content);
+  } catch (err) {
     warnMemoryScaffold(`write ${path}`, err);
   }
 }
@@ -56,6 +67,7 @@ ${agentRemit(staff)}
 export function ensureAgentMemoryFile(cwd: string, staff: Staff, binary: string): void {
   mkdirIfNeeded(cwd);
   writeFileIfAbsent(join(cwd, agentMemoryFileName(binary)), agentMemoryTemplate(staff));
+  ensureMcpJson(join(cwd, '.mcp.json'), findRepoRoot());
 }
 
 export function ensureManagerWorkspace(): string {
@@ -126,6 +138,95 @@ function findRepoRoot(): string {
   return process.cwd();
 }
 
+function templateValue(raw: string, repoRoot: string, config: Record<string, unknown>): string {
+  return raw.replaceAll('{repoRoot}', repoRoot).replace(/\{config\.([A-Za-z0-9_-]+)\}/g, (_match, key: string) => {
+    const value = config[key];
+    return typeof value === 'string' ? value : '';
+  });
+}
+
+function templateArgs(rawArgs: string[], repoRoot: string, config: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const raw of rawArgs) {
+    const configOnly = raw.match(/^\{config\.([A-Za-z0-9_-]+)\}$/);
+    if (configOnly) {
+      const key = configOnly[1];
+      if (!key) continue;
+      const value = config[key];
+      if (Array.isArray(value)) {
+        out.push(...value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0));
+        continue;
+      }
+    }
+    const value = templateValue(raw, repoRoot, config);
+    if (value.length > 0) out.push(value);
+  }
+  return out;
+}
+
+function mcpServerEntryFromInstall(
+  install: McpPluginInstallSpec,
+  repoRoot: string,
+  config: Record<string, unknown>,
+): Record<string, unknown> | null {
+  if (install.type === 'remote') {
+    return {
+      type: 'remote',
+      url: templateValue(install.url, repoRoot, config),
+      ...(install.headers ? { headers: install.headers } : {}),
+    };
+  }
+
+  const env = install.env
+    ? Object.fromEntries(Object.entries(install.env).map(([key, value]) => [key, templateValue(value, repoRoot, config)]))
+    : undefined;
+  return {
+    type: 'stdio',
+    command: templateValue(install.command, repoRoot, config),
+    args: templateArgs(install.args, repoRoot, config),
+    ...(env && Object.keys(env).length > 0 ? { env } : {}),
+  };
+}
+
+function configuredMcpServers(repoRoot: string): Record<string, unknown> {
+  const servers: Record<string, unknown> = {};
+  const holon = findMcpPluginManifest('holon');
+  if (holon) {
+    const entry = mcpServerEntryFromInstall(holon.install, repoRoot, {});
+    if (entry) servers[holon.id] = entry;
+  }
+
+  for (const link of getOwner().integrations) {
+    if (link.kind !== 'mcp' || !link.enabled) continue;
+    const id = mcpPluginId(link);
+    if (!id || id === 'holon') continue;
+    const manifest = findMcpPluginManifest(id);
+    if (!manifest) continue;
+    const entry = mcpServerEntryFromInstall(manifest.install, repoRoot, link.config);
+    if (entry) servers[id] = entry;
+  }
+  return servers;
+}
+
+function ensureMcpJson(path: string, repoRoot: string): void {
+  const registryIds = new Set(MCP_PLUGIN_REGISTRY.map((plugin) => plugin.id));
+  let existingServers: Record<string, unknown> = {};
+  if (existsSync(path)) {
+    try {
+      const raw = JSON.parse(readFileSync(path, 'utf8')) as { mcpServers?: unknown };
+      if (raw.mcpServers && typeof raw.mcpServers === 'object' && !Array.isArray(raw.mcpServers)) {
+        existingServers = raw.mcpServers as Record<string, unknown>;
+      }
+    } catch (err) {
+      warnMemoryScaffold(`read ${path}`, err);
+    }
+  }
+
+  for (const id of registryIds) delete existingServers[id];
+  const mcpServers = { ...existingServers, ...configuredMcpServers(repoRoot) };
+  writeFileBestEffort(path, `${JSON.stringify({ mcpServers }, null, 2)}\n`);
+}
+
 const SECRETARY_PERSONA = `# Secretary
 
 You are the CEO's secretary. Stay extremely concise.
@@ -147,15 +248,7 @@ export function ensureSecretaryWorkspace(): string {
   mkdirIfNeeded(cwd);
   writeFileIfAbsent(join(cwd, 'CLAUDE.md'), SECRETARY_PERSONA);
   writeFileIfAbsent(join(cwd, 'AGENTS.md'), SECRETARY_PERSONA);
-  writeFileIfAbsent(join(cwd, '.mcp.json'), `${JSON.stringify({
-    mcpServers: {
-      holon: {
-        type: 'stdio',
-        command: 'corepack',
-        args: ['pnpm', '-C', repoRoot, '-F', 'holon-mcp', 'start'],
-      },
-    },
-  }, null, 2)}\n`);
+  ensureMcpJson(join(cwd, '.mcp.json'), repoRoot);
   return cwd;
 }
 
@@ -178,14 +271,6 @@ export function ensureMemoryManagerWorkspace(): string {
   mkdirIfNeeded(cwd);
   writeFileIfAbsent(join(cwd, 'CLAUDE.md'), MEMORY_MANAGER_PERSONA);
   writeFileIfAbsent(join(cwd, 'AGENTS.md'), MEMORY_MANAGER_PERSONA);
-  writeFileIfAbsent(join(cwd, '.mcp.json'), `${JSON.stringify({
-    mcpServers: {
-      holon: {
-        type: 'stdio',
-        command: 'corepack',
-        args: ['pnpm', '-C', repoRoot, '-F', 'holon-mcp', 'start'],
-      },
-    },
-  }, null, 2)}\n`);
+  ensureMcpJson(join(cwd, '.mcp.json'), repoRoot);
   return cwd;
 }
