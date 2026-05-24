@@ -1766,6 +1766,17 @@ button, input, textarea, select { font: inherit; }
   display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end;
 }
 
+/* CLI usage list — read-only, muted */
+.weizo-clilist { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.weizo-clilist-row {
+  display: flex; align-items: baseline; gap: 6px;
+  color: var(--ink-mute, #999); font-size: 13.5px;
+}
+.weizo-clilist-dot { flex: 0 0 auto; font-size: 10px; color: var(--ink-mute, #999); }
+.weizo-clilist-label { flex: 0 0 auto; color: var(--ink-mute, #888); font-size: 13.5px; }
+.weizo-clilist-tokens { flex: 1 1 auto; color: var(--ink-mute, #aaa); font-size: 12px; }
+.weizo-clilist-note { margin-top: 6px; color: var(--ink-mute, #bbb); font-size: 11px; line-height: 1.4; }
+
 /* Feedback + disconnect */
 .mobile-feedback-button {
   width: 100%; min-height: 48px; border: 0; border-radius: 8px;

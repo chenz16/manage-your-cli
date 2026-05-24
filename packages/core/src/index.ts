@@ -196,3 +196,9 @@ export {
   updateTodo,
   deleteTodo,
 } from './todo-store.js';
+
+// Claude token-usage stats (local log parser)
+export {
+  readClaudeUsage,
+  type ClaudeUsage,
+} from './usage-stats.js';

@@ -1675,6 +1675,55 @@ function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
   );
 }
 
+// ─── CLI 用量 — local log stats ───────────────────────────────────────────────
+
+interface CliUsageEntry {
+  binary: string;
+  label: string;
+  in_use: boolean;
+  usage?: {
+    today_tokens: number;
+    week_tokens: number;
+    total_tokens: number;
+    since: string;
+    last_scan: string;
+  };
+}
+
+interface CliUsageResponse {
+  clis: CliUsageEntry[];
+  note: string;
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return String(n);
+}
+
+function CliUsageSection({ data }: { data: CliUsageResponse | null }) {
+  if (!data) return null;
+  return (
+    <div className="mobile-me-section">
+      <div className="mobile-me-label">使用中的 CLI</div>
+      <div className="weizo-clilist">
+        {data.clis.map((cli) => (
+          <div key={cli.binary} className="weizo-clilist-row">
+            <span className="weizo-clilist-dot">{cli.in_use ? '●' : '○'}</span>
+            <span className="weizo-clilist-label">{cli.label}</span>
+            {cli.usage && (
+              <span className="weizo-clilist-tokens">
+                今日 ~{fmtTokens(cli.usage.today_tokens)} · 本周 ~{fmtTokens(cli.usage.week_tokens)} tokens
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="weizo-clilist-note">{data.note}</div>
+    </div>
+  );
+}
+
 // ─── 集成 / 连接服务 — integrations section ──────────────────────────────────
 
 interface MeOwnerData {
@@ -2091,6 +2140,7 @@ function MeTab({
   const [personaApplied, setPersonaApplied] = useState('');
   const [error, setError] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [cliUsage, setCliUsage] = useState<CliUsageResponse | null>(null);
 
   async function load() {
     setLoading(true);
@@ -2120,6 +2170,13 @@ function MeTab({
   }
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    holonApiFetch('/api/v1/usage', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<CliUsageResponse> : Promise.resolve(null))
+      .then((data) => { if (data) setCliUsage(data); })
+      .catch(() => undefined);
+  }, []);
 
   async function applyPersona(persona: PersonaPreset) {
     setSavingId(persona.id);
@@ -2186,6 +2243,7 @@ function MeTab({
         {loading && <div className="mobile-me-note">加载人设…</div>}
       </div>
       <IntegrationsSection meData={meData} onRefresh={() => void load()} />
+      <CliUsageSection data={cliUsage} />
       <div className="mobile-me-section">
         <div className="mobile-me-label">应用版本</div>
         <div className="mobile-me-value">微作 Weizo 0.1.0</div>
