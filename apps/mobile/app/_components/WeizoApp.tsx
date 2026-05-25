@@ -49,6 +49,7 @@ import {
   clearDesktopConnection,
   holonApiFetch,
   installMobileApiFetchProxy,
+  normalizeBaseUrl,
   readDesktopConnection,
   writeDesktopConnection,
   type MobileDesktopConnection,
@@ -5162,7 +5163,6 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
     setBusy(true);
     setErr('');
     try {
-      const { normalizeBaseUrl } = await import('../_lib/mobile-runtime');
       const normalizedUrl = normalizeBaseUrl(baseUrl.trim());
       const r = await fetch(`${normalizedUrl}/api/v1/pair/request`, {
         method: 'POST',
@@ -5191,7 +5191,6 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
     setBusy(true);
     setErr('');
     try {
-      const { normalizeBaseUrl, writeDesktopConnection } = await import('../_lib/mobile-runtime');
       const normalizedUrl = normalizeBaseUrl(baseUrl.trim());
       const r = await fetch(`${normalizedUrl}/api/v1/pair/confirm`, {
         method: 'POST',
