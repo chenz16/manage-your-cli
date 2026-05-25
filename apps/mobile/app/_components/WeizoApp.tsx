@@ -1750,13 +1750,24 @@ function MobileChatPanel({
 
 // ─── 通讯录 — contacts tab ────────────────────────────────────────────────────
 
+interface AgentUsage { today_tokens: number; total_tokens: number }
+
+/** A staff member's model/CLI label (claude/codex/…) for the roster + usage row. */
+function staffModelLabel(s: Staff): string {
+  const sub = s.substrate;
+  if (sub?.kind === 'cli_agent' && typeof sub.binary === 'string' && sub.binary) return sub.binary;
+  return 'local';
+}
+
 function Contacts({
   staff,
+  agentUsage,
   onOpen,
   onRefresh,
   refreshing,
 }: {
   staff: readonly Staff[];
+  agentUsage: Record<string, AgentUsage>;
   onOpen: (s: Staff) => void;
   onRefresh: () => void;
   refreshing: boolean;
@@ -1818,16 +1829,26 @@ function Contacts({
       {/* 刷新条已去掉 —— 下拉即刷新(ptr-indicator)+ 切到通讯录自动刷新 */}
       {staff.length === 0 ? (
         <div className="mobile-empty-panel">还没有员工。</div>
-      ) : staff.map((s) => (
-        <button key={s.id} type="button" className="mobile-row" onClick={() => onOpen(s)}>
-          <span className="mobile-avatar">{substrateIcon(s)}</span>
-          <span className="mobile-row-main">
-            <span className="mobile-row-title">{s.name}</span>
-            <span className="mobile-row-sub">{s.role_label}</span>
-          </span>
-          <span className="mobile-row-action">配置</span>
-        </button>
-      ))}
+      ) : staff.map((s) => {
+        const usage = agentUsage[s.id];
+        const model = staffModelLabel(s);
+        return (
+          <button key={s.id} type="button" className="mobile-row" onClick={() => onOpen(s)}>
+            <span className="mobile-avatar">{substrateIcon(s)}</span>
+            <span className="mobile-row-main">
+              <span className="mobile-row-title">{s.name}</span>
+              <span className="mobile-row-sub">{s.role_label}</span>
+              <span className="mobile-row-usage">
+                <span className="mobile-row-model">{model}</span>
+                {usage
+                  ? <span className="mobile-row-tokens">今日 {fmtTokens(usage.today_tokens)} · 累计 {fmtTokens(usage.total_tokens)} tokens</span>
+                  : <span className="mobile-row-tokens mobile-row-tokens-na">暂无统计</span>}
+              </span>
+            </span>
+            <span className="mobile-row-action">配置</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1852,6 +1873,50 @@ function StaffProfile({
 
   // Seed/refresh the editable draft whenever the loaded staff changes (incl. after save).
   useEffect(() => { setPersonaDraft(staff?.system_prompt?.trim() ?? ''); }, [staff]);
+
+  // Editable fixed attributes (名称/角色标签/角色名/并发上限) — all PATCHABLE on the desk.
+  const [nameDraft, setNameDraft] = useState('');
+  const [roleLabelDraft, setRoleLabelDraft] = useState('');
+  const [roleNameDraft, setRoleNameDraft] = useState('');
+  const [maxJobsDraft, setMaxJobsDraft] = useState('1');
+  const [savingProps, setSavingProps] = useState(false);
+  const [propsMsg, setPropsMsg] = useState('');
+  useEffect(() => {
+    setNameDraft(staff?.name ?? '');
+    setRoleLabelDraft(staff?.role_label ?? '');
+    setRoleNameDraft(staff?.role_name ?? '');
+    setMaxJobsDraft(String(staff?.max_concurrent_jobs ?? 1));
+  }, [staff]);
+
+  async function saveProps() {
+    if (!staff || savingProps) return;
+    setSavingProps(true); setPropsMsg('');
+    try {
+      const patch: Record<string, unknown> = {};
+      if (nameDraft.trim() && nameDraft.trim() !== staff.name) patch.name = nameDraft.trim();
+      if (roleLabelDraft.trim() && roleLabelDraft.trim() !== staff.role_label) patch.role_label = roleLabelDraft.trim();
+      if (roleNameDraft.trim() && roleNameDraft.trim() !== staff.role_name) patch.role_name = roleNameDraft.trim();
+      const mj = parseInt(maxJobsDraft, 10);
+      if (Number.isFinite(mj) && mj > 0 && mj !== staff.max_concurrent_jobs) patch.max_concurrent_jobs = mj;
+      if (Object.keys(patch).length === 0) { setPropsMsg('没有改动'); return; }
+      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staff.id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const j = await r.json().catch(() => ({})) as Staff & { error?: string };
+      if (!r.ok || !j.id) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setStaff(j as Staff);
+      setPropsMsg('已保存');
+    } catch (err) {
+      setPropsMsg(`保存失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally { setSavingProps(false); }
+  }
+  const propsDirty = staff
+    ? nameDraft.trim() !== staff.name
+      || roleLabelDraft.trim() !== staff.role_label
+      || roleNameDraft.trim() !== staff.role_name
+      || (parseInt(maxJobsDraft, 10) || 0) !== staff.max_concurrent_jobs
+    : false;
 
   async function polishPersona() {
     if (!staff || !personaDraft.trim() || polishing) return;
@@ -1915,12 +1980,28 @@ function StaffProfile({
             <span className="mobile-staff-profile-name">{staff.name}</span>
             <span className="mobile-staff-profile-role">{staff.role_label}</span>
           </div>
-          <dl className="mobile-config-list">
-            <div><dt>名称</dt><dd>{staff.name}</dd></div>
-            <div><dt>角色标签</dt><dd>{staff.role_label}</dd></div>
-            <div><dt>角色名</dt><dd>{staff.role_name}</dd></div>
-            <div><dt>并发任务上限</dt><dd>{staff.max_concurrent_jobs}</dd></div>
-          </dl>
+          <div className="mobile-staff-edit">
+            <label className="mobile-config-dt" htmlFor="staff-name">名称</label>
+            <input id="staff-name" className="mobile-staff-field" value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)} disabled={savingProps} />
+            <label className="mobile-config-dt" htmlFor="staff-rolelabel">角色标签</label>
+            <input id="staff-rolelabel" className="mobile-staff-field" value={roleLabelDraft}
+              onChange={(e) => setRoleLabelDraft(e.target.value)} disabled={savingProps} />
+            <label className="mobile-config-dt" htmlFor="staff-rolename">角色名</label>
+            <input id="staff-rolename" className="mobile-staff-field" value={roleNameDraft}
+              onChange={(e) => setRoleNameDraft(e.target.value)} disabled={savingProps} />
+            <label className="mobile-config-dt" htmlFor="staff-maxjobs">并发任务上限</label>
+            <input id="staff-maxjobs" type="number" min="1" inputMode="numeric"
+              className="mobile-staff-field" value={maxJobsDraft}
+              onChange={(e) => setMaxJobsDraft(e.target.value)} disabled={savingProps} />
+            <div className="mobile-persona-editor-actions">
+              {propsMsg && <span className="mobile-persona-editor-msg">{propsMsg}</span>}
+              <button type="button" className="mobile-persona-save-btn"
+                onClick={() => void saveProps()} disabled={savingProps || !propsDirty}>
+                {savingProps ? '保存中…' : '保存属性'}
+              </button>
+            </div>
+          </div>
           <div className="mobile-persona-editor">
             <div className="mobile-persona-editor-head">
               <span className="mobile-config-dt">系统指令（人设）</span>
@@ -4204,6 +4285,7 @@ export function WeizoApp() {
   const [booted, setBooted] = useState(false);
   const [tab, setTab] = useState<TabKey>('chats');
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [agentUsage, setAgentUsage] = useState<Record<string, AgentUsage>>({});
   const [activeChat, setActiveChat] = useState<ActiveChat>({ kind: 'owner' });
   const [chatSeed, setChatSeed] = useState<string | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
@@ -4230,6 +4312,18 @@ export function WeizoApp() {
       const j = await r.json() as ListStaffResponse;
       setStaff(Array.isArray(j.items) ? j.items : []);
       setStaffError('');
+      // Per-agent token usage (best-effort; never blocks the roster). Only
+      // claude-based agents have counts (from local Claude logs); codex/others
+      // come back without an entry → row shows "暂无统计".
+      void holonApiFetch('/api/v1/usage', { cache: 'no-store' })
+        .then((ur) => (ur.ok ? ur.json() : null))
+        .then((uj: { agents?: Array<{ id: string; today_tokens: number; total_tokens: number }> } | null) => {
+          if (!uj?.agents) return;
+          const map: Record<string, AgentUsage> = {};
+          for (const a of uj.agents) map[a.id] = { today_tokens: a.today_tokens, total_tokens: a.total_tokens };
+          setAgentUsage(map);
+        })
+        .catch(() => { /* usage is optional */ });
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : String(err));
       setDesktopOffline(true);
@@ -4410,7 +4504,7 @@ export function WeizoApp() {
               }}
             />
           ) : (
-            <Contacts staff={staff} onOpen={setSelectedStaff} onRefresh={() => void fetchStaff()} refreshing={staffRefreshing} />
+            <Contacts staff={staff} agentUsage={agentUsage} onOpen={setSelectedStaff} onRefresh={() => void fetchStaff()} refreshing={staffRefreshing} />
           )
         )}
         {tab === 'work' && (
