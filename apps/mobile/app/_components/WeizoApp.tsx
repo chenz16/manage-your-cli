@@ -4202,21 +4202,39 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
 function AssetsView({
   onBack,
   delivCount,
+  refCount,
   onOpenSkills,
+  onOpenDesk,
 }: {
   onBack: () => void;
   delivCount: number | null;
+  refCount: number | null;
   onOpenSkills: () => void;
+  onOpenDesk: (path: string) => void;
 }) {
   return (
     <div className="mobile-me">
       <button type="button" className="mobile-back-row" onClick={onBack}>‹ 我</button>
+      <div className="mobile-me-label" style={{ marginTop: 4 }}>能力 · 知识</div>
       <div className="mobile-asset-grid">
         <button type="button" className="mobile-asset-cell" onClick={onOpenSkills}>
           <span className="mobile-asset-icon">🧰</span>
           <span className="mobile-asset-name">技能</span>
           <span className="mobile-asset-sub">团队能力</span>
         </button>
+        <button type="button" className="mobile-asset-cell" onClick={() => onOpenDesk('/references')}>
+          <span className="mobile-asset-icon">📚</span>
+          <span className="mobile-asset-name">引用</span>
+          <span className="mobile-asset-sub">{refCount === null ? '桌面库' : `${refCount} 条`}</span>
+        </button>
+        <button type="button" className="mobile-asset-cell" onClick={() => onOpenDesk('/references')}>
+          <span className="mobile-asset-icon">🧩</span>
+          <span className="mobile-asset-name">模板</span>
+          <span className="mobile-asset-sub">输出格式</span>
+        </button>
+      </div>
+      <div className="mobile-me-label" style={{ marginTop: 14 }}>产出</div>
+      <div className="mobile-asset-grid">
         <div className="mobile-asset-cell is-static">
           <span className="mobile-asset-icon">📦</span>
           <span className="mobile-asset-name">交付物</span>
@@ -4229,7 +4247,7 @@ function AssetsView({
         </div>
       </div>
       <div className="mobile-me-note" style={{ marginTop: 12 }}>
-        资产是团队的能力与产出（不是消息）。技能可浏览 / 新建；交付文件夹与统计随后接桌面。
+        资产是团队的能力、知识与产出（不是消息）。技能可浏览 / 新建；引用、模板在桌面完整管理；交付文件夹与统计随后接入。
       </div>
     </div>
   );
@@ -4273,6 +4291,7 @@ function MeTab({
   const [assetsOpen, setAssetsOpen] = useState(false); // 资产区(技能 + 交付统计 + …)
   const [skillSheetOpen, setSkillSheetOpen] = useState(false);
   const [delivCount, setDelivCount] = useState<number | null>(null);
+  const [refCount, setRefCount] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -4317,6 +4336,10 @@ function MeTab({
     holonApiFetch('/api/v1/deliverables', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() as Promise<ListDeliverablesResponse> : Promise.resolve(null))
       .then((data) => { if (data) setDelivCount(Array.isArray(data.items) ? data.items.length : 0); })
+      .catch(() => undefined);
+    holonApiFetch('/api/v1/references', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<{ items?: unknown[] }> : Promise.resolve(null))
+      .then((data) => { if (data) setRefCount(Array.isArray(data.items) ? data.items.length : 0); })
       .catch(() => undefined);
   }, []);
 
@@ -4462,7 +4485,9 @@ function MeTab({
         <AssetsView
           onBack={() => setAssetsOpen(false)}
           delivCount={delivCount}
+          refCount={refCount}
           onOpenSkills={() => setSkillSheetOpen(true)}
+          onOpenDesk={(path) => { if (connection.baseUrl) window.open(`${connection.baseUrl}${path}`, '_blank'); }}
         />
         {skillSheetOpen && (
           <SkillSheet
@@ -4529,7 +4554,7 @@ function MeTab({
         <button type="button" className="mobile-collapse-head" onClick={() => setAssetsOpen(true)}>
           <span className="mobile-me-asset-icon" aria-hidden="true">🧰</span>
           <span className="mobile-me-label" style={{ margin: 0 }}>资产</span>
-          <span className="mobile-collapse-summary">技能 · 交付{delivCount !== null ? ` ${delivCount}` : ''}</span>
+          <span className="mobile-collapse-summary">技能 · 引用 · 交付{delivCount !== null ? ` ${delivCount}` : ''}</span>
           <span className="mobile-collapse-chevron">›</span>
         </button>
       </div>
