@@ -46,8 +46,16 @@ echo "[3/5] regen capacitor iOS platform"
 rm -rf ios
 npx --yes @capacitor/cli@6 add ios  2>&1 | tail -2 || true   # internal pod install fails @13.0 — ignore; Podfile generated
 npx --yes @capacitor/cli@6 sync ios 2>&1 | tail -2 || true
-echo "[4/5] raise deployment target + pod install"
+echo "[4/5] raise deployment target + pod install + ATS exception"
 ( cd ios/App && sed -i '' "s/platform :ios, .*/platform :ios, '15.0'/" Podfile && pod install 2>&1 | tail -6 ) || { echo FAIL-pod; exit 1; }
+# iOS blocks cleartext HTTP by default → app can't reach the http:// LAN desk.
+# Add an ATS exception (dev). TECH DEBT: tighten to NSAllowsLocalNetworking +
+# exception domains for production / App Store.
+PL=ios/App/App/Info.plist
+/usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$PL" 2>/dev/null
+/usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PL"
+/usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$PL"
+echo "ATS: $(/usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$PL")"
 echo "[5/5] xcodebuild simulator (no signing)"
 SIM=$(xcrun simctl list devices available | grep -E 'iPhone 16 \(' | head -1 | grep -oE '[A-F0-9-]{36}')
 [ -z "$SIM" ] && SIM=$(xcrun simctl list devices available | grep iPhone | head -1 | grep -oE '[A-F0-9-]{36}')
