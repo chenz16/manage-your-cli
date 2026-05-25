@@ -1955,12 +1955,14 @@ function Contacts({
   staff,
   agentUsage,
   onOpen,
+  onOpenConfig,
   onRefresh,
   refreshing,
 }: {
   staff: readonly Staff[];
   agentUsage: Record<string, AgentUsage>;
   onOpen: (s: Staff) => void;
+  onOpenConfig: (s: Staff) => void;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
@@ -2057,7 +2059,13 @@ function Contacts({
                   : <span className="mobile-row-tokens mobile-row-tokens-na">暂无统计</span>}
               </span>
             </span>
-            <span className="mobile-row-action">配置</span>
+            <button
+              type="button"
+              className="mobile-row-action"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 4px', font: 'inherit' }}
+              onClick={(e) => { e.stopPropagation(); onOpenConfig(s); }}
+              aria-label={`配置 ${s.name}`}
+            >配置</button>
           </button>
         );
       })}
@@ -2374,6 +2382,164 @@ function StaffProfile({
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [staffId]);
+
+  // Row-list expand state (embedded mode only)
+  const [openRow, setOpenRow] = useState<'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | null>(null);
+
+  function toggleRow(row: 'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona') {
+    setOpenRow((prev) => (prev === row ? null : row));
+  }
+
+  if (embedded && staff) {
+    return (
+      <div className="mobile-staff-profile">
+        {loading && !staff && <div className="mobile-empty-panel">加载中…</div>}
+        {error && <div className="mobile-error">员工配置加载失败：{error}</div>}
+        {/* Compact avatar hero */}
+        <div className="mobile-staff-profile-hero">
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAvatarPicked(f); if (e.target) e.target.value = ''; }}
+          />
+          <StaffAvatar staff={staff} size={64} onPick={() => avatarInputRef.current?.click()} />
+          <span className="mobile-staff-cap" onClick={() => avatarInputRef.current?.click()}>点图换头像</span>
+          <span className="mobile-staff-profile-name">{staff.name}</span>
+          {staff.role_label && staff.role_label !== staff.name && (
+            <span className="mobile-staff-profile-role">{staff.role_label}</span>
+          )}
+        </div>
+
+        {/* Row list — WeChat 我-tab style */}
+        <div className="mobile-me-section" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+          {/* 名称 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('name')}>
+            <span className="mobile-me-row-title">名称</span>
+            <span className="mobile-collapse-summary">{staff.name}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'name' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'name' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              <input id="staff-name-emb" className="mobile-staff-field" value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)} disabled={savingProps} />
+              <div className="mobile-persona-editor-actions">
+                {propsMsg && <span className="mobile-persona-editor-msg">{propsMsg}</span>}
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveProps().then(() => setOpenRow(null)); }} disabled={savingProps || !propsDirty}>
+                  {savingProps ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 角色标签 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('roleLabel')}>
+            <span className="mobile-me-row-title">角色标签</span>
+            <span className="mobile-collapse-summary">{staff.role_label || '—'}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'roleLabel' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'roleLabel' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              <input id="staff-rolelabel-emb" className="mobile-staff-field" value={roleLabelDraft}
+                onChange={(e) => setRoleLabelDraft(e.target.value)} disabled={savingProps} />
+              <div className="mobile-persona-editor-actions">
+                {propsMsg && <span className="mobile-persona-editor-msg">{propsMsg}</span>}
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveProps().then(() => setOpenRow(null)); }} disabled={savingProps || !propsDirty}>
+                  {savingProps ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 角色名 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('roleName')}>
+            <span className="mobile-me-row-title">角色名</span>
+            <span className="mobile-collapse-summary">{staff.role_name || '—'}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'roleName' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'roleName' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              <input id="staff-rolename-emb" className="mobile-staff-field" value={roleNameDraft}
+                onChange={(e) => setRoleNameDraft(e.target.value)} disabled={savingProps} />
+              <div className="mobile-persona-editor-actions">
+                {propsMsg && <span className="mobile-persona-editor-msg">{propsMsg}</span>}
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveProps().then(() => setOpenRow(null)); }} disabled={savingProps || !propsDirty}>
+                  {savingProps ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 并发任务上限 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('maxJobs')}>
+            <span className="mobile-me-row-title">并发任务上限</span>
+            <span className="mobile-collapse-summary">{staff.max_concurrent_jobs ?? 1}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'maxJobs' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'maxJobs' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              <input id="staff-maxjobs-emb" type="number" min="1" inputMode="numeric"
+                className="mobile-staff-field" value={maxJobsDraft}
+                onChange={(e) => setMaxJobsDraft(e.target.value)} disabled={savingProps} />
+              <div className="mobile-persona-editor-actions">
+                {propsMsg && <span className="mobile-persona-editor-msg">{propsMsg}</span>}
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveProps().then(() => setOpenRow(null)); }} disabled={savingProps || !propsDirty}>
+                  {savingProps ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 人设 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('persona')}>
+            <span className="mobile-me-row-title">人设（系统指令）</span>
+            <span className="mobile-collapse-summary" style={{ maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {staff.system_prompt?.trim() ? staff.system_prompt.trim().slice(0, 30) + (staff.system_prompt.trim().length > 30 ? '…' : '') : '未设置'}
+            </span>
+            <span className={`mobile-collapse-chevron${openRow === 'persona' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'persona' && (
+            <div className="mobile-persona-editor" style={{ margin: '0 0 8px' }}>
+              {personaMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{personaMsg}</span>}
+              <textarea
+                className="mobile-persona-editor-textarea"
+                value={personaDraft}
+                onChange={(e) => setPersonaDraft(e.target.value)}
+                placeholder="描述这个员工的职责与风格，可先随手写，再点「润色」让小秘整理。"
+                rows={6}
+                disabled={polishing || savingPersona}
+              />
+              <div className="mobile-persona-editor-actions">
+                <button
+                  type="button"
+                  className="mobile-persona-polish-btn"
+                  onClick={() => void polishPersona()}
+                  disabled={polishing || savingPersona || !personaDraft.trim()}
+                >
+                  {polishing ? '润色中…' : '✨ 润色'}
+                </button>
+                <button
+                  type="button"
+                  className="mobile-persona-save-btn"
+                  onClick={() => { void savePersona().then(() => setOpenRow(null)); }}
+                  disabled={savingPersona || polishing || !personaDirty}
+                >
+                  {savingPersona ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mobile-staff-profile">
@@ -4280,9 +4446,9 @@ function setStaffLanding(id: string, v: 'chat' | 'terminal'): void {
   try { window.localStorage.setItem(`${STAFF_LANDING_KEY}.${id}`, v); } catch { /* noop */ }
 }
 
-function StaffDetail({ staff, onBack }: { staff: Staff; onBack: () => void }) {
+function StaffDetail({ staff, onBack, initialMode }: { staff: Staff; onBack: () => void; initialMode?: 'primary' | 'config' }) {
   const isSecretary = staff.role_name === 'secretary';
-  const [mode, setMode] = useState<'primary' | 'config'>('primary');
+  const [mode, setMode] = useState<'primary' | 'config'>(initialMode ?? 'primary');
   const [landing, setLanding] = useState<'chat' | 'terminal'>(() => (isSecretary ? 'chat' : getStaffLanding(staff.id)));
 
   function pickLanding(v: 'chat' | 'terminal') { setLanding(v); setStaffLanding(staff.id, v); }
@@ -5375,6 +5541,7 @@ export function WeizoApp() {
   const [agentUsage, setAgentUsage] = useState<Record<string, AgentUsage>>({});
   const [chatSeed, setChatSeed] = useState<string | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
+  const [staffInitialMode, setStaffInitialMode] = useState<'primary' | 'config'>('primary');
   const [staffError, setStaffError] = useState('');
   const [desktopOffline, setDesktopOffline] = useState(false);
   const [checkingConnection, setCheckingConnection] = useState(false);
@@ -5518,6 +5685,7 @@ export function WeizoApp() {
   function openTab(next: TabKey) {
     setTab(next);
     setSelectedStaff(null);
+    setStaffInitialMode('primary');
     setMeSubview(false); // returning to 我 root must show its header (no flash)
   }
 
@@ -5566,9 +5734,16 @@ export function WeizoApp() {
         )}
         {tab === 'contacts' && (
           selectedStaff ? (
-            <StaffDetail staff={selectedStaff} onBack={() => setSelectedStaff(null)} />
+            <StaffDetail staff={selectedStaff} onBack={() => { setSelectedStaff(null); setStaffInitialMode('primary'); }} initialMode={staffInitialMode} />
           ) : (
-            <Contacts staff={staff} agentUsage={agentUsage} onOpen={setSelectedStaff} onRefresh={() => void fetchStaff()} refreshing={staffRefreshing} />
+            <Contacts
+              staff={staff}
+              agentUsage={agentUsage}
+              onOpen={(s) => { setStaffInitialMode('primary'); setSelectedStaff(s); }}
+              onOpenConfig={(s) => { setStaffInitialMode('config'); setSelectedStaff(s); }}
+              onRefresh={() => void fetchStaff()}
+              refreshing={staffRefreshing}
+            />
           )
         )}
         {tab === 'work' && (
