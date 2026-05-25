@@ -1776,6 +1776,11 @@ function Contacts({
   const startY = useRef<number | null>(null);
   const armedRef = useRef(false);
   const [pullY, setPullY] = useState(0);
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const filtered = query
+    ? staff.filter((s) => `${s.name} ${s.role_label} ${s.role_name}`.toLowerCase().includes(query))
+    : staff;
 
   const TRIGGER_PX = 64;
   const MAX_PULL_PX = 96;
@@ -1826,15 +1831,28 @@ function Contacts({
         <div className={`ptr-spinner${refreshing ? ' ptr-spinner-spin' : ''}`}
           style={{ transform: refreshing ? undefined : `rotate(${progress * 270}deg)` }} />
       </div>
-      {/* 刷新条已去掉 —— 下拉即刷新(ptr-indicator)+ 切到通讯录自动刷新 */}
+      {/* WeChat-style search bar */}
+      <div className="mobile-search-bar">
+        <span className="mobile-search-icon" aria-hidden="true">🔍</span>
+        <input
+          className="mobile-search-input"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="搜索员工"
+          inputMode="search"
+        />
+        {q && <button type="button" className="mobile-search-clear" onClick={() => setQ('')} aria-label="清除">×</button>}
+      </div>
       {staff.length === 0 ? (
         <div className="mobile-empty-panel">还没有员工。</div>
-      ) : staff.map((s) => {
+      ) : filtered.length === 0 ? (
+        <div className="mobile-empty-panel">没有匹配「{q}」的员工。</div>
+      ) : filtered.map((s) => {
         const usage = agentUsage[s.id];
         const model = staffModelLabel(s);
         return (
           <button key={s.id} type="button" className="mobile-row" onClick={() => onOpen(s)}>
-            <span className="mobile-avatar">{substrateIcon(s)}</span>
+            <StaffAvatar staff={s} size={44} />
             <span className="mobile-row-main">
               <span className="mobile-row-title">{s.name}</span>
               {s.role_label && s.role_label !== s.name && (
@@ -1879,16 +1897,16 @@ function StaffAvatar({ staff, size = 56, onPick }: { staff: Staff; size?: number
     ? { width: size, height: size, backgroundImage: `url(${custom})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : { width: size, height: size, background: `linear-gradient(135deg, hsl(${hue} 58% 52%), hsl(${(hue + 38) % 360} 60% 42%))` };
   return (
-    <button
-      type="button"
+    <span
       className="mobile-staff-avatar2"
       style={style}
       onClick={onPick}
-      aria-label="更换头像"
+      role={onPick ? 'button' : undefined}
+      aria-label={onPick ? '更换头像' : undefined}
     >
       {!custom && <span className="mobile-staff-avatar2-initial" style={{ fontSize: size * 0.4 }}>{staffInitial(staff.name)}</span>}
       {onPick && <span className="mobile-staff-avatar2-edit" aria-hidden="true">✎</span>}
-    </button>
+    </span>
   );
 }
 

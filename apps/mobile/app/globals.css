@@ -1167,6 +1167,20 @@ button, input, textarea, select { font: inherit; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mobile-row-action { flex: 0 0 auto; color: #8a8a8a; font-size: 12px; }
+/* WeChat-style search bar */
+.mobile-search-bar {
+  display: flex; align-items: center; gap: 6px; margin: 8px 12px 6px;
+  padding: 0 10px; height: 38px; border-radius: 9px; background: #ececec;
+}
+.mobile-search-icon { font-size: 13px; opacity: 0.55; }
+.mobile-search-input {
+  flex: 1 1 auto; min-width: 0; border: 0; background: transparent; outline: none;
+  font: inherit; font-size: 14.5px; color: #111;
+}
+.mobile-search-clear {
+  flex: 0 0 auto; width: 20px; height: 20px; border: 0; border-radius: 50%;
+  background: #c4c4c4; color: #fff; font-size: 14px; line-height: 1; padding: 0;
+}
 /* Per-member model + token consumption (通讯录 row). */
 .mobile-row-usage {
   display: flex; align-items: center; gap: 6px; margin-top: 1px;
