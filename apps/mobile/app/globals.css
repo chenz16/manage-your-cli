@@ -2204,9 +2204,12 @@ button, input, textarea, select { font: inherit; }
 .mobile-me-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .mobile-me-conn-error { color: #bf3d32 !important; font-weight: 600; }
 .mobile-me-qr-btn {
-  flex: 0 0 auto; border: 0; background: transparent; color: #4a4a4a; padding: 6px;
-  border-radius: 8px;
+  flex: 0 0 auto; border: 0; background: #f0efeb; color: #3a3a3a;
+  width: 44px; height: 44px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.1);
 }
+.mobile-me-qr-btn:active { background: #e2e0da; }
 
 /* WeChat-style QR viewfinder: corner brackets + sweeping scan line */
 .mobile-qr-frame {
