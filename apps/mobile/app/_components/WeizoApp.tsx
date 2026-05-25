@@ -2062,10 +2062,15 @@ function Contacts({
             <button
               type="button"
               className="mobile-row-action"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 4px', font: 'inherit' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 4px', color: '#888', display: 'flex', alignItems: 'center' }}
               onClick={(e) => { e.stopPropagation(); onOpenConfig(s); }}
               aria-label={`配置 ${s.name}`}
-            >配置</button>
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
           </button>
         );
       })}
@@ -4961,7 +4966,6 @@ function MeTab({
       {/* 资产 — WeChat 钱包式入口行 → 资产页(技能 / 交付 / 文件夹设置 / 统计) */}
       <div className="mobile-me-section">
         <button type="button" className="mobile-collapse-head" onClick={() => setAssetsOpen(true)}>
-          <span className="mobile-me-asset-icon" aria-hidden="true">🧰</span>
           <span className="mobile-me-row-title">资产</span>
           <span className="mobile-collapse-summary">技能 · 引用 · 交付{delivCount !== null ? ` ${delivCount}` : ''}</span>
           <span className="mobile-collapse-chevron">›</span>
@@ -5824,7 +5828,6 @@ export function WeizoApp() {
                 <span className="mobile-chat-header-sub">微作 AI 助理</span>
               </span>
             </div>
-            <OwnerChatSearch />
             <OwnerTodoStrip />
             <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />
           </div>
