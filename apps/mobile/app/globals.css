@@ -2840,3 +2840,17 @@ button, input, textarea, select { font: inherit; }
 }
 /* P1-1 — 我 tab tighter inter-card gap */
 .mobile-me { gap: 8px; }
+/* P0-4 — one avatar radius vocabulary (large hero was 18px, too heavy) */
+.mobile-staff-avatar2 { border-radius: 12px; }
+/* P1-6 — recipient switcher avatars use the brand token (was two greens) */
+.mobile-recipient-avatar { background: var(--brand-light); color: var(--brand); }
+.mobile-recipient-avatar-owner { background: var(--brand); color: #fff; }
+/* P2-1 — status pills all pill-shaped */
+.mobile-job-status { border-radius: 999px; }
+/* P2-4 — board sub-tab underline uses the brand token */
+.weizo-board-tab.is-active { color: var(--brand); border-bottom-color: var(--brand); }
+/* P2-5 — empty states: centered card, a little breathing room */
+.mobile-empty-panel {
+  margin: 24px 12px; padding: 22px 16px; border-radius: 8px; background: #fff;
+  color: #777; font-size: 13px; text-align: center;
+}
