@@ -4511,12 +4511,13 @@ function QrScanner({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             pointerEvents: 'none',
           }}>
-            <div style={{
-              width: 200, height: 200,
-              border: '2px solid rgba(255,255,255,0.7)',
-              borderRadius: 12,
-              boxShadow: '0 0 0 4000px rgba(0,0,0,0.45)',
-            }} />
+            <div className="mobile-qr-frame">
+              <span className="mobile-qr-corner tl" />
+              <span className="mobile-qr-corner tr" />
+              <span className="mobile-qr-corner bl" />
+              <span className="mobile-qr-corner br" />
+              <span className="mobile-qr-scanline" />
+            </div>
           </div>
         )}
       </div>

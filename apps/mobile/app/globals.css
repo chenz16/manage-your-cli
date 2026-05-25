@@ -2187,6 +2187,23 @@ button, input, textarea, select { font: inherit; }
 
 .mobile-me-conn-error { color: #bf3d32 !important; font-weight: 600; }
 
+/* WeChat-style QR viewfinder: corner brackets + sweeping scan line */
+.mobile-qr-frame {
+  position: relative; width: 230px; height: 230px; border-radius: 12px;
+  box-shadow: 0 0 0 4000px rgba(0,0,0,0.5); overflow: hidden;
+}
+.mobile-qr-corner { position: absolute; width: 26px; height: 26px; border: 3px solid #1AAD19; }
+.mobile-qr-corner.tl { top: -1px; left: -1px; border-right: 0; border-bottom: 0; border-top-left-radius: 10px; }
+.mobile-qr-corner.tr { top: -1px; right: -1px; border-left: 0; border-bottom: 0; border-top-right-radius: 10px; }
+.mobile-qr-corner.bl { bottom: -1px; left: -1px; border-right: 0; border-top: 0; border-bottom-left-radius: 10px; }
+.mobile-qr-corner.br { bottom: -1px; right: -1px; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
+.mobile-qr-scanline {
+  position: absolute; left: 8px; right: 8px; height: 2px;
+  background: linear-gradient(90deg, transparent, #1AAD19, transparent);
+  animation: qr-scan 2.2s ease-in-out infinite;
+}
+@keyframes qr-scan { 0% { top: 10px; } 50% { top: 216px; } 100% { top: 10px; } }
+
 /* Collapsible section header (WeChat-style) */
 .mobile-collapse-head {
   display: flex; align-items: center; justify-content: space-between;
