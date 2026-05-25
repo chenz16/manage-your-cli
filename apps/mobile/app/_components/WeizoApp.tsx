@@ -4375,6 +4375,97 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
+// ─── OwnerChatSearch — 搜索小秘聊天记录 ────────────────────────────────────────
+
+interface ChatHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+function OwnerChatSearch() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ChatHistoryMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    holonApiFetch('/api/v1/chat/history?thread=owner', { cache: 'no-store' })
+      .then(async (res) => {
+        if (cancelled) return;
+        if (!res.ok) { setResults([]); return; }
+        const data = await res.json().catch(() => ({})) as { messages?: Array<{ role?: unknown; content?: unknown }> };
+        const raw = Array.isArray(data.messages) ? data.messages : [];
+        const q = query.trim().toLowerCase();
+        const matched = raw
+          .filter((m): m is ChatHistoryMessage =>
+            (m.role === 'user' || m.role === 'assistant') &&
+            typeof m.content === 'string' &&
+            (m.content as string).toLowerCase().includes(q),
+          ) as ChatHistoryMessage[];
+        if (!cancelled) setResults(matched);
+      })
+      .catch(() => { if (!cancelled) setResults([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [query]);
+
+  return (
+    <div className="owner-chat-search">
+      <div className="owner-chat-search-bar">
+        <span className="owner-chat-search-icon" aria-hidden="true">🔍</span>
+        <input
+          type="search"
+          className="owner-chat-search-input"
+          placeholder="搜索聊天记录"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="搜索聊天记录"
+        />
+        {query && (
+          <button
+            type="button"
+            className="owner-chat-search-clear"
+            aria-label="清除搜索"
+            onClick={() => setQuery('')}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {query.trim() && (
+        <div className="owner-chat-search-results" role="listbox" aria-label="搜索结果">
+          {loading && <div className="owner-chat-search-empty">搜索中…</div>}
+          {!loading && results.length === 0 && (
+            <div className="owner-chat-search-empty">无匹配</div>
+          )}
+          {!loading && results.map((msg, i) => (
+            <button
+              key={i}
+              type="button"
+              className="owner-chat-search-result"
+              role="option"
+              aria-selected={false}
+              onClick={() => setQuery('')}
+            >
+              <span className={`owner-chat-search-role${msg.role === 'user' ? ' is-user' : ''}`}>
+                {msg.role === 'user' ? '我' : '小秘'}
+              </span>
+              <span className="owner-chat-search-snippet">
+                {msg.content.length > 60 ? msg.content.slice(0, 60) + '…' : msg.content}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 老板代办 strip — 小秘领地: 小秘从「你↔小秘」对话提炼的、需你拍板的事 ────────
 // (授权/同意/决定…)。别人/peer 让你做的走看板,不在这。可折叠;一碰输入/语音自动收起。
 const OWNER_ACTIONS_CACHE = 'holon.mobile.ownerActions.v1';
@@ -4481,7 +4572,12 @@ function StaffDetail({ staff, onBack, initialMode }: { staff: Staff; onBack: () 
       <div className="mobile-chat-header">
         <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回通讯录">‹</button>
         <span className="mobile-chat-header-name">{staff.name}{landing === 'terminal' ? ' · 后台' : ''}</span>
-        <button type="button" className="mobile-chat-header-gear" onClick={() => setMode('config')} aria-label="配置">⚙</button>
+        <button type="button" className="mobile-chat-header-gear" onClick={() => setMode('config')} aria-label="配置">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
       </div>
       {landing === 'terminal' && !isSecretary
         ? <StaffTerminal staffId={staff.id} />
@@ -5728,6 +5824,7 @@ export function WeizoApp() {
                 <span className="mobile-chat-header-sub">微作 AI 助理</span>
               </span>
             </div>
+            <OwnerChatSearch />
             <OwnerTodoStrip />
             <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />
           </div>

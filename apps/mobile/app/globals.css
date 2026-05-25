@@ -1117,6 +1117,58 @@ button, input, textarea, select { font: inherit; }
 .mobile-chat-header-title .mobile-chat-header-name { flex: 0 0 auto; }
 .mobile-chat-header-sub { font-size: 11px; color: #999; }
 
+/* ─── OwnerChatSearch — 搜索小秘聊天记录 ────────────────────────────────────── */
+.owner-chat-search {
+  flex: 0 0 auto;
+  background: #ededed;
+  position: relative;
+}
+.owner-chat-search-bar {
+  display: flex; align-items: center; gap: 6px;
+  margin: 6px 10px 4px;
+  padding: 0 10px; height: 36px;
+  border-radius: 18px; background: #d8d8d8;
+}
+.owner-chat-search-icon { font-size: 13px; opacity: 0.6; flex-shrink: 0; }
+.owner-chat-search-input {
+  flex: 1 1 auto; min-width: 0; border: 0; background: transparent; outline: none;
+  font: inherit; font-size: 14px; color: #111;
+  -webkit-appearance: none;
+}
+.owner-chat-search-input::placeholder { color: #888; }
+.owner-chat-search-clear {
+  flex-shrink: 0; border: 0; background: transparent; padding: 0 2px;
+  color: #888; font-size: 13px; cursor: pointer; line-height: 1;
+}
+.owner-chat-search-results {
+  position: absolute; left: 0; right: 0; top: 100%;
+  z-index: 50;
+  background: #fff;
+  border-bottom: 1px solid #e3e3e3;
+  max-height: 200px; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.owner-chat-search-empty {
+  padding: 10px 14px; font-size: 13px; color: #888; text-align: center;
+}
+.owner-chat-search-result {
+  width: 100%; min-height: 44px;
+  display: flex; align-items: flex-start; gap: 8px;
+  border: 0; border-bottom: 1px solid #f0f0f0;
+  background: #fff; color: var(--ink);
+  padding: 8px 14px; font: inherit; text-align: left; cursor: pointer;
+}
+.owner-chat-search-result:active { background: #f4f4f4; }
+.owner-chat-search-role {
+  flex-shrink: 0; font-size: 12px; font-weight: 600;
+  color: #888; padding-top: 1px; min-width: 24px;
+}
+.owner-chat-search-role.is-user { color: #1f7a44; }
+.owner-chat-search-snippet {
+  flex: 1 1 auto; font-size: 13px; line-height: 1.4; color: #333;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* 老板待办 strip — 小秘聊天页顶部, 紧凑, top 3 */
 .mobile-todo-strip {
   flex: 0 0 auto; background: #fffaf0; border-bottom: 1px solid #f0e6d2; padding: 6px 12px 8px;
