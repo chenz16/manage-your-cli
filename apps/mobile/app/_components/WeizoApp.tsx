@@ -3723,10 +3723,7 @@ function IntegrationsSection({ meData, onRefresh }: {
 
   return (
     <>
-      {/* Agent Card + WeChat QR moved into the profile's 扫码连接 sheet. */}
-
-      {/* ── 扫一扫 / 扫码连接 ── */}
-      <ScanConnectSection />
+      {/* Scan + Agent Card + WeChat QR all moved into the profile's 扫码连接 sheet. */}
 
       {/* ── 集成 / 连接服务(默认折叠,微信风)── */}
       <div className="mobile-me-section">
@@ -4219,6 +4216,7 @@ function MeTab({
               <h2 className="mobile-sheet-title">扫码连接</h2>
               <button type="button" className="mobile-sheet-close" onClick={() => setQrSheetOpen(false)} aria-label="关闭">×</button>
             </div>
+            <ScanConnectSection />
             <WechatQrSection />
             <AgentCardSection deskBaseUrl={connection.baseUrl} />
           </div>
