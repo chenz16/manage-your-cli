@@ -2153,6 +2153,28 @@ button, input, textarea, select { font: inherit; }
   font-family: inherit;
 }
 
+/* Base modal overlay for mobile (persona sheet, feedback dialog reuse these +
+   their own -backdrop/-modal overrides). Mobile lacked these → those sheets had
+   no positioning and silently failed to appear ("点不了"). */
+.bug-modal-backdrop {
+  position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; padding: 12px;
+}
+.bug-modal {
+  width: 100%; max-width: 480px; max-height: 88vh; max-height: 88dvh;
+  overflow-y: auto; background: #fff; border-radius: 14px; padding: 16px;
+  box-sizing: border-box;
+}
+.bug-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.bug-modal-close {
+  border: 0; background: #efefef; color: #555; width: 28px; height: 28px;
+  border-radius: 50%; font-size: 18px; line-height: 1; padding: 0;
+}
+.bug-modal-textarea {
+  width: 100%; box-sizing: border-box; border: 1px solid #d8d4cc; border-radius: 8px;
+  padding: 8px; font: inherit; font-size: 14px;
+}
+
 /* Rendered markdown for deliverable bodies */
 .md-body { font-size: 14px; line-height: 1.65; color: #1a1a1a; overflow-wrap: anywhere; }
 .md-body .md-h { margin: 14px 0 6px; line-height: 1.3; }
