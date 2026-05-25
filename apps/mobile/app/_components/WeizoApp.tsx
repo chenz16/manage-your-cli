@@ -4196,37 +4196,58 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
-// ─── 老板待办 strip — 挂在小秘聊天页顶部, top 3, 点→看板 (owner 2026-05-25) ─────
-function OwnerTodoStrip({ onOpenBoard }: { onOpenBoard: () => void }) {
-  const [todos, setTodos] = useState<Todo[]>([]);
+// ─── 老板代办 strip — 小秘领地: 小秘从「你↔小秘」对话提炼的、需你拍板的事 ────────
+// (授权/同意/决定…)。别人/peer 让你做的走看板,不在这。可折叠;一碰输入/语音自动收起。
+const OWNER_ACTIONS_CACHE = 'holon.mobile.ownerActions.v1';
+
+function readCachedActions(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(OWNER_ACTIONS_CACHE);
+    const j = raw ? JSON.parse(raw) : [];
+    return Array.isArray(j) ? j.filter((x): x is string => typeof x === 'string') : [];
+  } catch { return []; }
+}
+
+function OwnerTodoStrip() {
+  const [items, setItems] = useState<string[]>(() => readCachedActions());
+  const [collapsed, setCollapsed] = useState(false);
+
   useEffect(() => {
-    holonApiFetch('/api/v1/todos', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() as Promise<ListTodosResponse> : Promise.resolve(null)))
-      .then((d) => { if (d && Array.isArray(d.items)) setTodos(d.items); })
+    holonApiFetch('/api/v1/chat/owner-actions', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() as Promise<{ items?: string[] }> : Promise.resolve(null)))
+      .then((d) => {
+        if (d && Array.isArray(d.items)) {
+          setItems(d.items);
+          try { window.localStorage.setItem(OWNER_ACTIONS_CACHE, JSON.stringify(d.items)); } catch { /* noop */ }
+        }
+      })
       .catch(() => undefined);
   }, []);
 
-  const top = useMemo(() => {
-    const doneRank = (t: Todo) => (t.status === 'done' ? 1 : 0); // 未完成在前
-    const prioRank = (p: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : 2);
-    return [...todos]
-      .sort((a, b) => doneRank(a) - doneRank(b) || prioRank(a.priority) - prioRank(b.priority) || b.created_at.localeCompare(a.created_at))
-      .slice(0, 3);
-  }, [todos]);
+  // Auto-collapse the moment the boss touches the composer (typing or voice) —
+  // small Samsung screen, keep the chat window clear.
+  useEffect(() => {
+    function onDown(ev: Event) {
+      const t = ev.target as HTMLElement | null;
+      if (t?.closest('.mobile-chat-composer')) setCollapsed(true);
+    }
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, []);
 
-  if (top.length === 0) return null;
-  const pending = todos.filter((t) => t.status !== 'done').length;
+  if (items.length === 0) return null;
 
   return (
     <div className="mobile-todo-strip">
-      <button type="button" className="mobile-todo-strip-head" onClick={onOpenBoard}>
-        <span className="mobile-todo-strip-title">老板待办 · {pending}</span>
-        <span className="mobile-todo-strip-more">看板 ›</span>
+      <button type="button" className="mobile-todo-strip-head" onClick={() => setCollapsed((v) => !v)}>
+        <span className="mobile-todo-strip-title">老板代办 · {items.length}</span>
+        <span className="mobile-todo-strip-more">{collapsed ? '展开 ›' : '收起 ⌄'}</span>
       </button>
-      {top.map((t) => (
-        <div key={t.id} className={`mobile-todo-line${t.status === 'done' ? ' is-done' : ''}`}>
-          <span className="mobile-todo-mark">{t.status === 'done' ? '✓' : '○'}</span>
-          <span className="mobile-todo-text">{t.text}</span>
+      {!collapsed && items.slice(0, 3).map((t, i) => (
+        <div key={i} className="mobile-todo-line">
+          <span className="mobile-todo-mark">○</span>
+          <span className="mobile-todo-text">{t}</span>
         </div>
       ))}
     </div>
@@ -5489,7 +5510,7 @@ export function WeizoApp() {
             <div className="mobile-chat-header">
               <span className="mobile-chat-header-name">小秘</span>
             </div>
-            <OwnerTodoStrip onOpenBoard={() => openTab('work')} />
+            <OwnerTodoStrip />
             <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />
           </div>
         )}
