@@ -55,7 +55,9 @@ export {
   sendPrompt,
   paneCurrentCommand,
   captureCliOutput,
+  listTmuxSessions,
   type CliStatus,
+  type DiscoveredTmuxSession,
 } from './cli-session-service.js';
 export {
   ensureAgentMemoryFile,
