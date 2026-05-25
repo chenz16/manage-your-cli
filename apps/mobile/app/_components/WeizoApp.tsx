@@ -4460,7 +4460,7 @@ function MeTab({
         </button>
       </div>
       <div className="mobile-me-section">
-        <div className="mobile-me-label">我的人设</div>
+        <div className="mobile-me-label">关于我</div>
         <div className="mobile-persona-current-card">
           <span className="mobile-persona-current-copy">
             <span className="mobile-me-value">{personaName}</span>
