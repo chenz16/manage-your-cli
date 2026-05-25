@@ -3226,6 +3226,52 @@ function AgentCardSection({ deskBaseUrl }: { deskBaseUrl: string }) {
   );
 }
 
+// ─── 微信扫码找小秘 — clawbot QR for others to scan ───────────────────────────
+
+function WechatQrSection() {
+  const [qr, setQr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function load() {
+    setLoading(true);
+    setErr('');
+    try {
+      const r = await holonApiFetch('/api/v1/connectors/wechat/qr', { cache: 'no-store' });
+      const j = await r.json().catch(() => ({})) as { qrcode_url?: string; error?: string };
+      if (!r.ok || !j.qrcode_url) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setQr(j.qrcode_url);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mobile-me-section">
+      <div className="mobile-me-label">微信扫码找小秘</div>
+      <div className="mobile-me-note" style={{ marginBottom: 8 }}>别人用微信扫这个，直接跟小秘对话(微信码)</div>
+      {qr ? (
+        <>
+          <div className="mobile-connector-qr-wrap">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qr} alt="微信二维码" width={200} height={200} className="mobile-connector-qr-img" />
+          </div>
+          <button type="button" className="mobile-connector-url-copy" onClick={() => void load()} disabled={loading}>
+            <span className="mobile-connector-url-text">{loading ? '刷新中…' : '↻ 刷新二维码'}</span>
+          </button>
+        </>
+      ) : (
+        <button type="button" className="mobile-secondary-action" onClick={() => void load()} disabled={loading}>
+          {loading ? '生成中…' : '生成微信二维码'}
+        </button>
+      )}
+      {err && <div className="mobile-error">微信码获取失败：{err}</div>}
+    </div>
+  );
+}
+
 // ─── 微信连接状态 ─────────────────────────────────────────────────────────────
 
 interface WechatStatusData {
@@ -3571,6 +3617,9 @@ function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
     <>
       {/* ── Agent Card QR ── */}
       <AgentCardSection deskBaseUrl={deskBaseUrl} />
+
+      {/* ── 微信扫码找小秘 ── */}
+      <WechatQrSection />
 
       {/* ── 扫一扫 / 扫码连接 ── */}
       <ScanConnectSection />
