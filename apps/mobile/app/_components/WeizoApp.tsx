@@ -1853,6 +1853,51 @@ function Contacts({
   );
 }
 
+/** Read-only live view of an employee's CLI terminal (tmux screen + scrollback),
+ *  mirroring what the desk shows. Snapshot-polls /cli/output every 3s (robust on
+ *  Capacitor; avoids the SSE buffering pitfalls). */
+function StaffTerminal({ staffId }: { staffId: string }) {
+  const [output, setOutput] = useState('');
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+  const preRef = useRef<HTMLPreElement>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staffId)}/cli/output?lines=300`, { cache: 'no-store' });
+      const j = await r.json().catch(() => ({})) as { ok?: boolean; output?: string; reason?: string };
+      if (j.ok && typeof j.output === 'string') { setOutput(j.output); setReason(''); }
+      else { setReason(j.reason ?? '该员工当前没有运行中的终端会话'); }
+    } catch (e) {
+      setReason(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
+  }, [staffId]);
+
+  useEffect(() => {
+    void load();
+    const id = window.setInterval(() => void load(), 3000);
+    return () => window.clearInterval(id);
+  }, [load]);
+
+  // Keep pinned to the latest output (like a real terminal).
+  useEffect(() => { const el = preRef.current; if (el) el.scrollTop = el.scrollHeight; }, [output]);
+
+  return (
+    <div className="mobile-term-wrap">
+      <div className="mobile-persona-editor-head">
+        <span className="mobile-config-dt">运行终端（实时）</span>
+        <button type="button" className="mobile-term-refresh" onClick={() => void load()} disabled={loading}>
+          {loading ? '刷新中…' : '刷新'}
+        </button>
+      </div>
+      {output
+        ? <pre ref={preRef} className="mobile-term-screen">{output}</pre>
+        : <div className="mobile-term-empty">{reason || '加载中…'}</div>}
+    </div>
+  );
+}
+
 function StaffProfile({
   staffId,
   fallback,
@@ -1881,6 +1926,7 @@ function StaffProfile({
   const [maxJobsDraft, setMaxJobsDraft] = useState('1');
   const [savingProps, setSavingProps] = useState(false);
   const [propsMsg, setPropsMsg] = useState('');
+  const [showTerminal, setShowTerminal] = useState(false);
   useEffect(() => {
     setNameDraft(staff?.name ?? '');
     setRoleLabelDraft(staff?.role_label ?? '');
@@ -2034,6 +2080,14 @@ function StaffProfile({
               </button>
             </div>
           </div>
+          <button
+            type="button"
+            className="mobile-secondary-action"
+            onClick={() => setShowTerminal((v) => !v)}
+          >
+            {showTerminal ? '收起运行终端' : '查看运行终端'}
+          </button>
+          {showTerminal && <StaffTerminal staffId={staff.id} />}
           <button
             type="button"
             className="mobile-primary-action"
