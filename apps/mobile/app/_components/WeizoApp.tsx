@@ -2169,15 +2169,16 @@ function StaffProfile({
               onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAvatarPicked(f); if (e.target) e.target.value = ''; }}
             />
             <StaffAvatar staff={staff} size={64} onPick={() => avatarInputRef.current?.click()} />
+            <span className="mobile-staff-cap" onClick={() => avatarInputRef.current?.click()}>点图换头像</span>
             <span
               className="mobile-staff-profile-name"
               onDoubleClick={() => onMessage(staff)}
               title="双击进入聊天"
             >{staff.name}</span>
+            <span className="mobile-staff-cap">双击名字进入聊天</span>
             {staff.role_label && staff.role_label !== staff.name && (
               <span className="mobile-staff-profile-role">{staff.role_label}</span>
             )}
-            <span className="mobile-staff-hint">双击名字进入聊天 · 点头像换图</span>
           </div>
           {/* Chat is reached by double-tapping the name (it lives in 聊天 too);
               config + the live terminal are two tabs here. */}

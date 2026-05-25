@@ -1604,7 +1604,8 @@ button, input, textarea, select { font: inherit; }
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
-.mobile-staff-hint { margin-top: 8px; color: #a8a39a; font-size: 11.5px; }
+/* Tiny captions placed directly under the avatar / name so each action is clear. */
+.mobile-staff-cap { margin-top: 4px; color: #a8a39a; font-size: 11px; line-height: 1.2; }
 
 /* Employee-detail sub-tabs: 配置 | 运行终端 (WeChat-ish segmented). */
 .mobile-staff-tabs {
