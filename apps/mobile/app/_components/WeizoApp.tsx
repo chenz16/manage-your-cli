@@ -50,8 +50,10 @@ import {
   holonApiFetch,
   installMobileApiFetchProxy,
   readDesktopConnection,
+  writeDesktopConnection,
   type MobileDesktopConnection,
 } from '../_lib/mobile-runtime';
+import { discoverDeskOnLan } from '../_lib/desk-discovery';
 import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/tts';
 import * as nativeStt from '../_lib/native-stt';
 import { deskOrigin } from '../_lib/desk-origin';
@@ -4186,6 +4188,7 @@ const CONNECTION_POLL_MS = 12000;
 
 export function WeizoApp() {
   const [connection, setConnection] = useState<MobileDesktopConnection | null>(null);
+  const discoveringRef = useRef(false); // guards LAN re-discovery (one sweep at a time)
   const [booted, setBooted] = useState(false);
   const [tab, setTab] = useState<TabKey>('chats');
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -4272,8 +4275,35 @@ export function WeizoApp() {
       setDesktopOffline(false);
     } catch {
       setDesktopOffline(true);
+      void tryRediscoverDesk(); // stored address failed → auto re-find on the LAN
     } finally {
       setCheckingConnection(false);
+    }
+  }
+
+  // LAN auto-discovery: when the stored desk address stops answering (its IP
+  // shifted on the same network), sweep the /24 for the host that accepts our
+  // device token, then silently re-point the connection — no QR re-scan, no
+  // config. Guarded so only one sweep runs at a time. Intranet-only, no cloud.
+  async function tryRediscoverDesk() {
+    if (discoveringRef.current) return;
+    const conn = readDesktopConnection();
+    if (!conn) return;
+    discoveringRef.current = true;
+    try {
+      const found = await discoverDeskOnLan(conn.baseUrl, conn.deviceToken);
+      if (found) {
+        if (found !== conn.baseUrl) {
+          const next: MobileDesktopConnection = { baseUrl: found, deviceToken: conn.deviceToken };
+          writeDesktopConnection(next);
+          setConnection(next);
+        }
+        setDesktopOffline(false);
+      }
+    } catch {
+      /* not found on this subnet — stay offline; the poll will retry */
+    } finally {
+      discoveringRef.current = false;
     }
   }
 
