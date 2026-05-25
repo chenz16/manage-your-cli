@@ -1534,6 +1534,31 @@ button, input, textarea, select { font: inherit; }
 .mobile-config-list dt { color: #777; font-size: 13px; }
 .mobile-config-list dd { min-width: 0; margin: 0; color: #111; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
 .mobile-config-block { white-space: pre-wrap; }
+
+/* Employee persona editor — edit free-form, ✨润色 via the Secretary CLI, save. */
+.mobile-persona-editor { margin: 12px 0 4px; }
+.mobile-persona-editor-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px;
+}
+.mobile-config-dt { color: #777; font-size: 13px; }
+.mobile-persona-editor-msg { color: #1f7a44; font-size: 12px; overflow-wrap: anywhere; text-align: right; }
+.mobile-persona-editor-textarea {
+  width: 100%; box-sizing: border-box; min-height: 132px; resize: vertical;
+  padding: 10px; border: 1px solid #d8d4cc; border-radius: 8px;
+  font: inherit; font-size: 14px; line-height: 1.5; color: #111; background: #fff;
+  white-space: pre-wrap;
+}
+.mobile-persona-editor-textarea:disabled { opacity: 0.6; }
+.mobile-persona-editor-actions { display: flex; gap: 8px; margin-top: 8px; }
+.mobile-persona-polish-btn,
+.mobile-persona-save-btn {
+  flex: 1 1 0; height: 42px; border: 0; border-radius: 8px; font: inherit; font-size: 15px; font-weight: 600;
+}
+.mobile-persona-polish-btn { background: #ece6da; color: #6b4f1d; }
+.mobile-persona-save-btn { background: #1f7a44; color: #fff; }
+.mobile-persona-polish-btn:disabled,
+.mobile-persona-save-btn:disabled { opacity: 0.5; }
+
 .mobile-primary-action {
   width: 100%; height: 44px; border: 0; border-radius: 8px;
   background: #1f7a44; color: #fff; font: inherit; font-weight: 700;

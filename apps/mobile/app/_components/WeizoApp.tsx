@@ -1838,6 +1838,50 @@ function StaffProfile({
   const [staff, setStaff] = useState<Staff | null>(fallback ?? null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // 人设编辑(可编辑 + 小秘 CLI 润色 + 保存)
+  const [personaDraft, setPersonaDraft] = useState('');
+  const [polishing, setPolishing] = useState(false);
+  const [savingPersona, setSavingPersona] = useState(false);
+  const [personaMsg, setPersonaMsg] = useState('');
+
+  // Seed/refresh the editable draft whenever the loaded staff changes (incl. after save).
+  useEffect(() => { setPersonaDraft(staff?.system_prompt?.trim() ?? ''); }, [staff]);
+
+  async function polishPersona() {
+    if (!staff || !personaDraft.trim() || polishing) return;
+    setPolishing(true); setPersonaMsg('');
+    try {
+      const r = await holonApiFetch('/api/v1/persona/polish', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: personaDraft, role_label: staff.role_label }),
+      });
+      const j = await r.json().catch(() => ({})) as { polished?: string; error?: string };
+      if (!r.ok || typeof j.polished !== 'string') throw new Error(j.error ?? `HTTP ${r.status}`);
+      setPersonaDraft(j.polished);
+      setPersonaMsg('已润色，确认后点保存');
+    } catch (err) {
+      setPersonaMsg(`润色失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally { setPolishing(false); }
+  }
+
+  async function savePersona() {
+    if (!staff || savingPersona) return;
+    setSavingPersona(true); setPersonaMsg('');
+    try {
+      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staff.id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_prompt: personaDraft.trim() }),
+      });
+      const j = await r.json().catch(() => ({})) as Staff & { error?: string };
+      if (!r.ok || !j.id) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setStaff(j as Staff);
+      setPersonaMsg('已保存');
+    } catch (err) {
+      setPersonaMsg(`保存失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally { setSavingPersona(false); }
+  }
+
+  const personaDirty = staff ? personaDraft.trim() !== (staff.system_prompt?.trim() ?? '') : false;
 
   useEffect(() => {
     let cancelled = false;
@@ -1869,12 +1913,40 @@ function StaffProfile({
             <div><dt>名称</dt><dd>{staff.name}</dd></div>
             <div><dt>角色标签</dt><dd>{staff.role_label}</dd></div>
             <div><dt>角色名</dt><dd>{staff.role_name}</dd></div>
-            <div>
-              <dt>系统指令</dt>
-              <dd className="mobile-config-block">{staff.system_prompt?.trim() || '未设置'}</dd>
-            </div>
             <div><dt>并发任务上限</dt><dd>{staff.max_concurrent_jobs}</dd></div>
           </dl>
+          <div className="mobile-persona-editor">
+            <div className="mobile-persona-editor-head">
+              <span className="mobile-config-dt">系统指令（人设）</span>
+              {personaMsg && <span className="mobile-persona-editor-msg">{personaMsg}</span>}
+            </div>
+            <textarea
+              className="mobile-persona-editor-textarea"
+              value={personaDraft}
+              onChange={(e) => setPersonaDraft(e.target.value)}
+              placeholder="描述这个员工的职责与风格，可先随手写，再点「润色」让小秘整理。"
+              rows={6}
+              disabled={polishing || savingPersona}
+            />
+            <div className="mobile-persona-editor-actions">
+              <button
+                type="button"
+                className="mobile-persona-polish-btn"
+                onClick={() => void polishPersona()}
+                disabled={polishing || savingPersona || !personaDraft.trim()}
+              >
+                {polishing ? '润色中…' : '✨ 润色'}
+              </button>
+              <button
+                type="button"
+                className="mobile-persona-save-btn"
+                onClick={() => void savePersona()}
+                disabled={savingPersona || polishing || !personaDirty}
+              >
+                {savingPersona ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             className="mobile-primary-action"
