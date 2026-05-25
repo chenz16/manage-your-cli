@@ -1735,7 +1735,7 @@ function MobileOwnerChat({
 
 // ─── Staff 1:1 chat ───────────────────────────────────────────────────────────
 
-function StaffChat({ staff }: { staff: Staff }) {
+function StaffChat({ staff, onBack }: { staff: Staff; onBack: () => void }) {
   const staffChatId = `staff:${staff.id}`;
   const [messages, setMessages] = useState<StaffChatMessage[]>([]);
   const [text, setText] = useState('');
@@ -1854,6 +1854,12 @@ function StaffChat({ staff }: { staff: Staff }) {
 
   return (
     <div className="mobile-staff-chat">
+      {/* thin WeChat-style chat header: ‹ back + name */}
+      <div className="mobile-chat-header">
+        <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回">‹</button>
+        <span className="mobile-chat-header-name">{staff.name}</span>
+        <span className="mobile-chat-header-spacer" />
+      </div>
       <div ref={scrollRef} className="mobile-chat-viewport mobile-staff-chat-scroll">
         {messages.length === 0 ? (
           <div className="chat-empty">
@@ -1928,109 +1934,6 @@ function StaffChat({ staff }: { staff: Staff }) {
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Recipient switcher (对话:小秘 ▾) ─────────────────────────────────────────
-
-function MobileRecipientSwitcher({
-  activeChat,
-  staff,
-  onPick,
-}: {
-  activeChat: ActiveChat;
-  staff: readonly Staff[];
-  onPick: (chat: Exclude<ActiveChat, null>) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const currentLabel = activeChat?.kind === 'staff' ? activeChat.staff.name : '小秘';
-
-  function pick(chat: Exclude<ActiveChat, null>) {
-    onPick(chat);
-    setOpen(false);
-  }
-
-  return (
-    <div className={`mobile-recipient-switcher${open ? ' is-open' : ''}`}>
-      {/* Collapsed = WeChat-style thin chat header: centered name + small caret,
-          tap to switch recipient. 小秘 is the default. Keeps chat space large. */}
-      <button
-        type="button"
-        className="mobile-recipient-button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-      >
-        <span className="mobile-recipient-name">{currentLabel}</span>
-        <span className="mobile-recipient-caret">⌄</span>
-      </button>
-      {open && (
-        <div className="mobile-recipient-menu" role="listbox" aria-label="选择聊天对象">
-          <button
-            type="button"
-            role="option"
-            aria-selected={!activeChat || activeChat.kind === 'owner'}
-            className="mobile-recipient-option"
-            onClick={() => pick({ kind: 'owner' })}
-          >
-            <span className="mobile-recipient-avatar mobile-recipient-avatar-owner">秘</span>
-            <span className="mobile-recipient-text">
-              <span className="mobile-recipient-name">小秘</span>
-              <span className="mobile-recipient-role">老板直聊 · 可 @ 员工委派</span>
-            </span>
-          </button>
-          {staff.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              role="option"
-              aria-selected={activeChat?.kind === 'staff' && activeChat.staff.id === s.id}
-              className="mobile-recipient-option"
-              onClick={() => pick({ kind: 'staff', staff: s })}
-            >
-              <span className="mobile-recipient-avatar">{substrateIcon(s)}</span>
-              <span className="mobile-recipient-text">
-                <span className="mobile-recipient-name">{s.name}</span>
-                <span className="mobile-recipient-role">{s.role_label}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── 微信 tab — chat panel ────────────────────────────────────────────────────
-
-function MobileChatPanel({
-  activeChat,
-  staff,
-  staffError,
-  onPick,
-  seed,
-  onSeedConsumed,
-}: {
-  activeChat: ActiveChat;
-  staff: readonly Staff[];
-  staffError: string;
-  onPick: (chat: Exclude<ActiveChat, null>) => void;
-  seed: string | null;
-  onSeedConsumed: () => void;
-}) {
-  const chat = activeChat ?? { kind: 'owner' as const };
-  return (
-    <div className="mobile-chat-panel">
-      <MobileRecipientSwitcher activeChat={chat} staff={staff} onPick={onPick} />
-      {staffError && (
-        <div className="mobile-error mobile-chat-error">员工列表加载失败：{staffError}</div>
-      )}
-      {chat.kind === 'owner' ? (
-        <MobileOwnerChat staff={staff} seed={seed} onSeedConsumed={onSeedConsumed} />
-      ) : (
-        <StaffChat key={chat.staff.id} staff={chat.staff} />
-      )}
     </div>
   );
 }
@@ -2460,19 +2363,17 @@ function StaffProfile({
             />
             <StaffAvatar staff={staff} size={64} onPick={() => avatarInputRef.current?.click()} />
             <span className="mobile-staff-cap" onClick={() => avatarInputRef.current?.click()}>点图换头像</span>
-            <span
-              className="mobile-staff-profile-name"
-              onDoubleClick={() => onMessage(staff)}
-              title="双击进入聊天"
-            >{staff.name}</span>
-            <span className="mobile-staff-cap">双击名字进入聊天</span>
+            <span className="mobile-staff-profile-name">{staff.name}</span>
             {staff.role_label && staff.role_label !== staff.name && (
               <span className="mobile-staff-profile-role">{staff.role_label}</span>
             )}
           </div>
-          {/* Chat is reached by double-tapping the name (it lives in 聊天 too).
-              看后台 (tmux view) only applies to tmux-backed employees — the
-              Secretary is a warm headless -p process with no terminal. */}
+          {/* 发消息 = primary action (WeChat contact-detail style) → full-screen chat.
+              配置 / 看后台 are secondary. 看后台 (tmux view) only applies to
+              tmux-backed employees — the Secretary has no terminal. */}
+          <button type="button" className="mobile-staff-message-btn" onClick={() => onMessage(staff)}>
+            💬 发消息
+          </button>
           {staff.role_name !== 'secretary' && (
             <div className="mobile-staff-tabs">
               <button type="button" className={`mobile-staff-tab${detailTab === 'config' ? ' is-active' : ''}`} onClick={() => setDetailTab('config')}>配置</button>
@@ -5348,6 +5249,7 @@ export function WeizoApp() {
   const [badges] = useState<Record<BadgedTabKey, number>>({ chats: 0, work: 0 });
   const [staffRefreshing, setStaffRefreshing] = useState(false);
   const [meSubview, setMeSubview] = useState(false); // me-tab 二级页(资产/用量)→ 隐藏顶栏
+  const [staffChat, setStaffChat] = useState<Staff | null>(null); // 通讯录→员工→发消息 全屏聊天
 
   useEffect(() => {
     const conn = readDesktopConnection();
@@ -5486,6 +5388,7 @@ export function WeizoApp() {
   function openTab(next: TabKey) {
     setTab(next);
     setSelectedStaff(null);
+    setStaffChat(null);
   }
 
   // Don't flash anything on SSR — wait until client boot
@@ -5511,33 +5414,31 @@ export function WeizoApp() {
           tab the recipient bar sits at the very top (no title above it); any
           drill-in (staff profile / 资产 / 用量) carries its own back-row, so the
           app header would just double-stack and waste vertical space. */}
-      {tab !== 'chats' && !(tab === 'contacts' && selectedStaff) && !(tab === 'me' && meSubview) && (
+      {tab !== 'chats' && !(tab === 'contacts' && (selectedStaff || staffChat)) && !(tab === 'me' && meSubview) && (
         <AppHeader title={tabTitle(tab, selectedStaff)} />
       )}
       <section
         className={`mobile-tab-content${tab === 'chats' ? ' mobile-tab-content-chat' : ''}`}
       >
+        {/* Option 3 — 小秘专属: 聊天 tab is ONLY the Secretary, full window, no
+            switcher. Employee chats live under 通讯录 (contact → 发消息). */}
         {tab === 'chats' && (
-          <MobileChatPanel
-            activeChat={activeChat}
-            staff={staff}
-            staffError={staffError}
-            onPick={setActiveChat}
-            seed={chatSeed}
-            onSeedConsumed={() => setChatSeed(null)}
-          />
+          <div className="mobile-chat-panel">
+            <div className="mobile-chat-header">
+              <span className="mobile-chat-header-name">小秘</span>
+            </div>
+            <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />
+          </div>
         )}
         {tab === 'contacts' && (
-          selectedStaff ? (
+          staffChat ? (
+            <StaffChat key={staffChat.id} staff={staffChat} onBack={() => setStaffChat(null)} />
+          ) : selectedStaff ? (
             <StaffProfile
               staffId={selectedStaff.id}
               fallback={selectedStaff}
               onBack={() => setSelectedStaff(null)}
-              onMessage={(s) => {
-                setSelectedStaff(null);
-                setTab('chats');
-                setActiveChat({ kind: 'staff', staff: s });
-              }}
+              onMessage={(s) => setStaffChat(s)}
             />
           ) : (
             <Contacts staff={staff} agentUsage={agentUsage} onOpen={setSelectedStaff} onRefresh={() => void fetchStaff()} refreshing={staffRefreshing} />
