@@ -1722,6 +1722,8 @@ button, input, textarea, select { font: inherit; }
 .mobile-persona-polish-btn:disabled,
 .mobile-persona-save-btn:disabled { opacity: 0.5; }
 
+.mobile-persona-freeform { display: flex; flex-direction: column; gap: 6px; }
+
 /* ── persona: ① 行业/职业 chips + ② AI 采访 ── */
 .mobile-persona-industry { min-height: 0; height: 44px; white-space: normal; }
 .mobile-persona-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

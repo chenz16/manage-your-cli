@@ -138,7 +138,6 @@ interface StreamEvent {
 }
 
 type TabKey = 'chats' | 'contacts' | 'work' | 'me';
-type ActiveChat = { kind: 'owner' } | { kind: 'staff'; staff: Staff } | null;
 type StaffChatMessage = { role: 'user' | 'assistant'; content: string };
 type BadgedTabKey = 'chats' | 'work';
 
@@ -4365,6 +4364,12 @@ function MeTab({
   const [interviewAnswer, setInterviewAnswer] = useState('');
   const [interviewLoading, setInterviewLoading] = useState(false);
   const [interviewDone, setInterviewDone] = useState(false);
+  const interviewLogRef = useRef<HTMLDivElement>(null);
+  // Keep the interview Q&A scrolled to the latest turn.
+  useEffect(() => {
+    const el = interviewLogRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [interviewTurns, interviewLoading]);
   const [personaApplied, setPersonaApplied] = useState('');
   const [error, setError] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -4778,7 +4783,7 @@ function MeTab({
                 </button>
               ) : (
                 <div className="mobile-interview">
-                  <div className="mobile-interview-log">
+                  <div className="mobile-interview-log" ref={interviewLogRef}>
                     {interviewTurns.map((t, i) => (
                       <div key={i} className={`mobile-interview-turn is-${t.role}`}>
                         <span className="mobile-interview-bubble">{t.content}</span>
@@ -5325,7 +5330,6 @@ export function WeizoApp() {
   const [tab, setTab] = useState<TabKey>('chats');
   const [staff, setStaff] = useState<Staff[]>([]);
   const [agentUsage, setAgentUsage] = useState<Record<string, AgentUsage>>({});
-  const [activeChat, setActiveChat] = useState<ActiveChat>({ kind: 'owner' });
   const [chatSeed, setChatSeed] = useState<string | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [staffError, setStaffError] = useState('');
@@ -5464,7 +5468,6 @@ export function WeizoApp() {
   function disconnect() {
     clearDesktopConnection();
     setConnection(null);
-    setActiveChat({ kind: 'owner' });
     setSelectedStaff(null);
     setDesktopOffline(false);
   }
@@ -5472,6 +5475,7 @@ export function WeizoApp() {
   function openTab(next: TabKey) {
     setTab(next);
     setSelectedStaff(null);
+    setMeSubview(false); // returning to 我 root must show its header (no flash)
   }
 
   // Don't flash anything on SSR — wait until client boot
@@ -5501,7 +5505,7 @@ export function WeizoApp() {
         <AppHeader title={tabTitle(tab, selectedStaff)} />
       )}
       <section
-        className={`mobile-tab-content${tab === 'chats' ? ' mobile-tab-content-chat' : ''}`}
+        className={`mobile-tab-content${(tab === 'chats' || (tab === 'contacts' && selectedStaff)) ? ' mobile-tab-content-chat' : ''}`}
       >
         {/* Option 3 — 小秘专属: 聊天 tab is ONLY the Secretary, full window, no
             switcher. Employee chats live under 通讯录 (contact → 发消息). */}
@@ -5529,7 +5533,6 @@ export function WeizoApp() {
             onTalkToSecretary={(text) => {
               setChatSeed(text);
               setTab('chats');
-              setActiveChat({ kind: 'owner' });
             }}
           />
         )}
@@ -5541,7 +5544,6 @@ export function WeizoApp() {
             onSubviewChange={setMeSubview}
             onUseSkill={(text) => {
               setChatSeed(text);
-              setActiveChat({ kind: 'owner' });
               setTab('chats');
             }}
           />
