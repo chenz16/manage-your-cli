@@ -2069,6 +2069,24 @@ function StaffProfile({
               <span className="mobile-staff-profile-role">{staff.role_label}</span>
             )}
           </div>
+          {/* Primary actions first — talk to the employee / watch its terminal.
+              Config (attributes + persona) lives below. */}
+          <button
+            type="button"
+            className="mobile-primary-action"
+            onClick={() => onMessage(staff)}
+          >
+            发消息
+          </button>
+          <button
+            type="button"
+            className="mobile-secondary-action"
+            onClick={() => setShowTerminal((v) => !v)}
+          >
+            {showTerminal ? '收起运行终端' : '查看运行终端'}
+          </button>
+          {showTerminal && <StaffTerminal staffId={staff.id} />}
+          <div className="mobile-staff-config-label">配置</div>
           <div className="mobile-staff-edit">
             <label className="mobile-config-dt" htmlFor="staff-name">名称</label>
             <input id="staff-name" className="mobile-staff-field" value={nameDraft}
@@ -2123,21 +2141,6 @@ function StaffProfile({
               </button>
             </div>
           </div>
-          <button
-            type="button"
-            className="mobile-secondary-action"
-            onClick={() => setShowTerminal((v) => !v)}
-          >
-            {showTerminal ? '收起运行终端' : '查看运行终端'}
-          </button>
-          {showTerminal && <StaffTerminal staffId={staff.id} />}
-          <button
-            type="button"
-            className="mobile-primary-action"
-            onClick={() => onMessage(staff)}
-          >
-            发消息
-          </button>
         </>
       )}
     </div>
@@ -2751,6 +2754,86 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}天前`;
 }
 
+// Inline markdown: `code`, **bold**, *italic*, [text](url). No dependency.
+function renderInline(text: string, keyBase: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(\[[^\]]+\]\([^)]+\))/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const tok = m[0];
+    if (tok.startsWith('`')) nodes.push(<code key={`${keyBase}-${i}`} className="md-code">{tok.slice(1, -1)}</code>);
+    else if (tok.startsWith('**')) nodes.push(<strong key={`${keyBase}-${i}`}>{tok.slice(2, -2)}</strong>);
+    else if (tok.startsWith('*')) nodes.push(<em key={`${keyBase}-${i}`}>{tok.slice(1, -1)}</em>);
+    else {
+      const mm = /\[([^\]]+)\]\(([^)]+)\)/.exec(tok);
+      if (mm) nodes.push(<a key={`${keyBase}-${i}`} href={mm[2]} target="_blank" rel="noreferrer">{mm[1]}</a>);
+      else nodes.push(tok);
+    }
+    last = m.index + tok.length;
+    i++;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+// Lightweight markdown block renderer for deliverable bodies — headings, fenced
+// code, ordered/unordered lists, paragraphs. No external dependency (keeps the
+// static export lean per North Star).
+function MarkdownView({ text }: { text: string }) {
+  const lines = (text ?? '').split('\n');
+  const blocks: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  const at = (n: number) => lines[n] ?? '';
+  while (i < lines.length) {
+    const line = at(i);
+    if (line.trim().startsWith('```')) {
+      const buf: string[] = [];
+      i++;
+      while (i < lines.length && !at(i).trim().startsWith('```')) { buf.push(at(i)); i++; }
+      i++;
+      blocks.push(<pre key={key++} className="md-pre"><code>{buf.join('\n')}</code></pre>);
+      continue;
+    }
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (h) {
+      const lvl = (h[1] ?? '').length;
+      const content = renderInline(h[2] ?? '', `h${key}`);
+      blocks.push(lvl <= 2
+        ? <h3 key={key++} className="md-h">{content}</h3>
+        : <h4 key={key++} className="md-h">{content}</h4>);
+      i++;
+      continue;
+    }
+    if (/^\s*([-*]|\d+\.)\s+/.test(line)) {
+      const ordered = /^\s*\d+\.\s+/.test(line);
+      const lis: ReactNode[] = [];
+      while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(at(i))) {
+        const item = at(i).replace(/^\s*([-*]|\d+\.)\s+/, '');
+        lis.push(<li key={lis.length}>{renderInline(item, `li${key}-${lis.length}`)}</li>);
+        i++;
+      }
+      blocks.push(ordered
+        ? <ol key={key++} className="md-list">{lis}</ol>
+        : <ul key={key++} className="md-list">{lis}</ul>);
+      continue;
+    }
+    if (line.trim() === '') { i++; continue; }
+    const para: string[] = [];
+    while (
+      i < lines.length && at(i).trim() !== ''
+      && !/^\s*([-*]|\d+\.)\s+/.test(at(i))
+      && !/^#{1,6}\s/.test(at(i))
+      && !at(i).trim().startsWith('```')
+    ) { para.push(at(i)); i++; }
+    blocks.push(<p key={key++} className="md-p">{renderInline(para.join('\n'), `p${key}`)}</p>);
+  }
+  return <div className="md-body">{blocks}</div>;
+}
+
 function DelivSection() {
   const [items, setItems] = useState<Deliverable[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -2806,8 +2889,24 @@ function DelivSection() {
     }
   }
 
+  async function reviewDeliverable(id: string, status: 'accepted' | 'rejected') {
+    try {
+      const r = await holonApiFetch(`/api/v1/deliverables/${encodeURIComponent(id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json() as GetDeliverableResponse;
+      setDetail(j);
+      setItems((prev) => prev.map((d) => (d.id === id ? { ...d, status } : d)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   if (openId) {
     const d = detail?.deliverable;
+    const reviewable = d && (d.status === 'draft' || d.status === 'final' || d.status === 'revised');
     return (
       <div className="mobile-deliverables">
         <button type="button" className="mobile-back-row" onClick={() => setOpenId(null)}>‹ 交付</button>
@@ -2817,8 +2916,21 @@ function DelivSection() {
           <article className="mobile-deliverable-detail">
             <div className="mobile-detail-kicker">{STATUS_LABEL[d.status]} · {d.created_at?.slice(0, 10) ?? ''}</div>
             <h2>{d.title}</h2>
-            <pre className="mobile-deliverable-body">{bodyText(d.body)}</pre>
+            <MarkdownView text={bodyText(d.body)} />
           </article>
+        )}
+        {d && reviewable && (
+          <div className="mobile-deliv-review">
+            <button type="button" className="mobile-deliv-reject" onClick={() => void reviewDeliverable(d.id, 'rejected')}>
+              ✕ 拒绝
+            </button>
+            <button type="button" className="mobile-deliv-accept" onClick={() => void reviewDeliverable(d.id, 'accepted')}>
+              ✓ 接受
+            </button>
+          </div>
+        )}
+        {d && (d.status === 'accepted' || d.status === 'rejected') && (
+          <div className="mobile-deliv-reviewed">已{d.status === 'accepted' ? '接受' : '拒绝'} · 可下拉重看</div>
         )}
       </div>
     );
