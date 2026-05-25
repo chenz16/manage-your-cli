@@ -8,7 +8,7 @@ const PATCHABLE: Array<keyof StaffPatch> = [
   // NOTE: 'status' intentionally excluded — status changes must go through DELETE
   // (retireCliAgentStaff / dismissStaffById) to enforce lifecycle semantics.
   'system_prompt', 'autonomy_level', 'governance_mode',
-  'max_concurrent_jobs',
+  'max_concurrent_jobs', 'avatar_data',
   // Legacy local-AI staff config fields kept for persisted records.
   'denied_skills', 'monthly_budget_millicents', 'proxy_staff_id',
 ];
@@ -84,6 +84,13 @@ export async function PATCH(req: Request, ctx: Context): Promise<NextResponse> {
     const v = raw['max_concurrent_jobs'];
     if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 10) {
       return NextResponse.json({ error: 'max_concurrent_jobs must be an integer between 1 and 10', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('avatar_data' in raw) {
+    const v = raw['avatar_data'];
+    // Custom avatar is a small client-resized data URL; cap to ~256KB.
+    if (v !== null && (typeof v !== 'string' || (v.length > 0 && !v.startsWith('data:image/')) || v.length > 256_000)) {
+      return NextResponse.json({ error: 'avatar_data must be a data:image/* URL ≤256KB', code: 'invalid_field' }, { status: 400 });
     }
   }
   // --- End field validation ---

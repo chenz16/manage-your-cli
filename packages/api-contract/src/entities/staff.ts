@@ -204,6 +204,9 @@ export const Staff = z.object({
    *  Added iter-007 step 7 (create/update/dismiss staff from chat).
    *  Optional → backward-compatible with existing fixture rows. */
   system_prompt: z.string().optional(),
+  /** Optional custom avatar as a data URL (small, client-resized ~128px). When
+   *  absent the UI renders a generated gradient + initial. Capped server-side. */
+  avatar_data: z.string().max(300_000).optional(),
   created_at: zIsoDateTimeLoose.optional(),
 
   /* ── iter-009: virt agent config (deny-list model) ──────────── */

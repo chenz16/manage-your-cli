@@ -1858,6 +1858,67 @@ function Contacts({
 /** Read-only live view of an employee's CLI terminal (tmux screen + scrollback),
  *  mirroring what the desk shows. Snapshot-polls /cli/output every 3s (robust on
  *  Capacitor; avoids the SSE buffering pitfalls). */
+// Avatar helpers — a refined gradient circle with a smart initial when there's
+// no custom image. Chinese 小X/老X names → use the distinctive 2nd char.
+function staffInitial(name: string): string {
+  const n = (name ?? '').trim();
+  if (!n) return '?';
+  if (/^[小老阿大]/.test(n) && n.length > 1) return n.charAt(1);
+  return n.charAt(0).toUpperCase();
+}
+function staffHue(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 360;
+  return h;
+}
+/** Refined avatar: custom image if set, else a per-staff gradient + initial. */
+function StaffAvatar({ staff, size = 56, onPick }: { staff: Staff; size?: number; onPick?: () => void }) {
+  const custom = (staff as Staff & { avatar_data?: string }).avatar_data;
+  const hue = staffHue(staff.id || staff.name);
+  const style: React.CSSProperties = custom
+    ? { width: size, height: size, backgroundImage: `url(${custom})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { width: size, height: size, background: `linear-gradient(135deg, hsl(${hue} 58% 52%), hsl(${(hue + 38) % 360} 60% 42%))` };
+  return (
+    <button
+      type="button"
+      className="mobile-staff-avatar2"
+      style={style}
+      onClick={onPick}
+      aria-label="更换头像"
+    >
+      {!custom && <span className="mobile-staff-avatar2-initial" style={{ fontSize: size * 0.4 }}>{staffInitial(staff.name)}</span>}
+      {onPick && <span className="mobile-staff-avatar2-edit" aria-hidden="true">✎</span>}
+    </button>
+  );
+}
+
+/** Center-crop + resize an image File to a square data URL (keeps avatar_data
+ *  small so it fits the ≤256KB cap and renders instantly). */
+function resizeImageToDataUrl(file: File, size: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('canvas unavailable')); return; }
+        const s = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)));
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
+  });
+}
+
 function StaffTerminal({ staffId }: { staffId: string }) {
   const [output, setOutput] = useState('');
   const [reason, setReason] = useState('');
@@ -1967,7 +2028,26 @@ function StaffProfile({
   const [maxJobsDraft, setMaxJobsDraft] = useState('1');
   const [savingProps, setSavingProps] = useState(false);
   const [propsMsg, setPropsMsg] = useState('');
-  const [showTerminal, setShowTerminal] = useState(false);
+  const [detailTab, setDetailTab] = useState<'config' | 'terminal'>('config');
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  async function onAvatarPicked(file: File) {
+    if (!staff) return;
+    setPropsMsg('头像处理中…');
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 128);
+      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staff.id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar_data: dataUrl }),
+      });
+      const j = await r.json().catch(() => ({})) as Staff & { error?: string };
+      if (!r.ok || !j.id) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setStaff(j as Staff);
+      setPropsMsg('头像已更新');
+    } catch (e) {
+      setPropsMsg(`头像更新失败：${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
   useEffect(() => {
     setNameDraft(staff?.name ?? '');
     setRoleLabelDraft(staff?.role_label ?? '');
@@ -2063,30 +2143,34 @@ function StaffProfile({
       {staff && (
         <>
           <div className="mobile-staff-profile-hero">
-            <span className="mobile-avatar mobile-staff-profile-avatar">{substrateIcon(staff)}</span>
-            <span className="mobile-staff-profile-name">{staff.name}</span>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void onAvatarPicked(f); if (e.target) e.target.value = ''; }}
+            />
+            <StaffAvatar staff={staff} size={64} onPick={() => avatarInputRef.current?.click()} />
+            <span
+              className="mobile-staff-profile-name"
+              onDoubleClick={() => onMessage(staff)}
+              title="双击进入聊天"
+            >{staff.name}</span>
             {staff.role_label && staff.role_label !== staff.name && (
               <span className="mobile-staff-profile-role">{staff.role_label}</span>
             )}
+            <span className="mobile-staff-hint">双击名字进入聊天 · 点头像换图</span>
           </div>
-          {/* Primary actions first — talk to the employee / watch its terminal.
-              Config (attributes + persona) lives below. */}
-          <button
-            type="button"
-            className="mobile-primary-action"
-            onClick={() => onMessage(staff)}
-          >
-            发消息
-          </button>
-          <button
-            type="button"
-            className="mobile-secondary-action"
-            onClick={() => setShowTerminal((v) => !v)}
-          >
-            {showTerminal ? '收起运行终端' : '查看运行终端'}
-          </button>
-          {showTerminal && <StaffTerminal staffId={staff.id} />}
-          <div className="mobile-staff-config-label">配置</div>
+          {/* Chat is reached by double-tapping the name (it lives in 聊天 too);
+              config + the live terminal are two tabs here. */}
+          <div className="mobile-staff-tabs">
+            <button type="button" className={`mobile-staff-tab${detailTab === 'config' ? ' is-active' : ''}`} onClick={() => setDetailTab('config')}>配置</button>
+            <button type="button" className={`mobile-staff-tab${detailTab === 'terminal' ? ' is-active' : ''}`} onClick={() => setDetailTab('terminal')}>运行终端</button>
+          </div>
+          {detailTab === 'terminal' ? (
+            <StaffTerminal staffId={staff.id} />
+          ) : (
+          <>
           <div className="mobile-staff-edit">
             <label className="mobile-config-dt" htmlFor="staff-name">名称</label>
             <input id="staff-name" className="mobile-staff-field" value={nameDraft}
@@ -2141,6 +2225,8 @@ function StaffProfile({
               </button>
             </div>
           </div>
+          </>
+          )}
         </>
       )}
     </div>

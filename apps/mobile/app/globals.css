@@ -1574,6 +1574,34 @@ button, input, textarea, select { font: inherit; }
   margin: 18px 0 2px; color: #9a958c; font-size: 12px; font-weight: 600;
   letter-spacing: 0.04em;
 }
+
+/* Refined staff avatar — gradient + initial, or a custom image; tappable to change. */
+.mobile-staff-avatar2 {
+  position: relative; border: 0; padding: 0; border-radius: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  overflow: visible; cursor: pointer;
+}
+.mobile-staff-avatar2-initial { line-height: 1; user-select: none; }
+.mobile-staff-avatar2-edit {
+  position: absolute; right: -4px; bottom: -4px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; color: #1f7a44; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.mobile-staff-hint { margin-top: 8px; color: #a8a39a; font-size: 11.5px; }
+
+/* Employee-detail sub-tabs: 配置 | 运行终端 (WeChat-ish segmented). */
+.mobile-staff-tabs {
+  display: flex; gap: 4px; margin: 14px 0 10px; padding: 3px;
+  background: #ecebe7; border-radius: 10px;
+}
+.mobile-staff-tab {
+  flex: 1 1 0; height: 36px; border: 0; border-radius: 8px; background: transparent;
+  font: inherit; font-size: 14px; font-weight: 600; color: #6b675f;
+}
+.mobile-staff-tab.is-active { background: #fff; color: #1f7a44; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 /* Employee fixed attributes — editable + save (名称/角色标签/角色名/并发上限). */
 .mobile-staff-edit { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
 .mobile-staff-edit .mobile-config-dt { margin-top: 8px; }

@@ -52,7 +52,7 @@ export type OwnerAssistantPatch = Partial<OwnerAssistant>;
 export type StaffPatch = Partial<Pick<Staff,
   | 'name' | 'role_label' | 'role_name' | 'status'
   | 'system_prompt' | 'autonomy_level' | 'governance_mode'
-  | 'max_concurrent_jobs'
+  | 'max_concurrent_jobs' | 'avatar_data'
   | 'denied_skills' | 'monthly_budget_millicents' | 'proxy_staff_id'>>;
 
 interface StoreState {
