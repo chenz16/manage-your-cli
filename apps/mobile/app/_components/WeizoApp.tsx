@@ -4241,9 +4241,12 @@ export function WeizoApp() {
   useEffect(() => {
     if (!connection) return;
     void checkDesktop();
-    const id = window.setInterval(() => void checkDesktop(), CONNECTION_POLL_MS);
+    // Adaptive cadence: poll fast (3s) while offline so recovery is near-instant
+    // and fully automatic; relax to 12s once connected. No user action, no config.
+    const interval = desktopOffline ? 3000 : CONNECTION_POLL_MS;
+    const id = window.setInterval(() => void checkDesktop(), interval);
     return () => window.clearInterval(id);
-  }, [connection]);
+  }, [connection, desktopOffline]);
 
   // Reconnect IMMEDIATELY when the app returns to the foreground. Android (esp.
   // Samsung) suspends the webview in the background, which also FREEZES the 12s
