@@ -1587,7 +1587,11 @@ function StaffChat({ staff }: { staff: Staff }) {
           <div className="chatmsg chatmsg-assistant">
             <div className="chatmsg-avatar" aria-hidden="true">{staff.name.slice(0, 1)}</div>
             <div className="chatmsg-body">
-              <div className="chatmsg-bubble chatmsg-bubble-assistant">正在回复…</div>
+              <div className="chatmsg-bubble chatmsg-bubble-assistant chat-typing-bubble">
+                <span className="chat-typing-dots" aria-label="正在回复">
+                  <i /><i /><i />
+                </span>
+              </div>
             </div>
           </div>
         )}
