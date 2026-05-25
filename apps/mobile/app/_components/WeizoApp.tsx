@@ -2640,6 +2640,8 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
+  const [latest, setLatest] = useState<Record<string, string>>({}); // staff_id → latest terminal line
+  const [liveStaffId, setLiveStaffId] = useState<string | null>(null); // open terminal overlay
 
   useEffect(() => {
     let cancelled = false;
@@ -2676,6 +2678,32 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
         .catch(() => undefined);
     }
   }
+
+  // Live status: poll each running job's terminal for its latest line so the
+  // 进行中 cards show real activity (not a hardcoded "排队中…"), and stalls show.
+  useEffect(() => {
+    const running = items.filter((j) => j.status === 'running' && j.staff_id);
+    if (running.length === 0) return;
+    let cancelled = false;
+    const pull = async () => {
+      const updates: Record<string, string> = {};
+      await Promise.all(running.map(async (j) => {
+        const sid = j.staff_id;
+        if (!sid) return;
+        try {
+          const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(sid)}/cli/output?lines=12`, { cache: 'no-store' });
+          if (!r.ok) return;
+          const x = await r.json() as { output?: string };
+          const line = (x.output ?? '').split('\n').map((s) => s.trim()).filter(Boolean).pop() ?? '';
+          if (line) updates[sid] = line.slice(0, 60);
+        } catch { /* ignore — keep last known */ }
+      }));
+      if (!cancelled && Object.keys(updates).length) setLatest((p) => ({ ...p, ...updates }));
+    };
+    void pull();
+    const id = window.setInterval(() => void pull(), 5000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [items]);
 
   function elapsedMinutes(createdAt: string | undefined): string | null {
     if (!createdAt) return null;
@@ -2715,10 +2743,17 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
                 </div>
                 <div className="weizo-kanban-job-title">{job.brief ?? job.id}</div>
                 <div className="weizo-kanban-job-latest">
-                  {jobStatus === 'queued' ? '等待：' : '最新：'}排队中…
+                  {jobStatus === 'queued'
+                    ? '等待：排队中…'
+                    : `最新：${(job.staff_id && latest[job.staff_id]) || '运行中…'}`}
                 </div>
                 <div className="weizo-kanban-job-actions">
-                  <button type="button" className="weizo-kanban-action-btn" disabled>
+                  <button
+                    type="button"
+                    className="weizo-kanban-action-btn"
+                    disabled={!job.staff_id}
+                    onClick={() => job.staff_id && setLiveStaffId(job.staff_id)}
+                  >
                     查看实时
                   </button>
                   <button
@@ -2734,6 +2769,17 @@ function ActiveJobs({ onTalkToSecretary }: { onTalkToSecretary: (text: string) =
           );
         })}
       </div>
+      {liveStaffId && (
+        <div className="mobile-live-overlay" role="dialog" aria-modal="true">
+          <div className="mobile-live-sheet">
+            <div className="mobile-live-head">
+              <span>实时终端</span>
+              <button type="button" className="mobile-live-close" onClick={() => setLiveStaffId(null)}>关闭</button>
+            </div>
+            <StaffTerminal staffId={liveStaffId} />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -3897,7 +3943,6 @@ function MeTab({
     }
   }
 
-  const ownerName = owner?.owner_name?.trim() || snapshot?.owner?.name?.trim() || 'Owner';
   const ownerRoleRaw = owner?.owner_role?.trim() || snapshot?.owner?.role?.trim() || '';
   const ownerIntro = owner?.owner_intro?.trim() || snapshot?.owner?.intro?.trim() || '';
   const activePersona = personas.find((p) => p.owner_role === ownerRoleRaw || p.name === ownerRoleRaw);
@@ -3922,16 +3967,15 @@ function MeTab({
   return (
     <div className="mobile-me">
       <div className="mobile-me-profile">
-        <span className="mobile-avatar mobile-avatar-owner">{ownerName.slice(0, 1).toUpperCase()}</span>
+        <span className="mobile-avatar mobile-avatar-owner">我</span>
         <span className="mobile-row-main">
-          <span className="mobile-row-title">{ownerName}</span>
-          <span className="mobile-row-sub">桌面已连接</span>
+          <span className="mobile-row-title">我</span>
+          {/* Desk IP folded into the status line; turns red on connection error. */}
+          <span className={`mobile-row-sub${error ? ' mobile-me-conn-error' : ''}`}>
+            {error ? '桌面连接异常 · ' : '桌面已连接 · '}
+            {connection.baseUrl.replace(/^https?:\/\//, '')}
+          </span>
         </span>
-      </div>
-      {error && <div className="mobile-error">读取失败：{error}</div>}
-      <div className="mobile-me-section">
-        <div className="mobile-me-label">已连接桌面</div>
-        <div className="mobile-me-value">{connection.baseUrl}</div>
       </div>
       <div className="mobile-me-section">
         <div className="mobile-me-label">我的人设</div>

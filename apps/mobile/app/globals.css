@@ -1649,6 +1649,22 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-term-send:disabled { opacity: 0.5; }
 
+/* Live-terminal overlay (看板 进行中 → 查看实时) */
+.mobile-live-overlay {
+  position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-end;
+}
+.mobile-live-sheet {
+  width: 100%; max-height: 80vh; max-height: 80dvh; background: #fff;
+  border-radius: 16px 16px 0 0; padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.mobile-live-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 15px; font-weight: 700; color: #111; margin-bottom: 6px;
+}
+.mobile-live-close { border: 0; background: #f3f3f3; color: #333; border-radius: 8px; font: inherit; font-size: 13px; padding: 6px 14px; }
+
 /* 看板 / work tracker */
 .mobile-work {
   display: flex; flex-direction: column; gap: 0; padding: 0 0 14px;
@@ -2125,6 +2141,8 @@ button, input, textarea, select { font: inherit; }
   margin: 0 10px 16px; padding: 10px; border-radius: 8px; text-align: center;
   background: #f5f3ee; color: #8a8a8a; font-size: 13px;
 }
+
+.mobile-me-conn-error { color: #bf3d32 !important; font-weight: 600; }
 
 /* 我 — me tab */
 .mobile-me {
