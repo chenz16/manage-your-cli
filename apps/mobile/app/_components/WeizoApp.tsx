@@ -2180,13 +2180,16 @@ function StaffProfile({
               <span className="mobile-staff-profile-role">{staff.role_label}</span>
             )}
           </div>
-          {/* Chat is reached by double-tapping the name (it lives in 聊天 too);
-              config + the live terminal are two tabs here. */}
-          <div className="mobile-staff-tabs">
-            <button type="button" className={`mobile-staff-tab${detailTab === 'config' ? ' is-active' : ''}`} onClick={() => setDetailTab('config')}>配置</button>
-            <button type="button" className={`mobile-staff-tab${detailTab === 'terminal' ? ' is-active' : ''}`} onClick={() => setDetailTab('terminal')}>看后台</button>
-          </div>
-          {detailTab === 'terminal' ? (
+          {/* Chat is reached by double-tapping the name (it lives in 聊天 too).
+              看后台 (tmux view) only applies to tmux-backed employees — the
+              Secretary is a warm headless -p process with no terminal. */}
+          {staff.role_name !== 'secretary' && (
+            <div className="mobile-staff-tabs">
+              <button type="button" className={`mobile-staff-tab${detailTab === 'config' ? ' is-active' : ''}`} onClick={() => setDetailTab('config')}>配置</button>
+              <button type="button" className={`mobile-staff-tab${detailTab === 'terminal' ? ' is-active' : ''}`} onClick={() => setDetailTab('terminal')}>看后台</button>
+            </div>
+          )}
+          {staff.role_name !== 'secretary' && detailTab === 'terminal' ? (
             <StaffTerminal staffId={staff.id} />
           ) : (
           <>
