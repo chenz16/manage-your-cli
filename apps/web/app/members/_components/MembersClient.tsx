@@ -728,7 +728,7 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
             style={{ fontSize: 12, padding: '4px 10px' }}
             title="收编本机正在运行的 tmux CLI 会话为员工"
           >
-            收编会话
+            收编
           </button>
           <button
             id="hire"
