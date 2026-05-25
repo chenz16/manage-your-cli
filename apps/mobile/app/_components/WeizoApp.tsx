@@ -2242,7 +2242,6 @@ function StaffProfile({
   const [maxJobsDraft, setMaxJobsDraft] = useState('1');
   const [savingProps, setSavingProps] = useState(false);
   const [propsMsg, setPropsMsg] = useState('');
-  const [detailTab, setDetailTab] = useState<'config' | 'terminal'>('config');
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   async function onAvatarPicked(file: File) {
@@ -2380,16 +2379,6 @@ function StaffProfile({
               💬 发消息
             </button>
           )}
-          {staff.role_name !== 'secretary' && (
-            <div className="mobile-staff-tabs">
-              <button type="button" className={`mobile-staff-tab${detailTab === 'config' ? ' is-active' : ''}`} onClick={() => setDetailTab('config')}>配置</button>
-              <button type="button" className={`mobile-staff-tab${detailTab === 'terminal' ? ' is-active' : ''}`} onClick={() => setDetailTab('terminal')}>看后台</button>
-            </div>
-          )}
-          {staff.role_name !== 'secretary' && detailTab === 'terminal' ? (
-            <StaffTerminal staffId={staff.id} />
-          ) : (
-          <>
           <div className="mobile-staff-edit">
             <label className="mobile-config-dt" htmlFor="staff-name">名称</label>
             <input id="staff-name" className="mobile-staff-field" value={nameDraft}
@@ -2444,7 +2433,12 @@ function StaffProfile({
               </button>
             </div>
           </div>
-          </>
+          {/* 看后台 — 放在配置最底部 (owner 2026-05-25). Secretary has no terminal. */}
+          {staff.role_name !== 'secretary' && (
+            <div className="mobile-staff-term-block">
+              <div className="mobile-me-label" style={{ marginTop: 14, marginBottom: 6 }}>看后台</div>
+              <StaffTerminal staffId={staff.id} />
+            </div>
           )}
         </>
       )}
@@ -4254,23 +4248,31 @@ function OwnerTodoStrip() {
   );
 }
 
-// ─── 员工详情 — 顶部 [聊天 | 配置] tab, 默认聊天 (owner 2026-05-25) ────────────
+// ─── 员工详情 — 点进直接聊天;右上齿轮 ⚙ → 配置 (owner 2026-05-25) ────────────
+// WeChat-style: 1 tap = chat. Gear in the chat header opens config (attributes +
+// persona + 看后台 at the bottom). No top tab bar.
 function StaffDetail({ staff, onBack }: { staff: Staff; onBack: () => void }) {
-  const [tab, setTab] = useState<'chat' | 'config'>('chat'); // 默认进聊天
+  const [mode, setMode] = useState<'chat' | 'config'>('chat'); // 点进默认聊天
+  if (mode === 'config') {
+    return (
+      <div className="mobile-staff-detail">
+        <div className="mobile-chat-header">
+          <button type="button" className="mobile-chat-header-back" onClick={() => setMode('chat')} aria-label="返回聊天">‹</button>
+          <span className="mobile-chat-header-name">{staff.name} · 配置</span>
+          <span className="mobile-chat-header-spacer" />
+        </div>
+        <StaffProfile key={`cfg-${staff.id}`} staffId={staff.id} fallback={staff} embedded />
+      </div>
+    );
+  }
   return (
     <div className="mobile-staff-detail">
       <div className="mobile-chat-header">
-        <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回">‹</button>
+        <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回通讯录">‹</button>
         <span className="mobile-chat-header-name">{staff.name}</span>
-        <span className="mobile-chat-header-spacer" />
+        <button type="button" className="mobile-chat-header-gear" onClick={() => setMode('config')} aria-label="配置">⚙</button>
       </div>
-      <div className="mobile-staff-toptabs">
-        <button type="button" className={`mobile-staff-toptab${tab === 'chat' ? ' is-active' : ''}`} onClick={() => setTab('chat')}>聊天</button>
-        <button type="button" className={`mobile-staff-toptab${tab === 'config' ? ' is-active' : ''}`} onClick={() => setTab('config')}>配置</button>
-      </div>
-      {tab === 'chat'
-        ? <StaffChat key={`chat-${staff.id}`} staff={staff} embedded />
-        : <StaffProfile key={`cfg-${staff.id}`} staffId={staff.id} fallback={staff} embedded />}
+      <StaffChat key={`chat-${staff.id}`} staff={staff} embedded />
     </div>
   );
 }
