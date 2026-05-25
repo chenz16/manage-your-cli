@@ -73,9 +73,12 @@ function extractUsage(line: Record<string, unknown>): { tokens: number; ts: stri
       const u = usage as Record<string, unknown>;
       const input = typeof u.input_tokens === 'number' ? u.input_tokens : 0;
       const output = typeof u.output_tokens === 'number' ? u.output_tokens : 0;
-      const cacheCreate = typeof u.cache_creation_input_tokens === 'number' ? u.cache_creation_input_tokens : 0;
-      const cacheRead = typeof u.cache_read_input_tokens === 'number' ? u.cache_read_input_tokens : 0;
-      const tokens = input + output + cacheCreate + cacheRead;
+      // Count only real new conversation tokens (input + output). We deliberately
+      // EXCLUDE cache_read_input_tokens — the warm process re-reads the same cached
+      // context every turn, so counting it inflates totals ~200× (a few K of real
+      // chat showed as millions) and misled the owner. cache_creation is likewise
+      // caching overhead, not consumption, so it's excluded too.
+      const tokens = input + output;
       if (tokens > 0) {
         const ts = typeof line.timestamp === 'string' ? line.timestamp : '';
         return { tokens, ts };
