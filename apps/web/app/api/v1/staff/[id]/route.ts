@@ -11,6 +11,8 @@ const PATCHABLE: Array<keyof StaffPatch> = [
   'max_concurrent_jobs', 'avatar_data',
   // Legacy local-AI staff config fields kept for persisted records.
   'denied_skills', 'monthly_budget_millicents', 'proxy_staff_id',
+  // AI-agent config: TTS voice/style + reply language.
+  'tts_voice', 'tts_style', 'reply_language',
 ];
 
 export async function GET(_req: Request, ctx: Context): Promise<NextResponse> {
@@ -91,6 +93,24 @@ export async function PATCH(req: Request, ctx: Context): Promise<NextResponse> {
     // Custom avatar is a small client-resized data URL; cap to ~256KB.
     if (v !== null && (typeof v !== 'string' || (v.length > 0 && !v.startsWith('data:image/')) || v.length > 256_000)) {
       return NextResponse.json({ error: 'avatar_data must be a data:image/* URL ≤256KB', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tts_voice' in raw) {
+    const v = raw['tts_voice'];
+    if (typeof v !== 'string' || v.length > 64) {
+      return NextResponse.json({ error: 'tts_voice must be a string ≤64 chars', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tts_style' in raw) {
+    const v = raw['tts_style'];
+    if (typeof v !== 'string' || v.length > 64) {
+      return NextResponse.json({ error: 'tts_style must be a string ≤64 chars', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('reply_language' in raw) {
+    const v = raw['reply_language'];
+    if (v !== 'auto' && v !== 'zh-CN' && v !== 'en') {
+      return NextResponse.json({ error: "reply_language must be 'auto', 'zh-CN', or 'en'", code: 'invalid_field' }, { status: 400 });
     }
   }
   // --- End field validation ---

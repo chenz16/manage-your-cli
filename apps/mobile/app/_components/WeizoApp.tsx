@@ -2389,11 +2389,64 @@ function StaffProfile({
   }, [staffId]);
 
   // Row-list expand state (embedded mode only)
-  const [openRow, setOpenRow] = useState<'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | null>(null);
+  const [openRow, setOpenRow] = useState<'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'replyLang' | null>(null);
 
-  function toggleRow(row: 'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona') {
+  function toggleRow(row: 'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'replyLang') {
     setOpenRow((prev) => (prev === row ? null : row));
   }
+
+  // TTS + reply language drafts (per-staff AI-agent config)
+  const [ttsVoiceDraft, setTtsVoiceDraft] = useState('');
+  const [ttsStyleDraft, setTtsStyleDraft] = useState('');
+  const [replyLangDraft, setReplyLangDraft] = useState<'auto' | 'zh-CN' | 'en'>('auto');
+  const [savingAiCfg, setSavingAiCfg] = useState(false);
+  const [aiCfgMsg, setAiCfgMsg] = useState('');
+
+  useEffect(() => {
+    setTtsVoiceDraft(staff?.tts_voice ?? '');
+    setTtsStyleDraft(staff?.tts_style ?? '');
+    setReplyLangDraft(staff?.reply_language ?? 'auto');
+  }, [staff]);
+
+  async function saveAiCfgField(patch: Record<string, unknown>) {
+    if (!staff || savingAiCfg) return;
+    setSavingAiCfg(true); setAiCfgMsg('');
+    try {
+      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staff.id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const j = await r.json().catch(() => ({})) as Staff & { error?: string };
+      if (!r.ok || !j.id) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setStaff(j as Staff);
+      setAiCfgMsg('已保存');
+    } catch (err) {
+      setAiCfgMsg(`保存失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally { setSavingAiCfg(false); }
+  }
+
+  const TTS_VOICE_OPTIONS: Array<{ label: string; value: string }> = [
+    { label: '默认（系统）', value: '' },
+    { label: '晓晓·女声', value: 'zh-CN-XiaoxiaoNeural' },
+    { label: '云希·男声', value: 'zh-CN-YunxiNeural' },
+    { label: '晓伊·女声', value: 'zh-CN-XiaoyiNeural' },
+    { label: '云扬·男声', value: 'zh-CN-YunyangNeural' },
+  ];
+  const TTS_STYLE_OPTIONS: Array<{ label: string; value: string }> = [
+    { label: '默认', value: '' },
+    { label: '平和', value: 'calm' },
+    { label: '热情', value: 'cheerful' },
+    { label: '专业', value: 'serious' },
+  ];
+  const REPLY_LANG_OPTIONS: Array<{ label: string; value: 'auto' | 'zh-CN' | 'en' }> = [
+    { label: '跟随', value: 'auto' },
+    { label: '中文', value: 'zh-CN' },
+    { label: 'English', value: 'en' },
+  ];
+
+  const ttsVoiceLabel = TTS_VOICE_OPTIONS.find((o) => o.value === (staff?.tts_voice ?? ''))?.label ?? '默认';
+  const ttsStyleLabel = TTS_STYLE_OPTIONS.find((o) => o.value === (staff?.tts_style ?? ''))?.label ?? '默认';
+  const replyLangLabel = REPLY_LANG_OPTIONS.find((o) => o.value === (staff?.reply_language ?? 'auto'))?.label ?? '跟随';
 
   if (embedded && staff) {
     return (
@@ -2536,6 +2589,93 @@ function StaffProfile({
                   disabled={savingPersona || polishing || !personaDirty}
                 >
                   {savingPersona ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 朗读声音 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('ttsVoice')}>
+            <span className="mobile-me-row-title">朗读声音</span>
+            <span className="mobile-collapse-summary">{ttsVoiceLabel}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'ttsVoice' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'ttsVoice' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              <select
+                className="mobile-staff-field"
+                value={ttsVoiceDraft}
+                onChange={(e) => setTtsVoiceDraft(e.target.value)}
+                disabled={savingAiCfg}
+              >
+                {TTS_VOICE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <div className="mobile-persona-editor-actions">
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveAiCfgField({ tts_voice: ttsVoiceDraft }).then(() => setOpenRow(null)); }}
+                  disabled={savingAiCfg || ttsVoiceDraft === (staff?.tts_voice ?? '')}>
+                  {savingAiCfg ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 朗读风格 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('ttsStyle')}>
+            <span className="mobile-me-row-title">朗读风格</span>
+            <span className="mobile-collapse-summary">{ttsStyleLabel}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'ttsStyle' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'ttsStyle' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              <select
+                className="mobile-staff-field"
+                value={ttsStyleDraft}
+                onChange={(e) => setTtsStyleDraft(e.target.value)}
+                disabled={savingAiCfg}
+              >
+                {TTS_STYLE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <div className="mobile-persona-editor-actions">
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveAiCfgField({ tts_style: ttsStyleDraft }).then(() => setOpenRow(null)); }}
+                  disabled={savingAiCfg || ttsStyleDraft === (staff?.tts_style ?? '')}>
+                  {savingAiCfg ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 回复语言 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('replyLang')}>
+            <span className="mobile-me-row-title">回复语言</span>
+            <span className="mobile-collapse-summary">{replyLangLabel}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'replyLang' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'replyLang' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              <select
+                className="mobile-staff-field"
+                value={replyLangDraft}
+                onChange={(e) => setReplyLangDraft(e.target.value as 'auto' | 'zh-CN' | 'en')}
+                disabled={savingAiCfg}
+              >
+                {REPLY_LANG_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <div className="mobile-persona-editor-actions">
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveAiCfgField({ reply_language: replyLangDraft }).then(() => setOpenRow(null)); }}
+                  disabled={savingAiCfg || replyLangDraft === (staff?.reply_language ?? 'auto')}>
+                  {savingAiCfg ? '保存中…' : '保存'}
                 </button>
               </div>
             </div>

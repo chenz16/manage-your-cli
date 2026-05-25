@@ -239,5 +239,23 @@ export const Staff = z.object({
    *  Default `[]` preserves backward-compat: existing rows without this
    *  field parse with an empty set (no project affiliation). */
   project_ids: z.array(idOf('proj')).default([]),
+
+  /* ── AI-agent config: TTS + reply language ──────────────────────────────
+   * All optional so existing rows parse without changes.
+   * TTS wiring: leave a // TODO where synthesizeSpeech is called — not wired yet.
+   * Owner global-default: deferred to a follow-up pass.
+   */
+
+  /** Azure / system TTS voice name for this staff member's spoken output.
+   *  Empty string or absent = system default. */
+  tts_voice: z.string().max(64).optional(),
+
+  /** TTS speaking style (e.g. 'calm', 'cheerful', 'serious').
+   *  Empty string or absent = system default. */
+  tts_style: z.string().max(64).optional(),
+
+  /** Language the staff should reply in.
+   *  'auto' = follow the conversation language (default when absent). */
+  reply_language: z.enum(['auto', 'zh-CN', 'en']).optional(),
 });
 export type Staff = z.infer<typeof Staff>;
