@@ -2187,6 +2187,18 @@ button, input, textarea, select { font: inherit; }
 
 .mobile-me-conn-error { color: #bf3d32 !important; font-weight: 600; }
 
+/* Collapsible section header (WeChat-style) */
+.mobile-collapse-head {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; border: 0; background: transparent; padding: 2px 0;
+  font: inherit; cursor: pointer;
+}
+.mobile-collapse-chevron {
+  color: #b0aca4; font-size: 18px; line-height: 1;
+  transition: transform 160ms ease;
+}
+.mobile-collapse-chevron.open { transform: rotate(90deg); }
+
 /* 我 — me tab */
 .mobile-me {
   display: flex; flex-direction: column; gap: 10px; padding: 12px;

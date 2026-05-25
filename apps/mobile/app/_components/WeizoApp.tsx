@@ -3614,6 +3614,7 @@ function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
   const [inputB, setInputB] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [integOpen, setIntegOpen] = useState(false); // 集成区默认折叠(微信风)
 
   const integrations = Array.isArray(meData?.integrations) ? meData.integrations : [];
   const gmailLink = integrations.find((i) => i.kind === 'gmail');
@@ -3732,41 +3733,48 @@ function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
       {/* ── 扫一扫 / 扫码连接 ── */}
       <ScanConnectSection />
 
-      {/* ── 集成 / 连接服务 ── */}
+      {/* ── 集成 / 连接服务(默认折叠,微信风)── */}
       <div className="mobile-me-section">
-        <div className="mobile-me-label">集成 / 连接服务</div>
-        <div className="mobile-me-note" style={{ marginBottom: 8 }}>这些连接在桌面设置，这里只看状态。</div>
+        <button type="button" className="mobile-collapse-head" onClick={() => setIntegOpen((v) => !v)}>
+          <span className="mobile-me-label" style={{ margin: 0 }}>集成 / 连接服务</span>
+          <span className={`mobile-collapse-chevron${integOpen ? ' open' : ''}`}>›</span>
+        </button>
+        {integOpen && (
+          <>
+            <div className="mobile-me-note" style={{ margin: '6px 0 8px' }}>这些连接在桌面设置，这里只看状态。</div>
 
-        {/* 微信 live status */}
-        <div className="mobile-connector-channel-row">
-          <span className="mobile-intg-icon">💬</span>
-          <span className="mobile-intg-name">微信</span>
-          <span className="mobile-intg-pill-wrap">
-            <WechatStatusBlock />
-          </span>
-        </div>
+            {/* 微信 live status */}
+            <div className="mobile-connector-channel-row">
+              <span className="mobile-intg-icon">💬</span>
+              <span className="mobile-intg-name">微信</span>
+              <span className="mobile-intg-pill-wrap">
+                <WechatStatusBlock />
+              </span>
+            </div>
 
-        {/* 插件 */}
-        <div className="mobile-me-label" style={{ marginTop: 12 }}>插件</div>
-        <PluginsBlock />
+            {/* 插件 */}
+            <div className="mobile-me-label" style={{ marginTop: 12 }}>插件</div>
+            <PluginsBlock />
 
-        {/* Gmail / 消息渠道 */}
-        <div className="mobile-me-label" style={{ marginTop: 12 }}>Gmail / 消息渠道</div>
-        <div className="mobile-intg-list">
-          {ROWS.map((row) => (
-            <button
-              key={row.key}
-              type="button"
-              className="mobile-intg-row"
-              onClick={row.action}
-            >
-              <span className="mobile-intg-icon">{row.icon}</span>
-              <span className="mobile-intg-name">{row.name}</span>
-              <span className="mobile-intg-pill-wrap">{row.pill}</span>
-              <span className="mobile-intg-chevron">›</span>
-            </button>
-          ))}
-        </div>
+            {/* Gmail / 消息渠道 */}
+            <div className="mobile-me-label" style={{ marginTop: 12 }}>Gmail / 消息渠道</div>
+            <div className="mobile-intg-list">
+              {ROWS.map((row) => (
+                <button
+                  key={row.key}
+                  type="button"
+                  className="mobile-intg-row"
+                  onClick={row.action}
+                >
+                  <span className="mobile-intg-icon">{row.icon}</span>
+                  <span className="mobile-intg-name">{row.name}</span>
+                  <span className="mobile-intg-pill-wrap">{row.pill}</span>
+                  <span className="mobile-intg-chevron">›</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {modal && (
