@@ -27,6 +27,13 @@
   --green: #2E7D52;
   --purple: #7B4FAB;
   --red: #C0392B;
+  /* ── Design-polish tokens (2026-05-25): one brand green + surfaces + tap ── */
+  --brand: #1f7a44;
+  --brand-light: #edf6f0;
+  --brand-dim: #c0ddc8;
+  --brand-ink: #1a5e34;
+  --surface-nav: #f7f7f7;
+  --tap: 44px;
   /* Legacy desk aliases — mobile renamed these tokens; keep aliases so
      desk-mirrored classes referencing the old names still resolve. */
   --bg-alt: var(--paper-2);
@@ -2797,3 +2804,39 @@ button, input, textarea, select { font: inherit; }
   font: inherit; font-size: 12px; cursor: pointer;
 }
 .mobile-scan-connect-reset:active { background: #d4d4d0; }
+
+/* ───────────────────────────────────────────────────────────────────────
+   Design-polish pass (2026-05-25) — applied via trailing overrides so the
+   existing rules stay intact. One brand green, 44px tap targets, focus rings,
+   contrast + type fixes. See docs/design-polish-mobile.md.
+   ─────────────────────────────────────────────────────────────────────── */
+/* P0-1 — collapse competing greens to --brand */
+.mobile-me-lang-btn.is-active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.mobile-qr-corner { border-color: var(--brand); }
+.mobile-qr-scanline { background: linear-gradient(90deg, transparent, var(--brand), transparent); }
+.chatmsg-avatar { background: var(--brand); }
+.weizo-kanban-pulse-dot { background: var(--brand); }
+.mobile-me-status-dot { background: currentColor; }
+/* P0-5 — visible focus rings (a11y) */
+.chat-input:focus, .mobile-staff-field:focus, .mobile-persona-editor-textarea:focus,
+.weizo-todo-input:focus, .mobile-term-input:focus, .mobile-search-input:focus {
+  outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px rgba(31,122,68,0.18);
+}
+/* Touch targets ≥44px */
+.mobile-sheet-close { width: var(--tap); height: var(--tap); font-size: 20px; }
+.mobile-persona-change { min-height: var(--tap); }
+.mobile-voice-button { min-width: var(--tap); min-height: var(--tap); }
+/* Contrast (AA) */
+.mobile-row-action { color: #666; font-size: 13px; }
+.mobile-staff-cap { color: #777; }
+.mobile-row-tokens-na { color: #888; }
+/* Type scale */
+.mobile-row-title { font-size: 15px; }
+/* P1-5 — QR sheet: lighter bg + grip pill */
+.mobile-sheet { background: var(--surface-nav); }
+.mobile-sheet::before {
+  content: ""; display: block; width: 36px; height: 4px; border-radius: 2px;
+  background: #d8d8d8; margin: 2px auto 10px;
+}
+/* P1-1 — 我 tab tighter inter-card gap */
+.mobile-me { gap: 8px; }
