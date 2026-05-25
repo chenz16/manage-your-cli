@@ -4211,7 +4211,7 @@ function readCachedActions(): string[] {
 
 function OwnerTodoStrip() {
   const [items, setItems] = useState<string[]>(() => readCachedActions());
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true); // 默认收起,只显示数字;点一下看内容
 
   useEffect(() => {
     holonApiFetch('/api/v1/chat/owner-actions', { cache: 'no-store' })
@@ -5508,7 +5508,10 @@ export function WeizoApp() {
         {tab === 'chats' && (
           <div className="mobile-chat-panel">
             <div className="mobile-chat-header">
-              <span className="mobile-chat-header-name">小秘</span>
+              <span className="mobile-chat-header-title">
+                <span className="mobile-chat-header-name">小秘</span>
+                <span className="mobile-chat-header-sub">微作 AI 助理</span>
+              </span>
             </div>
             <OwnerTodoStrip />
             <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />

@@ -1090,6 +1090,10 @@ button, input, textarea, select { font: inherit; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mobile-chat-header-spacer { flex: 0 0 auto; width: 36px; }
+/* 小秘 root: 名字 + 微作 副标 (二行居中) */
+.mobile-chat-header-title { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+.mobile-chat-header-title .mobile-chat-header-name { flex: 0 0 auto; }
+.mobile-chat-header-sub { font-size: 11px; color: #999; }
 
 /* 老板待办 strip — 小秘聊天页顶部, 紧凑, top 3 */
 .mobile-todo-strip {
