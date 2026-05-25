@@ -5551,9 +5551,8 @@ function MeTab({
           }}
         >
           <span className="mobile-me-row-title">关于我</span>
-          <span className="mobile-collapse-summary">
-            {personaName.length > 10 ? `${personaName.slice(0, 10)}…` : (personaName || '未设置')}
-          </span>
+          {/* highlights like 资产 (技能·引用·交付): the identity dimensions; tap → details */}
+          <span className="mobile-collapse-summary">职业 · 人设 · 痛点</span>
           <span className="mobile-collapse-chevron">›</span>
         </button>
       </div>
@@ -5601,14 +5600,8 @@ function MeTab({
         {todaySummary && <span className="weizo-clilist-tokens" style={{ marginRight: 4 }}>{todaySummary}</span>}
         <span className="mobile-collapse-chevron">›</span>
       </button>
-      <div className="mobile-me-section">
-        <div className="mobile-me-value" style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '4px 0' }}>
-          微作 Weizo 0.1.0
-          {process.env.NEXT_PUBLIC_BUILD_SHA
-            ? ` · ${process.env.NEXT_PUBLIC_BUILD_SHA}${process.env.NEXT_PUBLIC_BUILD_DATE ? ` · ${process.env.NEXT_PUBLIC_BUILD_DATE}` : ''}`
-            : ''}
-        </div>
-      </div>
+      {/* WeChat-style quiet footer: plain centered gray line, no card, no sha/date. */}
+      <div className="mobile-me-version">微作 Weizo 0.1.0</div>
       <button type="button" className="mobile-feedback-button" onClick={() => setFeedbackOpen(true)}>
         <span>反馈 / 报错</span>
         <span>›</span>
