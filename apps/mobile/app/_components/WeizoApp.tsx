@@ -4013,6 +4013,9 @@ function MeTab({
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [personaSheetOpen, setPersonaSheetOpen] = useState(false);
+  const [ownerDraft, setOwnerDraft] = useState('');
+  const [ownerBusy, setOwnerBusy] = useState<'idle' | 'polishing' | 'saving'>('idle');
+  const [ownerMsg, setOwnerMsg] = useState('');
   const [personaApplied, setPersonaApplied] = useState('');
   const [error, setError] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -4102,6 +4105,44 @@ function MeTab({
     }
   }
 
+  // Free-form owner persona: describe yourself / your pain points → the polish
+  // agent (re)positions it → save as owner_role + owner_intro.
+  async function polishOwnerPersona() {
+    const text = ownerDraft.trim();
+    if (!text || ownerBusy !== 'idle') return;
+    setOwnerBusy('polishing'); setOwnerMsg('');
+    try {
+      const r = await holonApiFetch('/api/v1/persona/polish', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, role_label: '个人定位（老板视角）' }),
+      });
+      const j = await r.json().catch(() => ({})) as { polished?: string; error?: string };
+      if (!r.ok || typeof j.polished !== 'string') throw new Error(j.error ?? `HTTP ${r.status}`);
+      setOwnerDraft(j.polished);
+      setOwnerMsg('已定位，确认后点「用这个」');
+    } catch (e) { setOwnerMsg(`定位失败：${e instanceof Error ? e.message : String(e)}`); }
+    finally { setOwnerBusy('idle'); }
+  }
+
+  async function saveOwnerPersona() {
+    const text = ownerDraft.trim();
+    if (!text || ownerBusy !== 'idle') return;
+    setOwnerBusy('saving'); setOwnerMsg('');
+    try {
+      const role = ((text.split(/[\n。.!！?？]/)[0] ?? text).trim() || text).slice(0, 20);
+      const r = await holonApiFetch('/api/v1/me', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner_role: role, owner_intro: text }),
+      });
+      if (!r.ok) { const b = await r.json().catch(() => ({})) as { error?: string }; throw new Error(b.error ?? `HTTP ${r.status}`); }
+      setPersonaSheetOpen(false);
+      setPersonaApplied('已保存我的定位');
+      window.setTimeout(() => setPersonaApplied(''), 1600);
+      void load();
+    } catch (e) { setOwnerMsg(`保存失败：${e instanceof Error ? e.message : String(e)}`); }
+    finally { setOwnerBusy('idle'); }
+  }
+
   const ownerRoleRaw = owner?.owner_role?.trim() || snapshot?.owner?.role?.trim() || '';
   const ownerIntro = owner?.owner_intro?.trim() || snapshot?.owner?.intro?.trim() || '';
   const activePersona = personas.find((p) => p.owner_role === ownerRoleRaw || p.name === ownerRoleRaw);
@@ -4153,7 +4194,7 @@ function MeTab({
           <button
             type="button"
             className="mobile-persona-change"
-            onClick={() => setPersonaSheetOpen(true)}
+            onClick={() => { setOwnerDraft(ownerIntro); setOwnerMsg(''); setPersonaSheetOpen(true); }}
           >
             更换
           </button>
@@ -4255,6 +4296,30 @@ function MeTab({
               >
                 ×
               </button>
+            </div>
+            {/* Free-form: let AI position you from your own words / pain points */}
+            <div className="mobile-persona-freeform">
+              <div className="mobile-me-note" style={{ marginBottom: 6 }}>让 AI 给你定位 —— 说出你的角色、日常、痛点：</div>
+              <textarea
+                className="mobile-persona-editor-textarea"
+                value={ownerDraft}
+                onChange={(e) => setOwnerDraft(e.target.value)}
+                rows={4}
+                placeholder="例如：我是做柴油机出口的小公司老板，平时忙采购和客户跟进，痛点是邮件和报价太占时间…"
+                disabled={ownerBusy !== 'idle'}
+              />
+              <div className="mobile-persona-editor-actions">
+                {ownerMsg && <span className="mobile-persona-editor-msg">{ownerMsg}</span>}
+                <button type="button" className="mobile-persona-polish-btn"
+                  onClick={() => void polishOwnerPersona()} disabled={ownerBusy !== 'idle' || !ownerDraft.trim()}>
+                  {ownerBusy === 'polishing' ? '定位中…' : '✨ AI 定位'}
+                </button>
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => void saveOwnerPersona()} disabled={ownerBusy !== 'idle' || !ownerDraft.trim()}>
+                  {ownerBusy === 'saving' ? '保存中…' : '用这个'}
+                </button>
+              </div>
+              <div className="mobile-me-note" style={{ textAlign: 'center', margin: '12px 0 4px' }}>或选一个预设 ↓</div>
             </div>
             <div className="mobile-persona-list">
               {personas.map((persona) => {
