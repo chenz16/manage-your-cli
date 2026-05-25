@@ -1965,7 +1965,7 @@ function MobileRecipientSwitcher({
           {activeChat?.kind === 'staff' ? substrateIcon(activeChat.staff) : '秘'}
         </span>
         <span className="mobile-recipient-text">
-          <span className="mobile-recipient-name">对话：{currentLabel}</span>
+          <span className="mobile-recipient-name">{currentLabel}</span>
           <span className="mobile-recipient-role">{currentRole}</span>
         </span>
         <span className="mobile-recipient-caret">⌄</span>
@@ -2314,10 +2314,12 @@ function StaffProfile({
   staffId,
   fallback,
   onMessage,
+  onBack,
 }: {
   staffId: string;
   fallback?: Staff;
   onMessage: (staff: Staff) => void;
+  onBack: () => void;
 }) {
   const [staff, setStaff] = useState<Staff | null>(fallback ?? null);
   const [loading, setLoading] = useState(true);
@@ -2448,6 +2450,7 @@ function StaffProfile({
 
   return (
     <div className="mobile-staff-profile">
+      <button type="button" className="mobile-back-row" onClick={onBack}>‹ 通讯录</button>
       {loading && !staff && <div className="mobile-empty-panel">加载中…</div>}
       {error && <div className="mobile-error">员工配置加载失败：{error}</div>}
       {staff && (
@@ -4357,10 +4360,12 @@ function MeTab({
   connection,
   onDisconnect,
   onUseSkill,
+  onSubviewChange,
 }: {
   connection: MobileDesktopConnection;
   onDisconnect: () => void;
   onUseSkill: (text: string) => void;
+  onSubviewChange: (inSubview: boolean) => void;
 }) {
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
   const [meData, setMeData] = useState<MeOwnerData | null>(null);
@@ -4424,6 +4429,9 @@ function MeTab({
   }
 
   useEffect(() => { void load(); }, []);
+
+  // Tell the shell when a 二级页 (资产/用量) is open so it drops the app header.
+  useEffect(() => { onSubviewChange(assetsOpen || usageOpen); }, [assetsOpen, usageOpen, onSubviewChange]);
 
   useEffect(() => {
     holonApiFetch('/api/v1/usage', { cache: 'no-store' })
@@ -5344,6 +5352,7 @@ export function WeizoApp() {
   const [checkingConnection, setCheckingConnection] = useState(false);
   const [badges] = useState<Record<BadgedTabKey, number>>({ chats: 0, work: 0 });
   const [staffRefreshing, setStaffRefreshing] = useState(false);
+  const [meSubview, setMeSubview] = useState(false); // me-tab 二级页(资产/用量)→ 隐藏顶栏
 
   useEffect(() => {
     const conn = readDesktopConnection();
@@ -5503,32 +5512,13 @@ export function WeizoApp() {
         onRetry={() => void checkDesktop()}
         onRepair={disconnect}
       />
-      <AppHeader
-        title={
-          tab === 'chats' && activeChat?.kind === 'staff'
-            ? activeChat.staff.name
-            : tabTitle(tab, selectedStaff)
-        }
-        left={
-          tab === 'chats' && activeChat?.kind === 'staff' ? (
-            <button
-              type="button"
-              className="mobile-back-button"
-              onClick={() => setActiveChat({ kind: 'owner' })}
-            >
-              ‹ 微作
-            </button>
-          ) : selectedStaff ? (
-            <button
-              type="button"
-              className="mobile-back-button"
-              onClick={() => setSelectedStaff(null)}
-            >
-              ‹ 通讯录
-            </button>
-          ) : undefined
-        }
-      />
+      {/* Header shows ONLY on a non-chat tab ROOT. WeChat-style: in the chat
+          tab the recipient bar sits at the very top (no title above it); any
+          drill-in (staff profile / 资产 / 用量) carries its own back-row, so the
+          app header would just double-stack and waste vertical space. */}
+      {tab !== 'chats' && !(tab === 'contacts' && selectedStaff) && !(tab === 'me' && meSubview) && (
+        <AppHeader title={tabTitle(tab, selectedStaff)} />
+      )}
       <section
         className={`mobile-tab-content${tab === 'chats' ? ' mobile-tab-content-chat' : ''}`}
       >
@@ -5547,6 +5537,7 @@ export function WeizoApp() {
             <StaffProfile
               staffId={selectedStaff.id}
               fallback={selectedStaff}
+              onBack={() => setSelectedStaff(null)}
               onMessage={(s) => {
                 setSelectedStaff(null);
                 setTab('chats');
@@ -5571,6 +5562,7 @@ export function WeizoApp() {
           <MeTab
             connection={connection!}
             onDisconnect={disconnect}
+            onSubviewChange={setMeSubview}
             onUseSkill={(text) => {
               setChatSeed(text);
               setActiveChat({ kind: 'owner' });
