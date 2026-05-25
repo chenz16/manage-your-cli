@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { captureCliOutput } from '@holon/core';
+import { captureCliOutput, getStaffMerged } from '@holon/core';
 
 interface Context { params: Promise<{ id: string }> }
 
@@ -12,7 +12,23 @@ interface Context { params: Promise<{ id: string }> }
  */
 export async function GET(req: Request, ctx: Context): Promise<NextResponse> {
   const { id } = await ctx.params;
-  const linesParam = Number(new URL(req.url).searchParams.get('lines') ?? '200');
-  const r = captureCliOutput(id, Number.isFinite(linesParam) ? linesParam : 200);
-  return NextResponse.json(r, { status: r.ok ? 200 : 400 });
+  // BUG-006: a missing staff is a distinct 404, not a no_session (which the
+  // mobile terminal renders as "session not running").
+  if (!getStaffMerged(id)) {
+    return NextResponse.json({ ok: false, error: 'staff not found', code: 'not_found' }, { status: 404 });
+  }
+  // BUG-009: if `lines` is present it must be a positive integer — don't silently
+  // fall back to 200 on garbage input.
+  const rawLines = new URL(req.url).searchParams.get('lines');
+  let lines = 200;
+  if (rawLines !== null) {
+    const n = Number(rawLines);
+    if (!Number.isInteger(n) || n <= 0) {
+      return NextResponse.json({ ok: false, error: 'lines must be a positive integer', code: 'invalid_lines' }, { status: 400 });
+    }
+    lines = n;
+  }
+  const r = captureCliOutput(id, lines);
+  // no_session (running worker absent) is a 409 Conflict, not a 400.
+  return NextResponse.json(r, { status: r.ok ? 200 : 409 });
 }
