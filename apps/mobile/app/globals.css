@@ -2598,6 +2598,53 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-attach-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── ✨ skill button (composer) + skill sheet ── */
+.mobile-skill-button {
+  width: 38px; height: 38px; min-width: var(--tap, 44px); min-height: var(--tap, 44px);
+  border-radius: 50%;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; font-size: 18px; line-height: 1; flex: 0 0 auto; cursor: pointer;
+}
+.mobile-skill-section { margin: 8px 0 4px; }
+.mobile-skill-section-title { font-size: 13px; color: #888; margin: 0 2px 8px; }
+.mobile-skill-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mobile-skill-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 4px; border: 0; background: #fff; border-radius: 12px; cursor: pointer;
+  min-height: var(--tap, 44px);
+}
+.mobile-skill-card:active { background: #ececec; }
+.mobile-skill-icon { font-size: 24px; line-height: 1; }
+.mobile-skill-name { font-size: 11px; color: #333; text-align: center; line-height: 1.2; }
+.mobile-skill-empty { font-size: 13px; color: #999; padding: 8px 2px; }
+.mobile-skill-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px; margin-top: 8px;
+  border: 0; background: #fff; border-radius: 12px; cursor: pointer;
+  font-size: 15px; color: #222; min-height: var(--tap, 44px);
+}
+.mobile-skill-row:active { background: #ececec; }
+.mobile-skill-row-icon { font-size: 18px; }
+.mobile-skill-row-chevron { margin-left: auto; color: #bbb; font-size: 18px; }
+.mobile-skill-create {
+  background: #fff; border-radius: 12px; padding: 12px; margin-top: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mobile-skill-input {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px;
+  font-size: 15px; background: #fafafa; color: #222; font-family: inherit;
+}
+.mobile-skill-create-actions { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
+.mobile-skill-link { border: 0; background: none; color: #888; font-size: 14px; padding: 8px; cursor: pointer; }
+.mobile-skill-save {
+  border: 0; background: var(--brand, #1f7a44); color: #fff;
+  border-radius: 8px; padding: 8px 18px; font-size: 15px; cursor: pointer; min-height: var(--tap, 44px);
+}
+.mobile-skill-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ── composer-input-row: voice + attach + textarea + send on one row ── */
 .composer-input-row {
   display: flex;

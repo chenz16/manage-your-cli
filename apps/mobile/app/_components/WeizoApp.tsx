@@ -44,7 +44,7 @@ import type {
   TodoPriority,
   ListTodosResponse,
 } from '@holon/api-contract';
-import type { PersonaPreset } from '@holon/core';
+import type { PersonaPreset, SkillDescriptor, SkillKind } from '@holon/core';
 import {
   clearDesktopConnection,
   holonApiFetch,
@@ -1361,6 +1361,218 @@ function OwnerAttachAwareSend({
   );
 }
 
+// ─── ✨ 技能 — skill panel (composer sheet) ───────────────────────────────────
+//
+// 组合式: 最近用过(localStorage) + 能用的技能(implemented) + 创建 + 技能库链接(桌面)。
+// 手机只放精华;完整库(全 28 个 + 增删改查)在桌面 /skills。点技能 → 把示例填进
+// 输入框 → 用户直接发,秘书调用。Owner-confirmed design 2026-05-25.
+
+const RECENT_SKILLS_KEY = 'holon.mobile.recentSkills.v1';
+const RECENT_SKILLS_MAX = 5;
+
+const SKILL_KIND_LABELS: Record<SkillKind, string> = {
+  office: '办公',
+  media: '媒体',
+  engineering: '工程',
+  communication: '沟通',
+  research: '调研',
+  ops: '运营',
+};
+
+function readRecentSkillIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(RECENT_SKILLS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecentSkillId(id: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const next = [id, ...readRecentSkillIds().filter((x) => x !== id)].slice(0, RECENT_SKILLS_MAX);
+    window.localStorage.setItem(RECENT_SKILLS_KEY, JSON.stringify(next));
+  } catch {
+    /* localStorage best-effort */
+  }
+}
+
+/** Set the owner composer textarea text via the native setter (same proven
+ *  path the @-mention insert uses) so assistant-ui's controlled input syncs. */
+function seedOwnerComposer(text: string): void {
+  const ta = document.querySelector<HTMLTextAreaElement>('.mobile-chat-composer .chat-input');
+  if (!ta) return;
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+  setter?.call(ta, text);
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  ta.focus();
+  const pos = text.length;
+  ta.setSelectionRange(pos, pos);
+}
+
+/** Prefill payload for a tapped skill: prefer the first example, fall back to name. */
+function skillInvocation(s: SkillDescriptor): string {
+  return (s.examples && s.examples[0]) || s.name;
+}
+
+function SkillCard({ s, onPick }: { s: SkillDescriptor; onPick: (s: SkillDescriptor) => void }) {
+  return (
+    <button type="button" className="mobile-skill-card" onClick={() => onPick(s)}>
+      <span className="mobile-skill-icon">{s.icon}</span>
+      <span className="mobile-skill-name">{s.name}</span>
+    </button>
+  );
+}
+
+function SkillSheet({ onClose, onPick }: { onClose: () => void; onPick: (text: string) => void }) {
+  const [skills, setSkills] = useState<SkillDescriptor[]>([]);
+  const [loadErr, setLoadErr] = useState('');
+  const [recentIds, setRecentIds] = useState<string[]>(() => readRecentSkillIds());
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newKind, setNewKind] = useState<SkillKind>('ops');
+  const [newDesc, setNewDesc] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState('');
+
+  useEffect(() => {
+    holonApiFetch('/api/v1/skills', { cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json() as { items?: SkillDescriptor[] };
+        setSkills(Array.isArray(j.items) ? j.items : []);
+        setLoadErr('');
+      })
+      .catch((e) => setLoadErr(e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  const implemented = useMemo(() => skills.filter((s) => s.implemented), [skills]);
+  const recent = useMemo(
+    () => recentIds.map((id) => skills.find((s) => s.id === id)).filter((s): s is SkillDescriptor => !!s),
+    [recentIds, skills],
+  );
+
+  function pick(s: SkillDescriptor) {
+    pushRecentSkillId(s.id);
+    setRecentIds(readRecentSkillIds());
+    onPick(skillInvocation(s));
+  }
+
+  async function createSkill() {
+    const name = newName.trim();
+    const description = newDesc.trim();
+    if (!name || !description) { setSaveErr('名称和描述都要填'); return; }
+    setSaving(true);
+    setSaveErr('');
+    try {
+      const r = await holonApiFetch('/api/v1/skills', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, kind: newKind, description }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(j.error || `HTTP ${r.status}`);
+      }
+      const created = await r.json() as SkillDescriptor;
+      setSkills((prev) => [...prev, created]);
+      setNewName('');
+      setNewDesc('');
+      setCreating(false);
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openLibrary() {
+    const base = readDesktopConnection()?.baseUrl;
+    if (base) window.open(`${base}/skills`, '_blank');
+  }
+
+  return (
+    <div className="mobile-sheet-backdrop" onClick={onClose}>
+      <div className="mobile-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="mobile-sheet-head">
+          <h2 className="mobile-sheet-title">技能</h2>
+          <button type="button" className="mobile-sheet-close" onClick={onClose} aria-label="关闭">×</button>
+        </div>
+
+        {loadErr && <div className="mobile-error">技能加载失败：{loadErr}</div>}
+
+        {recent.length > 0 && (
+          <div className="mobile-skill-section">
+            <div className="mobile-skill-section-title">🕘 最近用过</div>
+            <div className="mobile-skill-grid">
+              {recent.map((s) => <SkillCard key={s.id} s={s} onPick={pick} />)}
+            </div>
+          </div>
+        )}
+
+        <div className="mobile-skill-section">
+          <div className="mobile-skill-section-title">✅ 能用的技能</div>
+          {implemented.length === 0 && !loadErr ? (
+            <div className="mobile-skill-empty">暂无可用技能</div>
+          ) : (
+            <div className="mobile-skill-grid">
+              {implemented.map((s) => <SkillCard key={s.id} s={s} onPick={pick} />)}
+            </div>
+          )}
+        </div>
+
+        {creating ? (
+          <div className="mobile-skill-create">
+            <input
+              className="mobile-skill-input"
+              placeholder="技能名称（如：周报总结）"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <select
+              className="mobile-skill-input"
+              value={newKind}
+              onChange={(e) => setNewKind(e.target.value as SkillKind)}
+            >
+              {(Object.keys(SKILL_KIND_LABELS) as SkillKind[]).map((k) => (
+                <option key={k} value={k}>{SKILL_KIND_LABELS[k]}</option>
+              ))}
+            </select>
+            <textarea
+              className="mobile-skill-input"
+              rows={3}
+              placeholder="这个技能做什么、什么时候用"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+            />
+            {saveErr && <div className="mobile-error">{saveErr}</div>}
+            <div className="mobile-skill-create-actions">
+              <button type="button" className="mobile-skill-link" onClick={() => { setCreating(false); setSaveErr(''); }}>取消</button>
+              <button type="button" className="mobile-skill-save" disabled={saving} onClick={() => void createSkill()}>
+                {saving ? '保存中…' : '保存'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className="mobile-skill-row" onClick={() => setCreating(true)}>
+            <span className="mobile-skill-row-icon">＋</span>
+            <span>创建技能</span>
+          </button>
+        )}
+
+        <button type="button" className="mobile-skill-row" onClick={openLibrary}>
+          <span className="mobile-skill-row-icon">📚</span>
+          <span>技能库（桌面）</span>
+          <span className="mobile-skill-row-chevron">›</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MobileOwnerChat({
   staff,
   seed,
@@ -1374,6 +1586,7 @@ function MobileOwnerChat({
   const runtime = useLocalRuntime(adapter);
   const [mounted, setMounted] = useState(false);
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+  const [skillSheetOpen, setSkillSheetOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -1417,6 +1630,12 @@ function MobileOwnerChat({
                 onAttach={(a) => setAttachment(a)}
                 disabled={attachment !== null}
               />
+              <button
+                type="button"
+                className="mobile-skill-button"
+                onClick={() => setSkillSheetOpen(true)}
+                aria-label="技能"
+              >✨</button>
               <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" autoFocus />
               <OwnerAttachAwareSend
                 attachment={attachment}
@@ -1436,6 +1655,12 @@ function MobileOwnerChat({
           </div>
         )}
         {mounted && <MobileMentionTypeahead staff={staff} />}
+        {skillSheetOpen && (
+          <SkillSheet
+            onClose={() => setSkillSheetOpen(false)}
+            onPick={(text) => { seedOwnerComposer(text); setSkillSheetOpen(false); }}
+          />
+        )}
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
   );
