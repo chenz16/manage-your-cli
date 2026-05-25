@@ -1945,7 +1945,6 @@ function MobileRecipientSwitcher({
 }) {
   const [open, setOpen] = useState(false);
   const currentLabel = activeChat?.kind === 'staff' ? activeChat.staff.name : '小秘';
-  const currentRole = activeChat?.kind === 'staff' ? activeChat.staff.role_label : '老板直聊';
 
   function pick(chat: Exclude<ActiveChat, null>) {
     onPick(chat);
@@ -1953,7 +1952,9 @@ function MobileRecipientSwitcher({
   }
 
   return (
-    <div className="mobile-recipient-switcher">
+    <div className={`mobile-recipient-switcher${open ? ' is-open' : ''}`}>
+      {/* Collapsed = WeChat-style thin chat header: centered name + small caret,
+          tap to switch recipient. 小秘 is the default. Keeps chat space large. */}
       <button
         type="button"
         className="mobile-recipient-button"
@@ -1961,13 +1962,7 @@ function MobileRecipientSwitcher({
         aria-expanded={open}
         aria-haspopup="listbox"
       >
-        <span className="mobile-recipient-avatar">
-          {activeChat?.kind === 'staff' ? substrateIcon(activeChat.staff) : '秘'}
-        </span>
-        <span className="mobile-recipient-text">
-          <span className="mobile-recipient-name">{currentLabel}</span>
-          <span className="mobile-recipient-role">{currentRole}</span>
-        </span>
+        <span className="mobile-recipient-name">{currentLabel}</span>
         <span className="mobile-recipient-caret">⌄</span>
       </button>
       {open && (
