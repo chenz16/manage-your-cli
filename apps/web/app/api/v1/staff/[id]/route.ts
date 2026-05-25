@@ -4,7 +4,9 @@ import { getStaffMerged, updateStaff, dismissStaffById, retireCliAgentStaff, typ
 interface Context { params: Promise<{ id: string }> }
 
 const PATCHABLE: Array<keyof StaffPatch> = [
-  'name', 'role_label', 'role_name', 'status',
+  'name', 'role_label', 'role_name',
+  // NOTE: 'status' intentionally excluded — status changes must go through DELETE
+  // (retireCliAgentStaff / dismissStaffById) to enforce lifecycle semantics.
   'system_prompt', 'autonomy_level', 'governance_mode',
   'max_concurrent_jobs',
   // Legacy local-AI staff config fields kept for persisted records.
@@ -39,6 +41,53 @@ export async function PATCH(req: Request, ctx: Context): Promise<NextResponse> {
   }
 
   const raw = body as Record<string, unknown>;
+
+  // --- Field validation ---
+  if ('name' in raw) {
+    const v = raw['name'];
+    if (typeof v !== 'string' || v.trim().length === 0) {
+      return NextResponse.json({ error: 'name must be a non-empty string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.trim().length > 80) {
+      return NextResponse.json({ error: 'name must be at most 80 characters', code: 'invalid_field' }, { status: 400 });
+    }
+    raw['name'] = v.trim();
+  }
+  if ('role_label' in raw) {
+    const v = raw['role_label'];
+    if (typeof v !== 'string') {
+      return NextResponse.json({ error: 'role_label must be a string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.length > 120) {
+      return NextResponse.json({ error: 'role_label must be at most 120 characters', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('role_name' in raw) {
+    const v = raw['role_name'];
+    if (typeof v !== 'string') {
+      return NextResponse.json({ error: 'role_name must be a string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.length > 120) {
+      return NextResponse.json({ error: 'role_name must be at most 120 characters', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('system_prompt' in raw) {
+    const v = raw['system_prompt'];
+    if (typeof v !== 'string') {
+      return NextResponse.json({ error: 'system_prompt must be a string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.length > 8000) {
+      return NextResponse.json({ error: 'system_prompt must be at most 8000 characters', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('max_concurrent_jobs' in raw) {
+    const v = raw['max_concurrent_jobs'];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 10) {
+      return NextResponse.json({ error: 'max_concurrent_jobs must be an integer between 1 and 10', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  // --- End field validation ---
+
   const patch: StaffPatch = {};
   for (const k of PATCHABLE) {
     if (k in raw) {

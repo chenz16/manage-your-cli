@@ -98,7 +98,10 @@ export async function POST(req: Request, ctx: Context): Promise<Response> {
       audit: 'staff.chat_turn.failed', staff_id: staff.id, binary, error: message,
       ts: new Date().toISOString(),
     }));
-    return NextResponse.json({ error: message, code: 'cli_turn_failed' }, { status: 502 });
+    // "agent busy with another turn" is a lock-contention condition, not a
+    // gateway failure — use 409 Conflict so callers don't retry blindly.
+    const status = message.includes('agent busy with another turn') ? 409 : 502;
+    return NextResponse.json({ error: message, code: 'cli_turn_failed' }, { status });
   }
 
   reply = reply.trim();
