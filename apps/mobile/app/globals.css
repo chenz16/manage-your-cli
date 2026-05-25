@@ -2385,14 +2385,14 @@ button, input, textarea, select { font: inherit; }
 .mobile-collapse-head {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; border: 0; background: transparent; padding: 2px 0;
-  font: inherit; cursor: pointer;
+  min-height: 52px; font: inherit; cursor: pointer;
 }
 .mobile-collapse-chevron {
-  color: #b0aca4; font-size: 18px; line-height: 1;
+  color: #c4c4c4; font-size: 18px; line-height: 1;
   transition: transform 160ms ease;
 }
 .mobile-collapse-chevron.open { transform: rotate(90deg); }
-.mobile-collapse-summary { margin-left: auto; margin-right: 8px; color: #999; font-size: 13px; }
+.mobile-collapse-summary { margin-left: auto; margin-right: 8px; color: #9a9a9a; font-size: 14px; }
 
 /* 我 — me tab */
 .mobile-me {
@@ -2405,9 +2405,10 @@ button, input, textarea, select { font: inherit; }
 .mobile-me-section {
   background: #fff; border-radius: 8px; padding: 13px 14px;
 }
-/* Unified 关于我/我 type scale — 3 tiers, consistent weights (owner: fonts felt
-   inconsistent — some tiny/thin, some bigger). Tier 1 label · Tier 2 value · Tier 3 note. */
-.mobile-me-label { color: #888; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+/* Unified 关于我/我 type scale — WeChat-style 4-tier scale.
+   Row title (nav rows): 16px/#111/400 · Group header: 13px/#9a9a9a/500 · Value: 16px/#111/600 · Note: 13px/#999/400 */
+.mobile-me-row-title { color: #111; font-size: 16px; font-weight: 400; margin: 0; }
+.mobile-me-label { color: #9a9a9a; font-size: 13px; font-weight: 500; margin-bottom: 6px; letter-spacing: normal; }
 .mobile-me-value { color: #111; font-size: 16px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .mobile-me-note { margin-top: 8px; color: #999; font-size: 13px; font-weight: 400; line-height: 1.45; }
 .mobile-me-lang-row { display: flex; gap: 8px; margin-top: 4px; }
@@ -2561,7 +2562,7 @@ button, input, textarea, select { font: inherit; }
 
 /* Feedback + disconnect */
 .mobile-feedback-button {
-  width: 100%; min-height: 48px; border: 0; border-radius: 8px;
+  width: 100%; min-height: 52px; border: 0; border-radius: 8px;
   background: #fff; color: #111; padding: 0 14px; font: inherit; font-size: 15px;
   display: flex; align-items: center; justify-content: space-between;
 }

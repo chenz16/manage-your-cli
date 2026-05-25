@@ -3912,7 +3912,7 @@ function IntegrationsSection({ meData, onRefresh }: {
       {/* ── 集成 / 连接服务(默认折叠,微信风)── */}
       <div className="mobile-me-section">
         <button type="button" className="mobile-collapse-head" onClick={() => setIntegOpen((v) => !v)}>
-          <span className="mobile-me-label" style={{ margin: 0 }}>连接服务</span>
+          <span className="mobile-me-row-title">连接服务</span>
           <span className={`mobile-collapse-chevron${integOpen ? ' open' : ''}`}>›</span>
         </button>
         {integOpen && (
@@ -4679,14 +4679,14 @@ function MeTab({
       <div className="mobile-me-section">
         <button type="button" className="mobile-collapse-head" onClick={() => setAssetsOpen(true)}>
           <span className="mobile-me-asset-icon" aria-hidden="true">🧰</span>
-          <span className="mobile-me-label" style={{ margin: 0 }}>资产</span>
+          <span className="mobile-me-row-title">资产</span>
           <span className="mobile-collapse-summary">技能 · 引用 · 交付{delivCount !== null ? ` ${delivCount}` : ''}</span>
           <span className="mobile-collapse-chevron">›</span>
         </button>
       </div>
       <div className="mobile-me-section">
         <button type="button" className="mobile-collapse-head" onClick={() => setLangOpen((v) => !v)}>
-          <span className="mobile-me-label" style={{ margin: 0 }}>语言{savingLang ? ' …' : ''}</span>
+          <span className="mobile-me-row-title">语言{savingLang ? ' …' : ''}</span>
           <span className="mobile-collapse-summary">{langPref === 'en' ? 'English' : '中文'}</span>
           <span className={`mobile-collapse-chevron${langOpen ? ' open' : ''}`}>›</span>
         </button>
@@ -4716,9 +4716,9 @@ function MeTab({
       </div>
       <IntegrationsSection meData={meData} onRefresh={() => void load()} />
       <button type="button" className="mobile-feedback-button" onClick={() => setUsageOpen(true)}>
-        <span>Token 用量</span>
+        <span className="mobile-me-row-title">Token 用量</span>
         {todaySummary && <span className="weizo-clilist-tokens" style={{ marginRight: 4 }}>{todaySummary}</span>}
-        <span>›</span>
+        <span className="mobile-collapse-chevron">›</span>
       </button>
       <div className="mobile-me-section">
         <div className="mobile-me-label">应用版本</div>
