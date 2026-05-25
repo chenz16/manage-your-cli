@@ -2261,6 +2261,7 @@ button, input, textarea, select { font: inherit; }
   transition: transform 160ms ease;
 }
 .mobile-collapse-chevron.open { transform: rotate(90deg); }
+.mobile-collapse-summary { margin-left: auto; margin-right: 8px; color: #a8a39a; font-size: 13px; }
 
 /* 我 — me tab */
 .mobile-me {

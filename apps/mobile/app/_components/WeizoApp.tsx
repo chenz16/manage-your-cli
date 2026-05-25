@@ -3728,7 +3728,7 @@ function IntegrationsSection({ meData, onRefresh }: {
       {/* ── 集成 / 连接服务(默认折叠,微信风)── */}
       <div className="mobile-me-section">
         <button type="button" className="mobile-collapse-head" onClick={() => setIntegOpen((v) => !v)}>
-          <span className="mobile-me-label" style={{ margin: 0 }}>集成 / 连接服务</span>
+          <span className="mobile-me-label" style={{ margin: 0 }}>连接服务</span>
           <span className={`mobile-collapse-chevron${integOpen ? ' open' : ''}`}>›</span>
         </button>
         {integOpen && (
@@ -4021,6 +4021,7 @@ function MeTab({
   const [cliUsage, setCliUsage] = useState<CliUsageResponse | null>(null);
   const [usageOpen, setUsageOpen] = useState(false);
   const [qrSheetOpen, setQrSheetOpen] = useState(false);
+  const [langOpen, setLangOpen] = useState(false); // 语言区折叠(为以后多语言)
 
   async function load() {
     setLoading(true);
@@ -4161,26 +4162,34 @@ function MeTab({
         {loading && <div className="mobile-me-note">加载人设…</div>}
       </div>
       <div className="mobile-me-section">
-        <div className="mobile-me-label">语言{savingLang ? ' …' : ''}</div>
-        <div className="mobile-me-lang-row">
-          <button
-            type="button"
-            className={`mobile-me-lang-btn${langPref === 'zh-CN' ? ' is-active' : ''}`}
-            onClick={() => { void saveLangPref('zh-CN'); }}
-            disabled={savingLang}
-          >
-            中文
-          </button>
-          <button
-            type="button"
-            className={`mobile-me-lang-btn${langPref === 'en' ? ' is-active' : ''}`}
-            onClick={() => { void saveLangPref('en'); }}
-            disabled={savingLang}
-          >
-            English
-          </button>
-        </div>
-        <div className="mobile-me-note">小秘回复语言（默认中文）</div>
+        <button type="button" className="mobile-collapse-head" onClick={() => setLangOpen((v) => !v)}>
+          <span className="mobile-me-label" style={{ margin: 0 }}>语言{savingLang ? ' …' : ''}</span>
+          <span className="mobile-collapse-summary">{langPref === 'en' ? 'English' : '中文'}</span>
+          <span className={`mobile-collapse-chevron${langOpen ? ' open' : ''}`}>›</span>
+        </button>
+        {langOpen && (
+          <>
+            <div className="mobile-me-lang-row" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className={`mobile-me-lang-btn${langPref === 'zh-CN' ? ' is-active' : ''}`}
+                onClick={() => { void saveLangPref('zh-CN'); }}
+                disabled={savingLang}
+              >
+                中文
+              </button>
+              <button
+                type="button"
+                className={`mobile-me-lang-btn${langPref === 'en' ? ' is-active' : ''}`}
+                onClick={() => { void saveLangPref('en'); }}
+                disabled={savingLang}
+              >
+                English
+              </button>
+            </div>
+            <div className="mobile-me-note">小秘回复语言（默认中文）</div>
+          </>
+        )}
       </div>
       <IntegrationsSection meData={meData} onRefresh={() => void load()} />
       <button type="button" className="mobile-feedback-button" onClick={() => setUsageOpen(true)}>
