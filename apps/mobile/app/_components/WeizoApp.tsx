@@ -788,6 +788,9 @@ function MessageActionStrip({ id, text }: { id: string; text: string }) {
     setTtsState('loading');
     disarmDismiss();
     try {
+      // TODO: pass per-staff tts_voice + tts_style here once MessageActionStrip
+      // receives the current staff's AI-agent config (tts_voice, tts_style).
+      // Deferred — fields are stored on Staff but not yet threaded to the speak call.
       await deviceTtsSpeak(text);
       setTtsState('idle');
     } catch {
