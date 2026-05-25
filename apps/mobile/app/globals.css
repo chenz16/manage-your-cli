@@ -74,6 +74,18 @@ html, body {
 a { color: inherit; text-decoration: none; }
 button, input, textarea, select { font: inherit; }
 
+/* iOS WKWebView auto-zoom prevention — force text inputs to ≥16px so iOS
+   does not zoom the viewport when a field receives focus (WKWebView zooms
+   whenever font-size < 16px on a focused input). The viewport meta keeps
+   user-scalable=yes for accessibility; this rule is the correct fix. */
+.mobile-app-shell input,
+.mobile-app-shell textarea,
+.chat-input,
+.mobile-staff-field,
+.mobile-persona-editor-textarea,
+.mobile-skill-input,
+.mobile-pairing-field input { font-size: 16px; }
+
 /* M-L-060 — global visible focus indicator (WCAG 2.4.7). External-keyboard,
    iOS Switch Control / Full Keyboard Access users need to see what's focused
    on every <button>/<a>/.tab-link/.landing-chip/.m-deliv-card/.s-card etc.
@@ -1183,13 +1195,15 @@ button, input, textarea, select { font: inherit; }
 .mobile-recipient-option:active { background: #f4f4f4; }
 .mobile-recipient-avatar {
   width: 26px; height: 26px;
-  border-radius: 6px;
+  border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto;
   background: #e8f3ec; color: #1f7a44;
   font-size: 15px; font-weight: 700;
 }
-.mobile-recipient-avatar-owner { background: #2e7d52; color: #fff; }
+.mobile-recipient-avatar-owner {
+  background: linear-gradient(160deg, #1f7a44 0%, #155c32 100%); color: #fff;
+}
 .mobile-recipient-text {
   min-width: 0; flex: 1 1 auto;
   display: flex; flex-direction: column; gap: 1px;
@@ -1240,13 +1254,14 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-row:active { background: #f4f4f4; }
 .mobile-avatar {
-  width: 42px; height: 42px; border-radius: 8px;
+  width: 42px; height: 42px; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto;
   background: #e8f3ec; color: #1f7a44; font-size: 21px;
 }
 .mobile-avatar-owner {
-  background: #2e7d52; color: #fff; font-size: 17px; font-weight: 700;
+  background: linear-gradient(160deg, #1f7a44 0%, #155c32 100%);
+  color: #fff; font-size: 17px; font-weight: 700;
 }
 .mobile-row-main {
   min-width: 0; flex: 1 1 auto;
@@ -1430,8 +1445,8 @@ button, input, textarea, select { font: inherit; }
 .chatmsg-avatar {
   flex-shrink: 0;
   width: 34px; height: 34px;
-  border-radius: 8px;
-  background: #2e7d52;
+  border-radius: 12px;
+  background: linear-gradient(160deg, #4FB0C6 0%, #3a8fa3 100%);
   color: #fff;
   font-size: 13px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1685,7 +1700,7 @@ button, input, textarea, select { font: inherit; }
 
 /* Refined staff avatar — gradient + initial, or a custom image; tappable to change. */
 .mobile-staff-avatar2 {
-  position: relative; border: 0; padding: 0; border-radius: 18px;
+  position: relative; border: 0; padding: 0; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
   color: #fff; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
   overflow: visible; cursor: pointer;
@@ -3038,11 +3053,13 @@ button, input, textarea, select { font: inherit; }
 }
 /* P1-1 — 我 tab tighter inter-card gap */
 .mobile-me { gap: 8px; }
-/* P0-4 — one avatar radius vocabulary (large hero was 18px, too heavy) */
+/* P0-4 — one avatar radius vocabulary: 12px rounded-square across all avatars */
 .mobile-staff-avatar2 { border-radius: 12px; }
-/* P1-6 — recipient switcher avatars use the brand token (was two greens) */
+/* P1-6 — recipient switcher avatars: brand colors (consistent with 我 avatar) */
 .mobile-recipient-avatar { background: var(--brand-light); color: var(--brand); }
-.mobile-recipient-avatar-owner { background: var(--brand); color: #fff; }
+.mobile-recipient-avatar-owner { background: linear-gradient(160deg, var(--brand) 0%, var(--brand-ink) 100%); color: #fff; }
+/* P1-6b — chatmsg avatar (秘) teal brand, 12px consistent radius */
+.chatmsg-avatar { border-radius: 12px; background: linear-gradient(160deg, #4FB0C6 0%, #3a8fa3 100%); }
 /* P2-1 — status pills all pill-shaped */
 .mobile-job-status { border-radius: 999px; }
 /* P2-4 — board sub-tab underline uses the brand token */

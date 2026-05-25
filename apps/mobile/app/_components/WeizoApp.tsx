@@ -2076,18 +2076,44 @@ function staffInitial(name: string): string {
   if (/^[小老阿大]/.test(n) && n.length > 1) return n.charAt(1);
   return n.charAt(0).toUpperCase();
 }
-function staffHue(seed: string): number {
+// Curated palette — 8 slightly-muted WeChat-like solid backgrounds (white initial).
+// Picked deterministically by hashing the staff id/name index into this list.
+const AVATAR_PALETTE = [
+  '#5B8FF9', // periwinkle blue
+  '#3FB68B', // muted teal-green
+  '#F6A04D', // warm amber
+  '#9B7BE8', // soft violet
+  '#E86A8C', // muted rose
+  '#4FB0C6', // sky teal
+  '#E0A93B', // golden yellow
+  '#7C8AA5', // slate blue-grey
+];
+
+function staffPaletteColor(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 360;
-  return h;
+  const idx = Math.abs(h) % AVATAR_PALETTE.length;
+  return AVATAR_PALETTE[idx]!;
 }
-/** Refined avatar: custom image if set, else a per-staff gradient + initial. */
+
+/** Darken a hex color by ~12% for the gradient bottom stop. */
+function darkenHex(hex: string, amount = 0.12): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const dr = Math.round(r * (1 - amount));
+  const dg = Math.round(g * (1 - amount));
+  const db = Math.round(b * (1 - amount));
+  return `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
+}
+
+/** Refined avatar: custom image if set, else a curated-palette gradient + initial. */
 function StaffAvatar({ staff, size = 56, onPick }: { staff: Staff; size?: number; onPick?: () => void }) {
   const custom = (staff as Staff & { avatar_data?: string }).avatar_data;
-  const hue = staffHue(staff.id || staff.name);
+  const baseColor = staffPaletteColor(staff.id || staff.name);
   const style: React.CSSProperties = custom
     ? { width: size, height: size, backgroundImage: `url(${custom})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { width: size, height: size, background: `linear-gradient(135deg, hsl(${hue} 58% 52%), hsl(${(hue + 38) % 360} 60% 42%))` };
+    : { width: size, height: size, background: `linear-gradient(160deg, ${baseColor} 0%, ${darkenHex(baseColor)} 100%)` };
   return (
     <span
       className="mobile-staff-avatar2"
@@ -4653,27 +4679,22 @@ function MeTab({
         </button>
       </div>
       <div className="mobile-me-section">
-        <div className="mobile-me-label">关于我</div>
-        <div className="mobile-persona-current-card">
-          <span className="mobile-persona-current-copy">
-            <span className="mobile-me-value">{personaName}</span>
-            <span className="mobile-me-note">{excerpt(personaSummary, 64)}</span>
+        <button
+          type="button"
+          className="mobile-collapse-head"
+          onClick={() => {
+            setOwnerDraft(ownerIntro);
+            setOwnerIndustry(ownerRoleRaw);
+            setInterviewActive(false); setInterviewDone(false); setInterviewTurns([]);
+            setOwnerMsg(''); setPersonaSheetOpen(true);
+          }}
+        >
+          <span className="mobile-me-row-title">关于我</span>
+          <span className="mobile-collapse-summary">
+            {personaName.length > 10 ? `${personaName.slice(0, 10)}…` : (personaName || '未设置')}
           </span>
-          <button
-            type="button"
-            className="mobile-persona-change"
-            onClick={() => {
-              setOwnerDraft(ownerIntro);
-              setOwnerIndustry(ownerRoleRaw);
-              setInterviewActive(false); setInterviewDone(false); setInterviewTurns([]);
-              setOwnerMsg(''); setPersonaSheetOpen(true);
-            }}
-          >
-            更换
-          </button>
-        </div>
-        {personaApplied && <div className="mobile-me-note">{personaApplied}</div>}
-        {loading && <div className="mobile-me-note">加载人设…</div>}
+          <span className="mobile-collapse-chevron">›</span>
+        </button>
       </div>
       {/* 资产 — WeChat 钱包式入口行 → 资产页(技能 / 交付 / 文件夹设置 / 统计) */}
       <div className="mobile-me-section">
