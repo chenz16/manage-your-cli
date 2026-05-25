@@ -2658,6 +2658,14 @@ button, input, textarea, select { font: inherit; }
 .mobile-asset-name { font-size: 13px; color: #222; }
 .mobile-asset-sub { font-size: 11px; color: #999; }
 
+/* ── 技能使用统计 (约) rows ── */
+.mobile-usage-row { display: flex; align-items: center; gap: 8px; padding: 7px 2px; }
+.mobile-usage-icon { font-size: 18px; flex: 0 0 auto; }
+.mobile-usage-name { flex: 0 0 38%; font-size: 14px; color: #222; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-usage-bar { flex: 1 1 auto; height: 8px; background: #ececec; border-radius: 999px; overflow: hidden; }
+.mobile-usage-bar-fill { display: block; height: 100%; background: var(--brand, #1f7a44); border-radius: 999px; }
+.mobile-usage-count { flex: 0 0 auto; font-size: 13px; color: #888; min-width: 20px; text-align: right; }
+
 .mobile-skill-section { margin: 8px 0 4px; }
 .mobile-skill-section-title { font-size: 13px; color: #888; margin: 0 2px 8px; }
 .mobile-skill-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }

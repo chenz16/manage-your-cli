@@ -1560,6 +1560,99 @@ function SkillSheet({ onClose, onPick }: { onClose: () => void; onPick: (text: s
   );
 }
 
+// ─── 技能使用统计 (约) ─────────────────────────────────────────────────────────
+//
+// 近似版 (owner 2026-05-25 选 ①+②, 真相源 ④ MCP skill.invoked 记技术债):
+//   ① 交付物标题关键词匹配 ② 我的对话关键词匹配 ③ 本地点击 (localStorage)
+// 没有真实调用埋点 — 标"约"。完整/真相去桌面。docs/tech-debt/skill-usage-stats.md
+function skillKeywords(s: SkillDescriptor): string[] {
+  const ks = new Set<string>();
+  ks.add(s.name.toLowerCase());
+  for (const t of s.tags ?? []) ks.add(t.toLowerCase());
+  // distinctive head noun from the name (e.g. "Slides / PPT" → "ppt")
+  for (const part of s.name.split(/[\s/·,，]+/)) {
+    const p = part.trim().toLowerCase();
+    if (p.length >= 2) ks.add(p);
+  }
+  return [...ks].filter((k) => k.length >= 2);
+}
+
+function SkillUsageView({ onClose, onOpenDesk }: { onClose: () => void; onOpenDesk: (path: string) => void }) {
+  const [rows, setRows] = useState<Array<{ id: string; name: string; icon: string; count: number }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [skRes, dvRes, hxRes] = await Promise.all([
+          holonApiFetch('/api/v1/skills', { cache: 'no-store' }),
+          holonApiFetch('/api/v1/deliverables', { cache: 'no-store' }).catch(() => null),
+          holonApiFetch('/api/v1/chat/history?thread=owner', { cache: 'no-store' }).catch(() => null),
+        ]);
+        if (!skRes.ok) throw new Error(`技能 HTTP ${skRes.status}`);
+        const skills = ((await skRes.json()) as { items?: SkillDescriptor[] }).items ?? [];
+        const titles: string[] = dvRes && dvRes.ok
+          ? (((await dvRes.json()) as { items?: Array<{ title?: string }> }).items ?? [])
+              .map((d) => (d.title ?? '').toLowerCase()).filter(Boolean)
+          : [];
+        const msgs: string[] = hxRes && hxRes.ok
+          ? (((await hxRes.json()) as { messages?: Array<{ content?: unknown }> }).messages ?? [])
+              .map((m) => (typeof m.content === 'string' ? m.content.toLowerCase() : '')).filter(Boolean)
+          : [];
+        const taps = readRecentSkillIds();
+        const haystack = [...titles, ...msgs];
+        const computed = skills.map((s) => {
+          const kws = skillKeywords(s);
+          let count = 0;
+          for (const text of haystack) {
+            if (kws.some((k) => text.includes(k))) count += 1;
+          }
+          if (taps.includes(s.id)) count += 1; // your own taps as a weak signal
+          return { id: s.id, name: s.name, icon: s.icon, count };
+        }).filter((r) => r.count > 0).sort((a, b) => b.count - a.count);
+        if (!cancelled) { setRows(computed); setLoading(false); }
+      } catch (e) {
+        if (!cancelled) { setErr(e instanceof Error ? e.message : String(e)); setLoading(false); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const max = rows.length > 0 ? (rows[0]?.count ?? 1) : 1;
+
+  return (
+    <div className="mobile-sheet-backdrop" onClick={onClose}>
+      <div className="mobile-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="mobile-sheet-head">
+          <h2 className="mobile-sheet-title">技能使用 · 约</h2>
+          <button type="button" className="mobile-sheet-close" onClick={onClose} aria-label="关闭">×</button>
+        </div>
+        <div className="mobile-me-note" style={{ marginBottom: 8 }}>
+          近似值：按交付标题 + 对话关键词估算，非真实调用次数。
+        </div>
+        {loading && <div className="mobile-skill-empty">统计中…</div>}
+        {err && <div className="mobile-error">{err}</div>}
+        {!loading && !err && rows.length === 0 && <div className="mobile-skill-empty">暂无可估算的使用</div>}
+        {rows.map((r) => (
+          <div key={r.id} className="mobile-usage-row">
+            <span className="mobile-usage-icon">{r.icon}</span>
+            <span className="mobile-usage-name">{r.name}</span>
+            <span className="mobile-usage-bar"><span className="mobile-usage-bar-fill" style={{ width: `${Math.round((r.count / max) * 100)}%` }} /></span>
+            <span className="mobile-usage-count">{r.count}</span>
+          </div>
+        ))}
+        <button type="button" className="mobile-skill-row" onClick={() => onOpenDesk('/skills')}>
+          <span className="mobile-skill-row-icon">📊</span>
+          <span>桌面查看完整</span>
+          <span className="mobile-skill-row-chevron">›</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MobileOwnerChat({
   staff,
   seed,
@@ -4204,12 +4297,14 @@ function AssetsView({
   delivCount,
   refCount,
   onOpenSkills,
+  onOpenUsage,
   onOpenDesk,
 }: {
   onBack: () => void;
   delivCount: number | null;
   refCount: number | null;
   onOpenSkills: () => void;
+  onOpenUsage: () => void;
   onOpenDesk: (path: string) => void;
 }) {
   return (
@@ -4245,6 +4340,11 @@ function AssetsView({
           <span className="mobile-asset-name">交付文件夹</span>
           <span className="mobile-asset-sub">桌面设置</span>
         </div>
+        <button type="button" className="mobile-asset-cell" onClick={onOpenUsage}>
+          <span className="mobile-asset-icon">📊</span>
+          <span className="mobile-asset-name">使用统计</span>
+          <span className="mobile-asset-sub">技能 · 约</span>
+        </button>
       </div>
       <div className="mobile-me-note" style={{ marginTop: 12 }}>
         资产是团队的能力、知识与产出（不是消息）。技能可浏览 / 新建；引用、模板在桌面完整管理；交付文件夹与统计随后接入。
@@ -4290,6 +4390,7 @@ function MeTab({
   const [langOpen, setLangOpen] = useState(false); // 语言区折叠(为以后多语言)
   const [assetsOpen, setAssetsOpen] = useState(false); // 资产区(技能 + 交付统计 + …)
   const [skillSheetOpen, setSkillSheetOpen] = useState(false);
+  const [skillUsageOpen, setSkillUsageOpen] = useState(false);
   const [delivCount, setDelivCount] = useState<number | null>(null);
   const [refCount, setRefCount] = useState<number | null>(null);
 
@@ -4487,12 +4588,19 @@ function MeTab({
           delivCount={delivCount}
           refCount={refCount}
           onOpenSkills={() => setSkillSheetOpen(true)}
+          onOpenUsage={() => setSkillUsageOpen(true)}
           onOpenDesk={(path) => { if (connection.baseUrl) window.open(`${connection.baseUrl}${path}`, '_blank'); }}
         />
         {skillSheetOpen && (
           <SkillSheet
             onClose={() => setSkillSheetOpen(false)}
             onPick={(text) => { onUseSkill(text); setSkillSheetOpen(false); }}
+          />
+        )}
+        {skillUsageOpen && (
+          <SkillUsageView
+            onClose={() => setSkillUsageOpen(false)}
+            onOpenDesk={(path) => { if (connection.baseUrl) window.open(`${connection.baseUrl}${path}`, '_blank'); }}
           />
         )}
       </>
