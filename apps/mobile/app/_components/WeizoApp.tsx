@@ -4219,8 +4219,8 @@ function MeTab({
               <h2 className="mobile-sheet-title">扫码连接</h2>
               <button type="button" className="mobile-sheet-close" onClick={() => setQrSheetOpen(false)} aria-label="关闭">×</button>
             </div>
-            <AgentCardSection deskBaseUrl={connection.baseUrl} />
             <WechatQrSection />
+            <AgentCardSection deskBaseUrl={connection.baseUrl} />
           </div>
         </div>
       )}
