@@ -3387,28 +3387,30 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
           <h2 className="mobile-feedback-title">反馈 / 报错</h2>
           <button type="button" className="bug-modal-close" onClick={onClose} aria-label="关闭">×</button>
         </div>
-        <label className="mobile-feedback-label" htmlFor="weizo-feedback-desc">反馈内容</label>
-        <textarea
-          id="weizo-feedback-desc"
-          value={description}
-          onChange={(ev) => setDescription(ev.target.value)}
-          rows={5}
-          className="bug-modal-textarea mobile-feedback-textarea"
-          placeholder="请描述你遇到的问题或建议。"
-          autoFocus
-        />
-        <label className="mobile-feedback-label" htmlFor="weizo-feedback-files">
-          截图（可选，最多 {MAX_FEEDBACK_SCREENSHOTS} 张）
-        </label>
-        <input
-          id="weizo-feedback-files"
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={onFileChange}
-          disabled={attachments.length >= MAX_FEEDBACK_SCREENSHOTS}
-          className="mobile-feedback-file"
-        />
+        <div className="mobile-feedback-body">
+          <label className="mobile-feedback-label" htmlFor="weizo-feedback-desc">反馈内容</label>
+          <textarea
+            id="weizo-feedback-desc"
+            value={description}
+            onChange={(ev) => setDescription(ev.target.value)}
+            rows={5}
+            className="bug-modal-textarea mobile-feedback-textarea"
+            placeholder="请描述你遇到的问题或建议。"
+            autoFocus
+          />
+          <label className="mobile-feedback-label" htmlFor="weizo-feedback-files">
+            截图（可选，最多 {MAX_FEEDBACK_SCREENSHOTS} 张）
+          </label>
+          <input
+            id="weizo-feedback-files"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={onFileChange}
+            disabled={attachments.length >= MAX_FEEDBACK_SCREENSHOTS}
+            className="mobile-feedback-file"
+          />
+        </div>
         <div className="mobile-feedback-actions">
           {result && <span className="mobile-feedback-result">{result}</span>}
           <button type="button" className="mobile-feedback-cancel" onClick={onClose} disabled={submitting}>取消</button>

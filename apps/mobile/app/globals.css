@@ -2153,14 +2153,28 @@ button, input, textarea, select { font: inherit; }
   background: #fff; color: #111; padding: 0 14px; font: inherit; font-size: 15px;
   display: flex; align-items: center; justify-content: space-between;
 }
-.mobile-feedback-backdrop { align-items: flex-end; padding: 12px; }
-.mobile-feedback-modal { max-width: 520px; max-height: min(88vh, 720px); border-radius: 12px; padding: 16px; }
-.mobile-feedback-title { margin: 0; color: #111; font-size: 16px; }
+/* Bottom-sheet that survives the (huge Samsung) soft keyboard: full-width, height
+   tracks the dynamic viewport (dvh shrinks when the keyboard is up; with
+   windowSoftInputMode=adjustResize the webview also resizes, so vh fallback works
+   too). Header + actions stay pinned; only the middle scrolls — so the textarea
+   and 提交 button are always reachable while typing. */
+.mobile-feedback-backdrop { align-items: flex-end; padding: 0; }
+.mobile-feedback-modal {
+  width: 100%; max-width: 560px;
+  max-height: 92vh; max-height: 92dvh;
+  display: flex; flex-direction: column;
+  border-radius: 16px 16px 0 0;
+  padding: 14px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.mobile-feedback-title { margin: 0; color: #111; font-size: 17px; }
+.mobile-feedback-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .mobile-feedback-label { display: block; margin-top: 12px; color: #666; font-size: 12px; }
-.mobile-feedback-textarea { min-height: 132px; font-size: 14px; }
+.mobile-feedback-textarea { min-height: 96px; font-size: 15px; }
 .mobile-feedback-file { width: 100%; margin-top: 8px; color: #555; font-size: 12px; }
 .mobile-feedback-actions {
-  display: flex; align-items: center; gap: 8px; margin-top: 14px;
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--line, #eee);
 }
 .mobile-feedback-result { min-width: 0; flex: 1 1 auto; color: #666; font-size: 12px; overflow-wrap: anywhere; }
 .mobile-feedback-cancel,
