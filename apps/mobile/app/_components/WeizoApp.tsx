@@ -1837,7 +1837,9 @@ function Contacts({
             <span className="mobile-avatar">{substrateIcon(s)}</span>
             <span className="mobile-row-main">
               <span className="mobile-row-title">{s.name}</span>
-              <span className="mobile-row-sub">{s.role_label}</span>
+              {s.role_label && s.role_label !== s.name && (
+                <span className="mobile-row-sub">{s.role_label}</span>
+              )}
               <span className="mobile-row-usage">
                 <span className="mobile-row-model">{model}</span>
                 {usage
@@ -2063,7 +2065,9 @@ function StaffProfile({
           <div className="mobile-staff-profile-hero">
             <span className="mobile-avatar mobile-staff-profile-avatar">{substrateIcon(staff)}</span>
             <span className="mobile-staff-profile-name">{staff.name}</span>
-            <span className="mobile-staff-profile-role">{staff.role_label}</span>
+            {staff.role_label && staff.role_label !== staff.name && (
+              <span className="mobile-staff-profile-role">{staff.role_label}</span>
+            )}
           </div>
           <div className="mobile-staff-edit">
             <label className="mobile-config-dt" htmlFor="staff-name">名称</label>
