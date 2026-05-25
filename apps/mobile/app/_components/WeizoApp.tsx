@@ -1400,19 +1400,6 @@ function pushRecentSkillId(id: string): void {
   }
 }
 
-/** Set the owner composer textarea text via the native setter (same proven
- *  path the @-mention insert uses) so assistant-ui's controlled input syncs. */
-function seedOwnerComposer(text: string): void {
-  const ta = document.querySelector<HTMLTextAreaElement>('.mobile-chat-composer .chat-input');
-  if (!ta) return;
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-  setter?.call(ta, text);
-  ta.dispatchEvent(new Event('input', { bubbles: true }));
-  ta.focus();
-  const pos = text.length;
-  ta.setSelectionRange(pos, pos);
-}
-
 /** Prefill payload for a tapped skill: prefer the first example, fall back to name. */
 function skillInvocation(s: SkillDescriptor): string {
   return (s.examples && s.examples[0]) || s.name;
@@ -1586,7 +1573,6 @@ function MobileOwnerChat({
   const runtime = useLocalRuntime(adapter);
   const [mounted, setMounted] = useState(false);
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
-  const [skillSheetOpen, setSkillSheetOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -1630,12 +1616,6 @@ function MobileOwnerChat({
                 onAttach={(a) => setAttachment(a)}
                 disabled={attachment !== null}
               />
-              <button
-                type="button"
-                className="mobile-skill-button"
-                onClick={() => setSkillSheetOpen(true)}
-                aria-label="技能"
-              >✨</button>
               <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" autoFocus />
               <OwnerAttachAwareSend
                 attachment={attachment}
@@ -1655,12 +1635,6 @@ function MobileOwnerChat({
           </div>
         )}
         {mounted && <MobileMentionTypeahead staff={staff} />}
-        {skillSheetOpen && (
-          <SkillSheet
-            onClose={() => setSkillSheetOpen(false)}
-            onPick={(text) => { seedOwnerComposer(text); setSkillSheetOpen(false); }}
-          />
-        )}
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
   );
@@ -4224,12 +4198,51 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
+// ─── 资产 — 「我」的资产页 (WeChat 钱包式: 技能 / 交付 / 文件夹设置 / 统计) ───────
+function AssetsView({
+  onBack,
+  delivCount,
+  onOpenSkills,
+}: {
+  onBack: () => void;
+  delivCount: number | null;
+  onOpenSkills: () => void;
+}) {
+  return (
+    <div className="mobile-me">
+      <button type="button" className="mobile-back-row" onClick={onBack}>‹ 我</button>
+      <div className="mobile-asset-grid">
+        <button type="button" className="mobile-asset-cell" onClick={onOpenSkills}>
+          <span className="mobile-asset-icon">🧰</span>
+          <span className="mobile-asset-name">技能</span>
+          <span className="mobile-asset-sub">团队能力</span>
+        </button>
+        <div className="mobile-asset-cell is-static">
+          <span className="mobile-asset-icon">📦</span>
+          <span className="mobile-asset-name">交付物</span>
+          <span className="mobile-asset-sub">{delivCount === null ? '…' : `${delivCount} 份`}</span>
+        </div>
+        <div className="mobile-asset-cell is-static">
+          <span className="mobile-asset-icon">📁</span>
+          <span className="mobile-asset-name">交付文件夹</span>
+          <span className="mobile-asset-sub">桌面设置</span>
+        </div>
+      </div>
+      <div className="mobile-me-note" style={{ marginTop: 12 }}>
+        资产是团队的能力与产出（不是消息）。技能可浏览 / 新建；交付文件夹与统计随后接桌面。
+      </div>
+    </div>
+  );
+}
+
 function MeTab({
   connection,
   onDisconnect,
+  onUseSkill,
 }: {
   connection: MobileDesktopConnection;
   onDisconnect: () => void;
+  onUseSkill: (text: string) => void;
 }) {
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
   const [meData, setMeData] = useState<MeOwnerData | null>(null);
@@ -4257,6 +4270,9 @@ function MeTab({
   const [usageOpen, setUsageOpen] = useState(false);
   const [qrSheetOpen, setQrSheetOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false); // 语言区折叠(为以后多语言)
+  const [assetsOpen, setAssetsOpen] = useState(false); // 资产区(技能 + 交付统计 + …)
+  const [skillSheetOpen, setSkillSheetOpen] = useState(false);
+  const [delivCount, setDelivCount] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -4293,6 +4309,14 @@ function MeTab({
     holonApiFetch('/api/v1/usage', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() as Promise<CliUsageResponse> : Promise.resolve(null))
       .then((data) => { if (data) setCliUsage(data); })
+      .catch(() => undefined);
+  }, []);
+
+  // 资产 · 交付统计 — count deliverables (real, from the deliverables API).
+  useEffect(() => {
+    holonApiFetch('/api/v1/deliverables', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<ListDeliverablesResponse> : Promise.resolve(null))
+      .then((data) => { if (data) setDelivCount(Array.isArray(data.items) ? data.items.length : 0); })
       .catch(() => undefined);
   }, []);
 
@@ -4432,6 +4456,24 @@ function MeTab({
     return <UsageDetail onBack={() => setUsageOpen(false)} />;
   }
 
+  if (assetsOpen) {
+    return (
+      <>
+        <AssetsView
+          onBack={() => setAssetsOpen(false)}
+          delivCount={delivCount}
+          onOpenSkills={() => setSkillSheetOpen(true)}
+        />
+        {skillSheetOpen && (
+          <SkillSheet
+            onClose={() => setSkillSheetOpen(false)}
+            onPick={(text) => { onUseSkill(text); setSkillSheetOpen(false); }}
+          />
+        )}
+      </>
+    );
+  }
+
   const todaySummary = cliUsage
     ? (() => {
         const total = cliUsage.clis.reduce((sum, c) => sum + (c.usage?.today_tokens ?? 0), 0);
@@ -4481,6 +4523,15 @@ function MeTab({
         </div>
         {personaApplied && <div className="mobile-me-note">{personaApplied}</div>}
         {loading && <div className="mobile-me-note">加载人设…</div>}
+      </div>
+      {/* 资产 — WeChat 钱包式入口行 → 资产页(技能 / 交付 / 文件夹设置 / 统计) */}
+      <div className="mobile-me-section">
+        <button type="button" className="mobile-collapse-head" onClick={() => setAssetsOpen(true)}>
+          <span className="mobile-me-asset-icon" aria-hidden="true">🧰</span>
+          <span className="mobile-me-label" style={{ margin: 0 }}>资产</span>
+          <span className="mobile-collapse-summary">技能 · 交付{delivCount !== null ? ` ${delivCount}` : ''}</span>
+          <span className="mobile-collapse-chevron">›</span>
+        </button>
       </div>
       <div className="mobile-me-section">
         <button type="button" className="mobile-collapse-head" onClick={() => setLangOpen((v) => !v)}>
@@ -5384,7 +5435,15 @@ export function WeizoApp() {
         )}
         {tab === 'me' && (
           // connection is always non-null here: unpaired path returns PairingPrompt above
-          <MeTab connection={connection!} onDisconnect={disconnect} />
+          <MeTab
+            connection={connection!}
+            onDisconnect={disconnect}
+            onUseSkill={(text) => {
+              setChatSeed(text);
+              setActiveChat({ kind: 'owner' });
+              setTab('chats');
+            }}
+          />
         )}
       </section>
       <BottomNav active={tab} badges={badges} onTab={openTab} />

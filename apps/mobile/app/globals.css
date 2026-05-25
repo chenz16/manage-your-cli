@@ -2642,6 +2642,22 @@ button, input, textarea, select { font: inherit; }
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0; font-size: 18px; line-height: 1; flex: 0 0 auto; cursor: pointer;
 }
+/* ── 资产页 (WeChat 钱包式 grid) ── */
+.mobile-me-asset-icon { font-size: 18px; margin-right: 8px; }
+.mobile-asset-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  background: #fff; border-radius: 12px; padding: 14px 8px; margin-top: 8px;
+}
+.mobile-asset-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 0; background: none; padding: 8px 4px; cursor: pointer;
+}
+.mobile-asset-cell.is-static { cursor: default; }
+.mobile-asset-cell:active:not(.is-static) { opacity: 0.6; }
+.mobile-asset-icon { font-size: 28px; line-height: 1; }
+.mobile-asset-name { font-size: 13px; color: #222; }
+.mobile-asset-sub { font-size: 11px; color: #999; }
+
 .mobile-skill-section { margin: 8px 0 4px; }
 .mobile-skill-section-title { font-size: 13px; color: #888; margin: 0 2px 8px; }
 .mobile-skill-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
