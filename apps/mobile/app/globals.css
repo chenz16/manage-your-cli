@@ -1091,6 +1091,20 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-chat-header-spacer { flex: 0 0 auto; width: 36px; }
 
+/* 员工详情壳: 顶 ‹名字 + [聊天|配置] tab, 填满高度让聊天可滚 */
+.mobile-staff-detail { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.mobile-staff-toptabs {
+  flex: 0 0 auto; display: flex; border-bottom: 1px solid #e3e3e3; background: #fff;
+}
+.mobile-staff-toptab {
+  flex: 1 1 0; min-height: 42px; border: 0; background: transparent;
+  font: inherit; font-size: 15px; color: #666; cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.mobile-staff-toptab.is-active { color: var(--brand, #1f7a44); font-weight: 600; border-bottom-color: var(--brand, #1f7a44); }
+.mobile-staff-detail .mobile-staff-chat { flex: 1 1 auto; min-height: 0; }
+.mobile-staff-detail .mobile-staff-profile { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
 .mobile-staff-message-btn {
   width: 100%; min-height: 46px; margin: 4px 0 12px;
   border: 0; border-radius: 10px; background: var(--brand, #1f7a44); color: #fff;

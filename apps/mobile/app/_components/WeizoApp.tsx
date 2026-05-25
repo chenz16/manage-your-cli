@@ -1735,7 +1735,7 @@ function MobileOwnerChat({
 
 // ─── Staff 1:1 chat ───────────────────────────────────────────────────────────
 
-function StaffChat({ staff, onBack }: { staff: Staff; onBack: () => void }) {
+function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => void; embedded?: boolean }) {
   const staffChatId = `staff:${staff.id}`;
   const [messages, setMessages] = useState<StaffChatMessage[]>([]);
   const [text, setText] = useState('');
@@ -1854,12 +1854,15 @@ function StaffChat({ staff, onBack }: { staff: Staff; onBack: () => void }) {
 
   return (
     <div className="mobile-staff-chat">
-      {/* thin WeChat-style chat header: ‹ back + name */}
-      <div className="mobile-chat-header">
-        <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回">‹</button>
-        <span className="mobile-chat-header-name">{staff.name}</span>
-        <span className="mobile-chat-header-spacer" />
-      </div>
+      {/* thin WeChat-style chat header: ‹ back + name (skipped when embedded
+          in StaffDetail — the 聊天|配置 shell provides the bar). */}
+      {!embedded && (
+        <div className="mobile-chat-header">
+          <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回">‹</button>
+          <span className="mobile-chat-header-name">{staff.name}</span>
+          <span className="mobile-chat-header-spacer" />
+        </div>
+      )}
       <div ref={scrollRef} className="mobile-chat-viewport mobile-staff-chat-scroll">
         {messages.length === 0 ? (
           <div className="chat-empty">
@@ -2213,11 +2216,13 @@ function StaffProfile({
   fallback,
   onMessage,
   onBack,
+  embedded,
 }: {
   staffId: string;
   fallback?: Staff;
-  onMessage: (staff: Staff) => void;
-  onBack: () => void;
+  onMessage?: (staff: Staff) => void;
+  onBack?: () => void;
+  embedded?: boolean;
 }) {
   const [staff, setStaff] = useState<Staff | null>(fallback ?? null);
   const [loading, setLoading] = useState(true);
@@ -2348,7 +2353,7 @@ function StaffProfile({
 
   return (
     <div className="mobile-staff-profile">
-      <button type="button" className="mobile-back-row" onClick={onBack}>‹ 通讯录</button>
+      {!embedded && <button type="button" className="mobile-back-row" onClick={onBack}>‹ 通讯录</button>}
       {loading && !staff && <div className="mobile-empty-panel">加载中…</div>}
       {error && <div className="mobile-error">员工配置加载失败：{error}</div>}
       {staff && (
@@ -2371,9 +2376,11 @@ function StaffProfile({
           {/* 发消息 = primary action (WeChat contact-detail style) → full-screen chat.
               配置 / 看后台 are secondary. 看后台 (tmux view) only applies to
               tmux-backed employees — the Secretary has no terminal. */}
-          <button type="button" className="mobile-staff-message-btn" onClick={() => onMessage(staff)}>
-            💬 发消息
-          </button>
+          {!embedded && onMessage && (
+            <button type="button" className="mobile-staff-message-btn" onClick={() => onMessage(staff)}>
+              💬 发消息
+            </button>
+          )}
           {staff.role_name !== 'secretary' && (
             <div className="mobile-staff-tabs">
               <button type="button" className={`mobile-staff-tab${detailTab === 'config' ? ' is-active' : ''}`} onClick={() => setDetailTab('config')}>配置</button>
@@ -4190,6 +4197,27 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
+// ─── 员工详情 — 顶部 [聊天 | 配置] tab, 默认聊天 (owner 2026-05-25) ────────────
+function StaffDetail({ staff, onBack }: { staff: Staff; onBack: () => void }) {
+  const [tab, setTab] = useState<'chat' | 'config'>('chat'); // 默认进聊天
+  return (
+    <div className="mobile-staff-detail">
+      <div className="mobile-chat-header">
+        <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回">‹</button>
+        <span className="mobile-chat-header-name">{staff.name}</span>
+        <span className="mobile-chat-header-spacer" />
+      </div>
+      <div className="mobile-staff-toptabs">
+        <button type="button" className={`mobile-staff-toptab${tab === 'chat' ? ' is-active' : ''}`} onClick={() => setTab('chat')}>聊天</button>
+        <button type="button" className={`mobile-staff-toptab${tab === 'config' ? ' is-active' : ''}`} onClick={() => setTab('config')}>配置</button>
+      </div>
+      {tab === 'chat'
+        ? <StaffChat key={`chat-${staff.id}`} staff={staff} embedded />
+        : <StaffProfile key={`cfg-${staff.id}`} staffId={staff.id} fallback={staff} embedded />}
+    </div>
+  );
+}
+
 // ─── 资产 — 「我」的资产页 (WeChat 钱包式: 技能 / 交付 / 文件夹设置 / 统计) ───────
 function AssetsView({
   onBack,
@@ -5249,7 +5277,6 @@ export function WeizoApp() {
   const [badges] = useState<Record<BadgedTabKey, number>>({ chats: 0, work: 0 });
   const [staffRefreshing, setStaffRefreshing] = useState(false);
   const [meSubview, setMeSubview] = useState(false); // me-tab 二级页(资产/用量)→ 隐藏顶栏
-  const [staffChat, setStaffChat] = useState<Staff | null>(null); // 通讯录→员工→发消息 全屏聊天
 
   useEffect(() => {
     const conn = readDesktopConnection();
@@ -5388,7 +5415,6 @@ export function WeizoApp() {
   function openTab(next: TabKey) {
     setTab(next);
     setSelectedStaff(null);
-    setStaffChat(null);
   }
 
   // Don't flash anything on SSR — wait until client boot
@@ -5414,7 +5440,7 @@ export function WeizoApp() {
           tab the recipient bar sits at the very top (no title above it); any
           drill-in (staff profile / 资产 / 用量) carries its own back-row, so the
           app header would just double-stack and waste vertical space. */}
-      {tab !== 'chats' && !(tab === 'contacts' && (selectedStaff || staffChat)) && !(tab === 'me' && meSubview) && (
+      {tab !== 'chats' && !(tab === 'contacts' && selectedStaff) && !(tab === 'me' && meSubview) && (
         <AppHeader title={tabTitle(tab, selectedStaff)} />
       )}
       <section
@@ -5431,15 +5457,8 @@ export function WeizoApp() {
           </div>
         )}
         {tab === 'contacts' && (
-          staffChat ? (
-            <StaffChat key={staffChat.id} staff={staffChat} onBack={() => setStaffChat(null)} />
-          ) : selectedStaff ? (
-            <StaffProfile
-              staffId={selectedStaff.id}
-              fallback={selectedStaff}
-              onBack={() => setSelectedStaff(null)}
-              onMessage={(s) => setStaffChat(s)}
-            />
+          selectedStaff ? (
+            <StaffDetail staff={selectedStaff} onBack={() => setSelectedStaff(null)} />
           ) : (
             <Contacts staff={staff} agentUsage={agentUsage} onOpen={setSelectedStaff} onRefresh={() => void fetchStaff()} refreshing={staffRefreshing} />
           )
