@@ -1709,7 +1709,7 @@ function MobileOwnerChat({
                 onAttach={(a) => setAttachment(a)}
                 disabled={attachment !== null}
               />
-              <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" autoFocus />
+              <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" />
               <OwnerAttachAwareSend
                 attachment={attachment}
                 onAttachmentUpdate={(a) => setAttachment(a)}
@@ -1924,7 +1924,6 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
             }}
             onFocus={() => { forceRef.current = true; scrollToBottom(); }}
             placeholder={`发消息给 ${staff.name}…`}
-            autoFocus
           />
           <button
             type="button"
