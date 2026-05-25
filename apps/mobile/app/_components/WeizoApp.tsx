@@ -3786,11 +3786,15 @@ function MeTab({
   }
 
   const ownerName = owner?.owner_name?.trim() || snapshot?.owner?.name?.trim() || 'Owner';
-  const ownerRole = owner?.owner_role?.trim() || snapshot?.owner?.role?.trim() || '未设置人设';
+  const ownerRoleRaw = owner?.owner_role?.trim() || snapshot?.owner?.role?.trim() || '';
   const ownerIntro = owner?.owner_intro?.trim() || snapshot?.owner?.intro?.trim() || '';
-  const activePersona = personas.find((p) => p.owner_role === ownerRole || p.name === ownerRole);
-  const personaName = activePersona ? `${activePersona.icon} ${activePersona.name}` : ownerRole;
-  const personaSummary = activePersona?.tagline || activePersona?.industry || ownerIntro || ownerRole;
+  const activePersona = personas.find((p) => p.owner_role === ownerRoleRaw || p.name === ownerRoleRaw);
+  // P1-4: when nothing is set, name + summary must NOT both fall back to the same
+  // string ("未设置人设 / 未设置人设"). Give distinct title + call-to-action.
+  const personaName = activePersona ? `${activePersona.icon} ${activePersona.name}` : (ownerRoleRaw || '尚未设置人设');
+  let personaSummary = activePersona?.tagline || activePersona?.industry || ownerIntro || '';
+  if (!personaSummary) personaSummary = activePersona ? '' : '点击「更换」选择你的身份';
+  if (personaSummary === personaName) personaSummary = '';
 
   if (usageOpen) {
     return <UsageDetail onBack={() => setUsageOpen(false)} />;
@@ -3909,7 +3913,7 @@ function MeTab({
             </div>
             <div className="mobile-persona-list">
               {personas.map((persona) => {
-                const active = activePersona?.id === persona.id || persona.owner_role === ownerRole;
+                const active = activePersona?.id === persona.id || persona.owner_role === ownerRoleRaw;
                 return (
                   <button
                     key={persona.id}
@@ -4001,6 +4005,22 @@ function AppHeader({ title, left }: { title: string; left?: ReactNode }) {
   );
 }
 
+// Bottom-nav icons — inline SVG (stroke, currentColor) so they render crisply
+// everywhere and inherit the active green. Replaces emoji that tofu'd on some
+// renderers. 24px to suit the tab bar.
+function navSvg(children: ReactNode) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+const IconNavChat = () => navSvg(<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />);
+const IconNavContacts = () => navSvg(<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>);
+const IconNavBoard = () => navSvg(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>);
+const IconNavMe = () => navSvg(<><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>);
+
 function BottomNav({
   active,
   badges,
@@ -4010,11 +4030,11 @@ function BottomNav({
   badges: Record<BadgedTabKey, number>;
   onTab: (tab: TabKey) => void;
 }) {
-  const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
-    { key: 'chats', label: '聊天', icon: '💬' },
-    { key: 'contacts', label: '通讯录', icon: '👥' },
-    { key: 'work', label: '看板', icon: '📋' },
-    { key: 'me', label: '我', icon: '⚙️' },
+  const TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
+    { key: 'chats', label: '聊天', icon: <IconNavChat /> },
+    { key: 'contacts', label: '通讯录', icon: <IconNavContacts /> },
+    { key: 'work', label: '看板', icon: <IconNavBoard /> },
+    { key: 'me', label: '我', icon: <IconNavMe /> },
   ];
 
   return (
