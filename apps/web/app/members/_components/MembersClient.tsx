@@ -530,11 +530,84 @@ function CliRuntimeBadges({ staff }: { staff: Staff }) {
   );
 }
 
+interface DiscoveredSession { name: string; cwd: string; command: string; is_holon: boolean; adopted: boolean }
+
+/** Adopt an existing owner-run tmux CLI session as an employee. De-duped:
+ *  Holon's own holon-* sessions are hidden; already-adopted ones are disabled. */
+function AdoptSessionsDialog({ open, onClose, onAdopted }: { open: boolean; onClose: () => void; onAdopted: () => void }) {
+  const [sessions, setSessions] = useState<DiscoveredSession[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function load(): Promise<void> {
+    setLoading(true); setError('');
+    try {
+      const r = await fetch('/api/v1/cli/discover', { cache: 'no-store' });
+      const j = (await r.json()) as { sessions?: DiscoveredSession[]; error?: string };
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setSessions(Array.isArray(j.sessions) ? j.sessions : []);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { if (open) void load(); }, [open]);
+
+  async function adopt(name: string): Promise<void> {
+    setBusy(name); setError('');
+    try {
+      const r = await fetch('/api/v1/cli/adopt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_name: name }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+      await load();
+      onAdopted();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(null); }
+  }
+
+  if (!open) return null;
+  const candidates = sessions.filter((s) => !s.is_holon); // de-dup: hide Holon's own sessions
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 540, maxHeight: '82vh', overflow: 'auto', background: '#fff', borderRadius: 14, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <h2 style={{ margin: 0, fontSize: 17 }}>收编运行中的会话</h2>
+          <button type="button" className="btn" onClick={() => void load()} disabled={loading}>{loading ? '扫描中…' : '刷新'}</button>
+        </div>
+        <p style={{ color: 'var(--ink-mute)', fontSize: 13, marginTop: 0 }}>把本机正在运行的 tmux CLI 会话收编为员工(非 tmux 会话不在列)。</p>
+        {error && <div style={{ color: '#bf3d32', fontSize: 13, margin: '6px 0' }}>{error}</div>}
+        {!loading && candidates.length === 0 && (
+          <div style={{ color: 'var(--ink-mute)', padding: 20, textAlign: 'center' }}>没有可收编的 tmux 会话。</div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {candidates.map((s) => (
+            <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: '1px solid var(--line)', borderRadius: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>{s.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-mute)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.command} · {s.cwd}</div>
+              </div>
+              {s.adopted
+                ? <span className="badge">已收编</span>
+                : <button type="button" className="btn btn-primary" onClick={() => void adopt(s.name)} disabled={busy === s.name}>{busy === s.name ? '收编中…' : '收编'}</button>}
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 14, textAlign: 'right' }}>
+          <button type="button" className="btn" onClick={onClose}>关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MembersClient({ initial, owner }: { initial: ListStaffResponse; owner: OwnerAssistant }) {
   const { t, tFmt } = useT();
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StaffKind>('all');
   const [hireOpen, setHireOpen] = useState(false);
+  const [adoptOpen, setAdoptOpen] = useState(false);
   // Phase 1 — project filter
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const { projects } = useProjects();
@@ -649,6 +722,15 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
           })}
           <div style={{ flex: 1 }} />
           <button
+            id="adopt-sessions"
+            type="button" className="btn"
+            onClick={() => setAdoptOpen(true)}
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            title="收编本机正在运行的 tmux CLI 会话为员工"
+          >
+            收编会话
+          </button>
+          <button
             id="hire"
             type="button" className="btn btn-primary"
             onClick={() => setHireOpen(true)}
@@ -692,6 +774,7 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
       )}
 
       <HireDialog open={hireOpen} onClose={() => setHireOpen(false)} onHired={reloadRoster} owner={owner} />
+      <AdoptSessionsDialog open={adoptOpen} onClose={() => setAdoptOpen(false)} onAdopted={reloadRoster} />
     </>
   );
 }
