@@ -4245,6 +4245,22 @@ export function WeizoApp() {
     return () => window.clearInterval(id);
   }, [connection]);
 
+  // Reconnect IMMEDIATELY when the app returns to the foreground. Android (esp.
+  // Samsung) suspends the webview in the background, which also FREEZES the 12s
+  // poll timer above — so on resume the app would otherwise sit on a stale
+  // "offline" state until a poll eventually fires. visibilitychange + focus fire
+  // on resume, so we re-check the desk right away. (No native plugin needed.)
+  useEffect(() => {
+    if (!connection) return;
+    const recheck = () => { if (document.visibilityState === 'visible') void checkDesktop(); };
+    document.addEventListener('visibilitychange', recheck);
+    window.addEventListener('focus', recheck);
+    return () => {
+      document.removeEventListener('visibilitychange', recheck);
+      window.removeEventListener('focus', recheck);
+    };
+  }, [connection]);
+
   async function checkDesktop() {
     setCheckingConnection(true);
     try {
