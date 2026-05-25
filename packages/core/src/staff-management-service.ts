@@ -192,7 +192,15 @@ export function createStaff(input: CreateStaffInput): Staff {
 export function getStaffMerged(id: string): Staff | null {
   if (isStaffDismissed(id)) return null;
   const fx = loadFixtures();
-  const base = fx.staff.find((s) => s.id === id) ?? getDynamicStaff(id);
+  // Mirror listStaffMerged: dynamic staff created by a SEPARATE process (the
+  // Secretary's Holon MCP create_agent) live only in the DB — the in-memory Map
+  // is hydrated once at boot. Without the DB fallback, getStaffMerged returns
+  // null for those (404), so they show in the roster but can't be opened/chatted
+  // ("staff 不能私聊"). DB is authoritative for cross-process creates.
+  const base = fx.staff.find((s) => s.id === id)
+    ?? getDynamicStaff(id)
+    ?? readDynamicStaff().find((s) => s.id === id)
+    ?? null;
   if (!base) return null;
   const ov = getStaffOverride(id);
   return ov ? { ...base, ...ov } : base;
