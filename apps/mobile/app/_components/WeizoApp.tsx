@@ -3667,11 +3667,12 @@ function DelivSection() {
 // ─── KanbanBoard — Phase 1: unified single-scroll 4-section board ─────────────
 //
 // Sections (top→bottom, urgency-ordered):
-//   1. 老板要决定 — deliverables needing review (draft/final/revised) + stuck jobs
+//   1. 外接任务   — inbound work from peers/superiors/external (outward-facing)
 //   2. 团队动态   — running/queued jobs with agent heartbeat
 //   3. 刚完成     — recently accepted deliverables (last 24h, up to 6)
 //   4. 待办积压   — pending todos (top 3 preview + see-all)
 //
+// 老板要决定 (blocked-on-owner items) moved to 小秘 "需要老板处理" strip.
 // Auto-refresh: 10s poll while tab visible; manual 刷新 button in header.
 
 function KanbanSectionHeader({ label, count, extra }: { label: string; count?: number; extra?: string | undefined }) {
@@ -3684,7 +3685,7 @@ function KanbanSectionHeader({ label, count, extra }: { label: string; count?: n
   );
 }
 
-function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
+function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary: (text: string) => void; initialDelivId?: string | null }) {
   // ── shared data ────────────────────────────────────────────────────────
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [jobs, setJobs] = useState<JobRow[]>([]);
@@ -3695,7 +3696,7 @@ function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // deliverable detail/review overlay
-  const [openDelivId, setOpenDelivId] = useState<string | null>(null);
+  const [openDelivId, setOpenDelivId] = useState<string | null>(() => initialDelivId ?? null);
   const [delivDetail, setDelivDetail] = useState<GetDeliverableResponse | null>(null);
   const [delivDetailLoading, setDelivDetailLoading] = useState(false);
   const [delivDetailError, setDelivDetailError] = useState('');
@@ -3832,16 +3833,13 @@ function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
   }
 
   // ── derived buckets ───────────────────────────────────────────────────
-  const needsReviewDeliv = deliverables.filter(
-    (d) => d.status === 'draft' || d.status === 'final' || d.status === 'revised',
-  );
+  // (老板要决定 items moved to 小秘 "需要老板处理" strip; 看板 is outward-facing)
   const stuckJobs = jobs.filter((j) => {
     if (j.status !== 'running') return false;
     if (!j.created_at) return false;
     const mins = (Date.now() - new Date(j.created_at).getTime()) / 60000;
     return mins > 20;
   });
-  const needsYouCount = needsReviewDeliv.length + stuckJobs.length;
 
   const activeJobs = jobs.filter((j) => j.status === 'queued' || j.status === 'running');
   const nonStuckActive = activeJobs.filter((j) => !stuckJobs.some((s) => s.id === j.id));
@@ -3914,67 +3912,12 @@ function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) 
       )}
 
       {/* ──────────────────────────────────────────────────────────── */}
-      {/* Section 1: 老板要决定                                       */}
+      {/* Section 1: 外接任务 — inbound from peers/superiors/external    */}
+      {/* TODO: wire A2A/peer inbound missions when /api/v1/missions      */}
+      {/*       (or equivalent) is available; no fake data until then.    */}
       {/* ──────────────────────────────────────────────────────────── */}
-      <KanbanSectionHeader label="老板要决定" count={needsYouCount} />
-
-      {needsYouCount === 0 && (
-        <div className="kb-empty-row">暂无待决事项</div>
-      )}
-
-      {/* Deliverables needing review */}
-      {needsReviewDeliv.map((d) => {
-        const authorName = d.author_staff_id ? (staffNames.get(d.author_staff_id) ?? d.author_staff_id) : '—';
-        return (
-          <div key={d.id} className="kb-card kb-card-needs-you">
-            <div className="kb-card-accent kb-accent-orange" />
-            <div className="kb-card-body">
-              <div className="kb-card-row1">
-                <span className="kb-card-icon" aria-hidden="true">📄</span>
-                <span className="kb-card-title">{d.title}</span>
-                <span className="weizo-kanban-status-pill weizo-kanban-review-pending">待验收</span>
-              </div>
-              <div className="kb-card-row2">
-                <span className="kb-card-meta">👤 {authorName} · {d.created_at ? timeAgo(d.created_at) : '—'}</span>
-                <button
-                  type="button"
-                  className="kb-cta-btn"
-                  onClick={() => setOpenDelivId(d.id)}
-                >
-                  立即处理 →
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-
-      {/* Stuck jobs */}
-      {stuckJobs.map((j) => {
-        const staffName = j.staff_id ? (staffNames.get(j.staff_id) ?? j.staff_id) : '—';
-        return (
-          <div key={j.id} className="kb-card kb-card-needs-you">
-            <div className="kb-card-accent kb-accent-red" />
-            <div className="kb-card-body">
-              <div className="kb-card-row1">
-                <span className="kb-card-icon" aria-hidden="true">⚠️</span>
-                <span className="kb-card-title">{j.brief ?? j.id}</span>
-                <span className="weizo-kanban-status-pill weizo-kanban-status-stuck">⚠卡住</span>
-              </div>
-              <div className="kb-card-row2">
-                <span className="kb-card-meta">👤 {staffName} · {elapsedLabel(j.created_at)}无响应</span>
-                <button
-                  type="button"
-                  className="kb-cta-btn"
-                  onClick={() => onTalkToSecretary(j.brief ?? j.id)}
-                >
-                  去对话 💬
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      <KanbanSectionHeader label="外接任务" />
+      <div className="kb-empty-row kb-empty-mission">暂无外接任务</div>
 
       {/* ──────────────────────────────────────────────────────────── */}
       {/* Section 2: 团队动态                                         */}
@@ -5065,8 +5008,12 @@ function OwnerChatSearch() {
   );
 }
 
-// ─── 老板代办 strip — 小秘领地: 小秘从「你↔小秘」对话提炼的、需你拍板的事 ────────
-// (授权/同意/决定…)。别人/peer 让你做的走看板,不在这。可折叠;一碰输入/语音自动收起。
+// ─── 需要老板处理 strip — 小秘判断: 老板需要处理的所有事项 (chat + work-blockers) ──
+// Union of:
+//   (a) chat-derived action items from /api/v1/chat/owner-actions
+//   (b) deliverables awaiting review (draft/final/revised) → secretary surfaces "待验收"
+//   (c) stuck jobs (running > 20min) → secretary surfaces "卡住"
+// Collapsed by default; auto-collapse on composer touch.
 const OWNER_ACTIONS_CACHE = 'holon.mobile.ownerActions.v1';
 
 function readCachedActions(): string[] {
@@ -5078,24 +5025,89 @@ function readCachedActions(): string[] {
   } catch { return []; }
 }
 
-function OwnerTodoStrip() {
-  const [items, setItems] = useState<string[]>(() => readCachedActions());
-  const [collapsed, setCollapsed] = useState(true); // 默认收起,只显示数字;点一下看内容
+interface BlockerItem {
+  kind: 'deliv' | 'job';
+  id: string;
+  label: string;
+  staffId?: string | undefined;
+}
 
+function OwnerTodoStrip({
+  onOpenBoard,
+  onOpenStaff,
+}: {
+  onOpenBoard: (delivId?: string) => void;
+  onOpenStaff: (staffId: string) => void;
+}) {
+  const [chatItems, setChatItems] = useState<string[]>(() => readCachedActions());
+  const [blockers, setBlockers] = useState<BlockerItem[]>([]);
+  const [collapsed, setCollapsed] = useState(true);
+
+  // (a) chat-derived action items
   useEffect(() => {
     holonApiFetch('/api/v1/chat/owner-actions', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() as Promise<{ items?: string[] }> : Promise.resolve(null)))
       .then((d) => {
         if (d && Array.isArray(d.items)) {
-          setItems(d.items);
+          setChatItems(d.items);
           try { window.localStorage.setItem(OWNER_ACTIONS_CACHE, JSON.stringify(d.items)); } catch { /* noop */ }
         }
       })
       .catch(() => undefined);
   }, []);
 
-  // Auto-collapse the moment the boss touches the composer (typing or voice) —
-  // small Samsung screen, keep the chat window clear.
+  // (b)+(c) work-blocker detection: deliverables awaiting review + stuck jobs
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchBlockers() {
+      try {
+        const [dRes, jRes, sRes] = await Promise.all([
+          holonApiFetch('/api/v1/deliverables', { cache: 'no-store' }),
+          holonApiFetch('/api/v1/jobs', { cache: 'no-store' }),
+          holonApiFetch('/api/v1/staff', { cache: 'no-store' }),
+        ]);
+        const [dj, jj, sj] = await Promise.all([
+          dRes.ok ? (dRes.json() as Promise<ListDeliverablesResponse>) : Promise.resolve({ items: [] }),
+          jRes.ok ? (jRes.json() as Promise<{ items?: JobRow[] }>) : Promise.resolve({ items: [] }),
+          sRes.ok ? (sRes.json() as Promise<ListStaffResponse>) : Promise.resolve({ items: [] }),
+        ]);
+        if (cancelled) return;
+
+        const staffNames = new Map<string, string>();
+        for (const s of (Array.isArray(sj.items) ? sj.items : [])) {
+          if (s.name) staffNames.set(s.id, s.name);
+        }
+
+        const list: BlockerItem[] = [];
+
+        // deliverables awaiting review
+        const reviewDeliv = Array.isArray(dj.items)
+          ? dj.items.filter((d) => d.status === 'draft' || d.status === 'final' || d.status === 'revised')
+          : [];
+        for (const d of reviewDeliv) {
+          list.push({ kind: 'deliv', id: d.id, label: `📄 ${d.title} 待验收`, staffId: d.author_staff_id ?? undefined });
+        }
+
+        // stuck jobs (running > 20min)
+        const allJobs = Array.isArray(jj.items) ? jj.items : [];
+        const now = Date.now();
+        for (const j of allJobs) {
+          if (j.status !== 'running' || !j.created_at) continue;
+          const mins = (now - new Date(j.created_at).getTime()) / 60000;
+          if (mins <= 20) continue;
+          const agentName = j.staff_id ? (staffNames.get(j.staff_id) ?? j.staff_id) : '未知员工';
+          list.push({ kind: 'job', id: j.id, label: `⚠ ${agentName} 卡住`, staffId: j.staff_id ?? undefined });
+        }
+
+        setBlockers(list);
+      } catch { /* best-effort */ }
+    }
+    void fetchBlockers();
+    const h = window.setInterval(() => void fetchBlockers(), 30000);
+    return () => { cancelled = true; window.clearInterval(h); };
+  }, []);
+
+  // Auto-collapse the moment the boss touches the composer
   useEffect(() => {
     function onDown(ev: Event) {
       const t = ev.target as HTMLElement | null;
@@ -5105,20 +5117,47 @@ function OwnerTodoStrip() {
     return () => document.removeEventListener('pointerdown', onDown, true);
   }, []);
 
-  if (items.length === 0) return null;
+  const totalCount = chatItems.length + blockers.length;
+  if (totalCount === 0) return null;
 
   return (
     <div className="mobile-todo-strip">
       <button type="button" className="mobile-todo-strip-head" onClick={() => setCollapsed((v) => !v)}>
-        <span className="mobile-todo-strip-title">老板代办 · {items.length}</span>
+        <span className="mobile-todo-strip-title">需要老板处理 · {totalCount}</span>
         <span className="mobile-todo-strip-more">{collapsed ? '展开 ›' : '收起 ⌄'}</span>
       </button>
-      {!collapsed && items.slice(0, 3).map((t, i) => (
-        <div key={i} className="mobile-todo-line">
-          <span className="mobile-todo-mark">○</span>
-          <span className="mobile-todo-text">{t}</span>
-        </div>
-      ))}
+      {!collapsed && (
+        <>
+          {/* work-blocker items — tappable navigation */}
+          {blockers.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              className="mobile-todo-line mobile-todo-line-tappable"
+              onClick={() => {
+                if (b.kind === 'deliv') {
+                  onOpenBoard(b.id);
+                } else if (b.staffId) {
+                  onOpenStaff(b.staffId);
+                } else {
+                  onOpenBoard();
+                }
+              }}
+            >
+              <span className="mobile-todo-mark">●</span>
+              <span className="mobile-todo-text">{b.label}</span>
+              <span className="mobile-todo-nav-hint">›</span>
+            </button>
+          ))}
+          {/* chat-derived items — plain text, no nav */}
+          {chatItems.slice(0, 3).map((t, i) => (
+            <div key={`chat-${i}`} className="mobile-todo-line">
+              <span className="mobile-todo-mark">○</span>
+              <span className="mobile-todo-text">{t}</span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -6231,6 +6270,7 @@ export function WeizoApp() {
   const [badges] = useState<Record<BadgedTabKey, number>>({ chats: 0, work: 0 });
   const [staffRefreshing, setStaffRefreshing] = useState(false);
   const [meSubview, setMeSubview] = useState(false); // me-tab 二级页(资产/用量)→ 隐藏顶栏
+  const [pendingDelivId, setPendingDelivId] = useState<string | null>(null); // strip→看板 deliverable deep-link
 
   useEffect(() => {
     const conn = readDesktopConnection();
@@ -6413,7 +6453,20 @@ export function WeizoApp() {
                 <span className="mobile-chat-header-sub">微作 AI 助理</span>
               </span>
             </div>
-            <OwnerTodoStrip />
+            <OwnerTodoStrip
+              onOpenBoard={(delivId) => {
+                setPendingDelivId(delivId ?? null);
+                setTab('work');
+              }}
+              onOpenStaff={(staffId) => {
+                const found = staff.find((s) => s.id === staffId);
+                if (found) {
+                  setStaffInitialMode('primary');
+                  setSelectedStaff(found);
+                }
+                setTab('contacts');
+              }}
+            />
             <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />
           </div>
         )}
@@ -6437,6 +6490,7 @@ export function WeizoApp() {
               setChatSeed(text);
               setTab('chats');
             }}
+            initialDelivId={pendingDelivId}
           />
         )}
         {tab === 'me' && (
