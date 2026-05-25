@@ -1658,6 +1658,41 @@ button, input, textarea, select { font: inherit; }
 .mobile-persona-polish-btn:disabled,
 .mobile-persona-save-btn:disabled { opacity: 0.5; }
 
+/* ── persona: ① 行业/职业 chips + ② AI 采访 ── */
+.mobile-persona-industry { min-height: 0; height: 44px; white-space: normal; }
+.mobile-persona-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.mobile-persona-chip {
+  border: 1px solid #d8d4cc; background: #fff; color: #444;
+  border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.mobile-persona-chip.is-active { background: var(--brand, #1f7a44); color: #fff; border-color: var(--brand, #1f7a44); }
+.mobile-persona-chip:disabled { opacity: 0.5; }
+
+.mobile-persona-interview-cta {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 1px dashed var(--brand, #1f7a44); background: #f3faf5; color: var(--brand, #1f7a44);
+  border-radius: 12px; padding: 14px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.mobile-persona-interview-cta small { font-size: 12px; font-weight: 400; color: #6a8a76; }
+
+.mobile-interview {
+  border: 1px solid #e3e0d8; border-radius: 12px; background: #fafafa; padding: 10px;
+}
+.mobile-interview-log { display: flex; flex-direction: column; gap: 8px; max-height: 38vh; overflow-y: auto; }
+.mobile-interview-turn { display: flex; }
+.mobile-interview-turn.is-interviewer { justify-content: flex-start; }
+.mobile-interview-turn.is-owner { justify-content: flex-end; }
+.mobile-interview-bubble {
+  max-width: 82%; padding: 8px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word;
+}
+.mobile-interview-turn.is-interviewer .mobile-interview-bubble { background: #fff; color: #222; border: 1px solid #eee; border-bottom-left-radius: 4px; }
+.mobile-interview-turn.is-owner .mobile-interview-bubble { background: var(--brand, #1f7a44); color: #fff; border-bottom-right-radius: 4px; }
+.mobile-interview-typing { color: #999; letter-spacing: 2px; }
+.mobile-interview-input-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 8px; }
+.mobile-interview-input-row .mobile-persona-editor-textarea { min-height: 44px; flex: 1 1 auto; }
+.mobile-interview-input-row .mobile-persona-save-btn { flex: 0 0 auto; width: 64px; }
+
 .mobile-primary-action {
   width: 100%; height: 44px; border: 0; border-radius: 8px;
   background: #1f7a44; color: #fff; font: inherit; font-weight: 700;

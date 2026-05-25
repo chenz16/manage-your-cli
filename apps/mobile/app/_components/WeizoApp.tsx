@@ -4239,8 +4239,15 @@ function MeTab({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [personaSheetOpen, setPersonaSheetOpen] = useState(false);
   const [ownerDraft, setOwnerDraft] = useState('');
+  const [ownerIndustry, setOwnerIndustry] = useState(''); // 行业/职业 — onboarding-style, drives the interview
   const [ownerBusy, setOwnerBusy] = useState<'idle' | 'polishing' | 'saving'>('idle');
   const [ownerMsg, setOwnerMsg] = useState('');
+  // AI 采访式人设定位 (multi-turn). Replaces the one-off polish for new users.
+  const [interviewTurns, setInterviewTurns] = useState<Array<{ role: 'interviewer' | 'owner'; content: string }>>([]);
+  const [interviewActive, setInterviewActive] = useState(false);
+  const [interviewAnswer, setInterviewAnswer] = useState('');
+  const [interviewLoading, setInterviewLoading] = useState(false);
+  const [interviewDone, setInterviewDone] = useState(false);
   const [personaApplied, setPersonaApplied] = useState('');
   const [error, setError] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -4349,12 +4356,55 @@ function MeTab({
     finally { setOwnerBusy('idle'); }
   }
 
+  // ── AI 采访式定位: one Q at a time → synthesizes the persona at the end ──
+  async function runInterviewTurn(transcript: Array<{ role: 'interviewer' | 'owner'; content: string }>) {
+    setInterviewLoading(true);
+    try {
+      const r = await holonApiFetch('/api/v1/persona/interview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, industry: ownerIndustry.trim() }),
+      });
+      const j = await r.json().catch(() => ({})) as { done?: boolean; message?: string; persona?: string; error?: string };
+      if (!r.ok || typeof j.message !== 'string') throw new Error(j.error ?? `HTTP ${r.status}`);
+      setInterviewTurns([...transcript, { role: 'interviewer', content: j.message }]);
+      if (j.done && typeof j.persona === 'string' && j.persona.trim()) {
+        setOwnerDraft(j.persona.trim());
+        setInterviewDone(true);
+        setOwnerMsg('采访完成，确认后点「用这个」');
+      }
+    } catch (e) {
+      setOwnerMsg(`采访失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setInterviewLoading(false);
+    }
+  }
+
+  function startInterview() {
+    setInterviewActive(true);
+    setInterviewDone(false);
+    setInterviewAnswer('');
+    setInterviewTurns([]);
+    setOwnerMsg('');
+    void runInterviewTurn([]);
+  }
+
+  function sendInterviewAnswer() {
+    const answer = interviewAnswer.trim();
+    if (!answer || interviewLoading) return;
+    const next = [...interviewTurns, { role: 'owner' as const, content: answer }];
+    setInterviewTurns(next);
+    setInterviewAnswer('');
+    void runInterviewTurn(next);
+  }
+
   async function saveOwnerPersona() {
     const text = ownerDraft.trim();
     if (!text || ownerBusy !== 'idle') return;
     setOwnerBusy('saving'); setOwnerMsg('');
     try {
-      const role = ((text.split(/[\n。.!！?？]/)[0] ?? text).trim() || text).slice(0, 20);
+      // owner_role = the industry/profession the owner picked (onboarding-style);
+      // fall back to the first sentence of the intro when none was set.
+      const role = (ownerIndustry.trim() || (text.split(/[\n。.!！?？]/)[0] ?? text).trim() || text).slice(0, 30);
       const r = await holonApiFetch('/api/v1/me', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner_role: role, owner_intro: text }),
@@ -4419,7 +4469,12 @@ function MeTab({
           <button
             type="button"
             className="mobile-persona-change"
-            onClick={() => { setOwnerDraft(ownerIntro); setOwnerMsg(''); setPersonaSheetOpen(true); }}
+            onClick={() => {
+              setOwnerDraft(ownerIntro);
+              setOwnerIndustry(ownerRoleRaw);
+              setInterviewActive(false); setInterviewDone(false); setInterviewTurns([]);
+              setOwnerMsg(''); setPersonaSheetOpen(true);
+            }}
           >
             更换
           </button>
@@ -4522,22 +4577,80 @@ function MeTab({
                 ×
               </button>
             </div>
-            {/* Free-form: let AI position you from your own words / pain points */}
+            {/* Step 1 行业/职业 (onboarding-style) → Step 2 AI 采访 */}
             <div className="mobile-persona-freeform">
-              <div className="mobile-me-note" style={{ marginBottom: 6 }}>让 AI 给你定位 —— 说出你的角色、日常、痛点：</div>
+              <div className="mobile-me-note" style={{ marginBottom: 6 }}>① 你的行业 / 职业</div>
+              <input
+                className="mobile-persona-editor-textarea mobile-persona-industry"
+                value={ownerIndustry}
+                onChange={(e) => setOwnerIndustry(e.target.value)}
+                placeholder="如：柴油机出口、跨境电商、律师、自由设计师…"
+                disabled={ownerBusy !== 'idle'}
+              />
+              <div className="mobile-persona-chips">
+                {['跨境外贸', '电商', '制造业', '咨询顾问', '律师', '自由职业', '投资人', '创业者'].map((c) => (
+                  <button key={c} type="button"
+                    className={`mobile-persona-chip${ownerIndustry.trim() === c ? ' is-active' : ''}`}
+                    onClick={() => setOwnerIndustry(c)} disabled={ownerBusy !== 'idle'}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mobile-me-note" style={{ margin: '12px 0 6px' }}>② 让 AI 采访你，问出使命、日常、痛点</div>
+              {!interviewActive ? (
+                <button type="button" className="mobile-persona-interview-cta" onClick={startInterview}>
+                  🎤 让 AI 采访我
+                  <small>{ownerIndustry.trim() ? `基于「${ownerIndustry.trim()}」问几个问题` : '几个问题，帮你说出使命、日常、痛点'}</small>
+                </button>
+              ) : (
+                <div className="mobile-interview">
+                  <div className="mobile-interview-log">
+                    {interviewTurns.map((t, i) => (
+                      <div key={i} className={`mobile-interview-turn is-${t.role}`}>
+                        <span className="mobile-interview-bubble">{t.content}</span>
+                      </div>
+                    ))}
+                    {interviewLoading && (
+                      <div className="mobile-interview-turn is-interviewer">
+                        <span className="mobile-interview-bubble mobile-interview-typing">…</span>
+                      </div>
+                    )}
+                  </div>
+                  {!interviewDone && (
+                    <div className="mobile-interview-input-row">
+                      <textarea
+                        className="mobile-persona-editor-textarea"
+                        value={interviewAnswer}
+                        onChange={(e) => setInterviewAnswer(e.target.value)}
+                        rows={2}
+                        placeholder="说说你的情况…"
+                        disabled={interviewLoading}
+                      />
+                      <button type="button" className="mobile-persona-save-btn"
+                        onClick={sendInterviewAnswer} disabled={interviewLoading || !interviewAnswer.trim()}>
+                        发送
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* The produced / hand-written persona — confirm with 用这个 */}
               <textarea
                 className="mobile-persona-editor-textarea"
+                style={{ marginTop: 10 }}
                 value={ownerDraft}
                 onChange={(e) => setOwnerDraft(e.target.value)}
                 rows={4}
-                placeholder="例如：我是做柴油机出口的小公司老板，平时忙采购和客户跟进，痛点是邮件和报价太占时间…"
+                placeholder="或自己写：我是做柴油机出口的小公司老板，平时忙采购和客户跟进，痛点是邮件和报价太占时间…"
                 disabled={ownerBusy !== 'idle'}
               />
               <div className="mobile-persona-editor-actions">
                 {ownerMsg && <span className="mobile-persona-editor-msg">{ownerMsg}</span>}
                 <button type="button" className="mobile-persona-polish-btn"
                   onClick={() => void polishOwnerPersona()} disabled={ownerBusy !== 'idle' || !ownerDraft.trim()}>
-                  {ownerBusy === 'polishing' ? '定位中…' : '✨ AI 定位'}
+                  {ownerBusy === 'polishing' ? '润色中…' : '✨ 润色'}
                 </button>
                 <button type="button" className="mobile-persona-save-btn"
                   onClick={() => void saveOwnerPersona()} disabled={ownerBusy !== 'idle' || !ownerDraft.trim()}>
