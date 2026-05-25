@@ -977,17 +977,24 @@ button, input, textarea, select { font: inherit; }
 
 .mobile-connection-banner {
   flex: 0 0 auto;
+  display: flex; align-items: stretch;
   width: 100%;
   min-height: 34px;
-  border: 0;
   border-bottom: 1px solid #e0b4b4;
   background: #fff2f2;
-  color: #a12f2f;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 650;
 }
-.mobile-connection-banner:disabled { color: #b86b6b; }
+.mobile-connection-banner-status {
+  flex: 1 1 auto;
+  border: 0; background: transparent;
+  color: #a12f2f; font: inherit; font-size: 13px; font-weight: 650;
+}
+.mobile-connection-banner-status:disabled { color: #b86b6b; }
+.mobile-connection-banner-repair {
+  flex: 0 0 auto;
+  border: 0; border-left: 1px solid #e0b4b4;
+  background: #a12f2f; color: #fff;
+  font: inherit; font-size: 13px; font-weight: 650; padding: 0 14px;
+}
 
 /* Not-paired banner: amber tint, flex row, action link on the right */
 .mobile-not-paired-banner {

@@ -3698,7 +3698,7 @@ function MeTab({
         <span>›</span>
       </button>
       <button type="button" className="mobile-disconnect-button" onClick={onDisconnect}>
-        断开连接
+        断开 / 重新配对
       </button>
 
       {personaSheetOpen && (
@@ -3783,21 +3783,29 @@ function ConnectionBanner({
   offline,
   checking,
   onRetry,
+  onRepair,
 }: {
   offline: boolean;
   checking: boolean;
   onRetry: () => void;
+  onRepair: () => void;
 }) {
   if (!offline) return null;
   return (
-    <button
-      type="button"
-      className="mobile-connection-banner"
-      onClick={onRetry}
-      disabled={checking}
-    >
-      桌面未连接 · {checking ? '重试中' : '重试'}
-    </button>
+    <div className="mobile-connection-banner">
+      <button
+        type="button"
+        className="mobile-connection-banner-status"
+        onClick={onRetry}
+        disabled={checking}
+      >
+        桌面未连接 · {checking ? '自动重连中…' : '自动重连中（点此立即重试）'}
+      </button>
+      {/* Escape hatch: changed desk / new network / discovery failed → re-pair. */}
+      <button type="button" className="mobile-connection-banner-repair" onClick={onRepair}>
+        重新配对
+      </button>
+    </div>
   );
 }
 
@@ -4345,6 +4353,7 @@ export function WeizoApp() {
         offline={desktopOffline}
         checking={checkingConnection}
         onRetry={() => void checkDesktop()}
+        onRepair={disconnect}
       />
       <AppHeader
         title={
