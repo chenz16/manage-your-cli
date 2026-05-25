@@ -1631,6 +1631,18 @@ button, input, textarea, select { font: inherit; }
   margin-top: 6px; padding: 16px; border-radius: 8px;
   background: #f5f3ee; color: #8a8a8a; font-size: 13px; text-align: center;
 }
+.mobile-term-input-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.mobile-term-input {
+  flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 10px;
+  border: 1px solid #d8d4cc; border-radius: 8px;
+  font: inherit; font-size: 14px; color: #111; background: #fff;
+}
+.mobile-term-input:disabled { opacity: 0.6; }
+.mobile-term-send {
+  flex: 0 0 auto; height: 40px; padding: 0 14px; border: 0; border-radius: 8px;
+  background: #1f7a44; color: #fff; font: inherit; font-size: 14px; font-weight: 600;
+}
+.mobile-term-send:disabled { opacity: 0.5; }
 
 /* 看板 / work tracker */
 .mobile-work {

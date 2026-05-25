@@ -1860,6 +1860,8 @@ function StaffTerminal({ staffId }: { staffId: string }) {
   const [output, setOutput] = useState('');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
+  const [cmd, setCmd] = useState('');
+  const [sending, setSending] = useState(false);
   const preRef = useRef<HTMLPreElement>(null);
 
   const load = useCallback(async () => {
@@ -1873,6 +1875,28 @@ function StaffTerminal({ staffId }: { staffId: string }) {
       setReason(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
   }, [staffId]);
+
+  // Send a command (keystrokes + Enter) straight into the agent's tmux session.
+  // Voice fills the box; the owner reviews, then taps 发送 — no auto-fire, since a
+  // wrong command can disrupt the agent's work.
+  async function sendCmd() {
+    const text = cmd.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staffId)}/cli/input`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: text, enter: true }),
+      });
+      if (r.ok) { setCmd(''); window.setTimeout(() => void load(), 400); }
+      else {
+        const j = await r.json().catch(() => ({})) as { error?: string };
+        setReason(j.error === 'no_session' ? '该员工没有运行中的终端会话' : (j.error ?? '发送失败'));
+      }
+    } catch (e) {
+      setReason(e instanceof Error ? e.message : String(e));
+    } finally { setSending(false); }
+  }
 
   useEffect(() => {
     void load();
@@ -1894,6 +1918,21 @@ function StaffTerminal({ staffId }: { staffId: string }) {
       {output
         ? <pre ref={preRef} className="mobile-term-screen">{output}</pre>
         : <div className="mobile-term-empty">{reason || '加载中…'}</div>}
+      {/* Direct CLI control: speak/type a command → straight into the tmux session. */}
+      <div className="mobile-term-input-row">
+        <MobileVoiceRecorderButton onTranscript={(t) => setCmd((c) => (c ? `${c} ${t}` : t))} />
+        <input
+          className="mobile-term-input"
+          value={cmd}
+          onChange={(e) => setCmd(e.target.value)}
+          placeholder="输入命令…（语音或打字,回车执行）"
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void sendCmd(); } }}
+          disabled={sending}
+        />
+        <button type="button" className="mobile-term-send" onClick={() => void sendCmd()} disabled={sending || !cmd.trim()}>
+          {sending ? '…' : '发送'}
+        </button>
+      </div>
     </div>
   );
 }
