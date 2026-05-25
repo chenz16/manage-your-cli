@@ -570,16 +570,18 @@ function AdoptSessionsDialog({ open, onClose, onAdopted }: { open: boolean; onCl
   if (!open) return null;
   const candidates = sessions.filter((s) => !s.is_holon); // de-dup: hide Holon's own sessions
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 540, maxHeight: '82vh', overflow: 'auto', background: '#fff', borderRadius: 14, padding: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <h2 style={{ margin: 0, fontSize: 17 }}>收编运行中的会话</h2>
-          <button type="button" className="btn" onClick={() => void load()} disabled={loading}>{loading ? '扫描中…' : '刷新'}</button>
+    <div className="bug-modal-backdrop" onClick={onClose}>
+      <div className="bug-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div className="bug-modal-header">
+          <h2 style={{ margin: 0, fontSize: 16 }}>收编 CLI 会话</h2>
+          <button type="button" className="bug-modal-close" onClick={onClose} aria-label="关闭">×</button>
         </div>
-        <p style={{ color: 'var(--ink-mute)', fontSize: 13, marginTop: 0 }}>把本机正在运行的 tmux CLI 会话收编为员工(非 tmux 会话不在列)。</p>
-        {error && <div style={{ color: '#bf3d32', fontSize: 13, margin: '6px 0' }}>{error}</div>}
+        <p style={{ fontSize: 12, color: 'var(--ink-mute)', marginTop: 0, lineHeight: 1.5 }}>
+          把本机正在运行的 tmux CLI 会话收编为员工(非 tmux 会话不在列)。
+        </p>
+        {error && <div style={{ fontSize: 12, color: 'var(--red, #c0392b)', marginBottom: 8 }}>{error}</div>}
         {!loading && candidates.length === 0 && (
-          <div style={{ color: 'var(--ink-mute)', padding: 20, textAlign: 'center' }}>没有可收编的 tmux 会话。</div>
+          <div style={{ color: 'var(--ink-mute)', padding: 20, textAlign: 'center', fontSize: 13 }}>没有可收编的 tmux 会话。</div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {candidates.map((s) => (
@@ -594,7 +596,8 @@ function AdoptSessionsDialog({ open, onClose, onAdopted }: { open: boolean; onCl
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 14, textAlign: 'right' }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn" onClick={() => void load()} disabled={loading}>{loading ? '扫描中…' : '刷新'}</button>
           <button type="button" className="btn" onClick={onClose}>关闭</button>
         </div>
       </div>
