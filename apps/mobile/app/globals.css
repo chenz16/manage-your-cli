@@ -1079,6 +1079,10 @@ button, input, textarea, select { font: inherit; }
   flex: 0 0 auto;
   display: flex; align-items: center;
   min-height: 44px; padding: 0 8px;
+  /* iOS notch/Dynamic-Island: this header replaces AppHeader on the chat tab,
+     so it must carry the top safe-area inset itself or the 小秘 title hides
+     under the status bar. */
+  padding-top: env(safe-area-inset-top, 0px);
   border-bottom: 1px solid #e3e3e3; background: #ededed;
 }
 .mobile-chat-header-back {
