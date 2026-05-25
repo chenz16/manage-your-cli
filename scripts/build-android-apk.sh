@@ -88,7 +88,14 @@ cd "$APP_DIR"
 # Clean out/ so a partial/stale build cannot mask a real failure (was the
 # 2026-05-18 silent-fallback bug in scripts/build-android.sh).
 rm -rf out
-NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN="$NEXT_PUBLIC_DESK_ORIGIN" pnpm exec next build 2>&1 | tail -8
+# Stamp the build so the 我 tab can show exactly which APK is installed (owner asked
+# to verify the right build is on the phone). SHA from git; date in local YYYY-MM-DD.
+BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BUILD_DATE="$(date +%Y-%m-%d)"
+log "stamping build: sha=$BUILD_SHA date=$BUILD_DATE"
+NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN="$NEXT_PUBLIC_DESK_ORIGIN" \
+  NEXT_PUBLIC_BUILD_SHA="$BUILD_SHA" NEXT_PUBLIC_BUILD_DATE="$BUILD_DATE" \
+  pnpm exec next build 2>&1 | tail -8
 [ -d out ] || fail "next build did not produce apps/mobile/out/ · static export config is broken (commonly: a dynamic [param] route is missing generateStaticParams)"
 
 # ---------- 2/6 · capacitor sync ----------

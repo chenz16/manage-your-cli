@@ -156,7 +156,10 @@ export async function listen(opts: ListenOptions = {}): Promise<string> {
       language: lang,
       maxResults: 1,
       prompt: '请说话…',
-      partialResults: wantPartial,
+      // 必须 false —— 文档明确:partialResults:true 时 start() 立即 resolve 且不带结果
+      // (结果只走 listener,直到 stop)。我们一收到早 resolve 就 settle 空 → 永远拿空。
+      // false ⇒ start() 在识别结束(松手 stop)时 resolve 最终 matches,直接拿到文字。
+      partialResults: false,
       popup: false,               // 保持紧凑按钮，不弹系统弹窗
     }).then((result) => {
       // popup:false 模式下 start() 可能 resolve 成 undefined,最终结果走 partialResults → 用 lastPartial 兜底

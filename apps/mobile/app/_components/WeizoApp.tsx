@@ -235,14 +235,21 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-function insertTranscriptIntoComposer(transcript: string): void {
+function insertTranscriptIntoComposer(transcript: string, autoSend = false): void {
   const ta = document.querySelector<HTMLTextAreaElement>('.mobile-chat-composer .chat-input');
   if (!ta) return;
   const next = ta.value ? `${ta.value} ${transcript}` : transcript;
   const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
   setter?.call(ta, next);
   ta.dispatchEvent(new Event('input', { bubbles: true }));
-  ta.focus();
+  if (autoSend) {
+    // 语音:识别完直接提交,owner 不用再按 ↑(那会把软键盘又弹出来)。延后一拍,
+    // 让 assistant-ui 的受控 state 先吃到上面的 input 事件,再 requestSubmit。
+    const form = ta.closest('form');
+    window.setTimeout(() => { form?.requestSubmit(); }, 0);
+  } else {
+    ta.focus();
+  }
 }
 
 // ─── Attachment helpers ───────────────────────────────────────────────────────
@@ -468,7 +475,7 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
 
   function deliverTranscript(text: string) {
     if (onTranscript) onTranscript(text);
-    else insertTranscriptIntoComposer(text);
+    else insertTranscriptIntoComposer(text, true); // 语音→直接发送,不弹键盘
   }
 
   // ── PRIMARY: native on-device STT ─────────────────────────────────────────
@@ -3600,7 +3607,15 @@ function MeTab({
       </button>
       <div className="mobile-me-section">
         <div className="mobile-me-label">应用版本</div>
-        <div className="mobile-me-value">微作 Weizo 0.1.0</div>
+        <div className="mobile-me-value">
+          微作 Weizo 0.1.0
+          {process.env.NEXT_PUBLIC_BUILD_SHA ? (
+            <span className="weizo-clilist-tokens" style={{ marginLeft: 6 }}>
+              {process.env.NEXT_PUBLIC_BUILD_SHA}
+              {process.env.NEXT_PUBLIC_BUILD_DATE ? ` · ${process.env.NEXT_PUBLIC_BUILD_DATE}` : ''}
+            </span>
+          ) : null}
+        </div>
       </div>
       <button type="button" className="mobile-feedback-button" onClick={() => setFeedbackOpen(true)}>
         <span>反馈 / 报错</span>
