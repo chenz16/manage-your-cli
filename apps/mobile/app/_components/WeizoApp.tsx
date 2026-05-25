@@ -3540,7 +3540,7 @@ function ScanConnectSection() {
 
   return (
     <div className="mobile-me-section">
-      <div className="mobile-me-label">扫码连接</div>
+      <div className="mobile-me-label">扫一扫</div>
       <div className="mobile-me-note" style={{ marginBottom: 8 }}>
         用摄像头扫另一个 AI Agent 的二维码，直接完成连接。
       </div>
