@@ -1991,7 +1991,7 @@ function StaffTerminal({ staffId }: { staffId: string }) {
   return (
     <div className="mobile-term-wrap">
       <div className="mobile-persona-editor-head">
-        <span className="mobile-config-dt">运行终端（实时）</span>
+        <span className="mobile-config-dt">对话终端（实时）</span>
         <button type="button" className="mobile-term-refresh" onClick={() => void load()} disabled={loading}>
           {loading ? '刷新中…' : '刷新'}
         </button>
@@ -2184,7 +2184,7 @@ function StaffProfile({
               config + the live terminal are two tabs here. */}
           <div className="mobile-staff-tabs">
             <button type="button" className={`mobile-staff-tab${detailTab === 'config' ? ' is-active' : ''}`} onClick={() => setDetailTab('config')}>配置</button>
-            <button type="button" className={`mobile-staff-tab${detailTab === 'terminal' ? ' is-active' : ''}`} onClick={() => setDetailTab('terminal')}>运行终端</button>
+            <button type="button" className={`mobile-staff-tab${detailTab === 'terminal' ? ' is-active' : ''}`} onClick={() => setDetailTab('terminal')}>对话终端</button>
           </div>
           {detailTab === 'terminal' ? (
             <StaffTerminal staffId={staff.id} />
