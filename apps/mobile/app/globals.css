@@ -1132,7 +1132,20 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-staff-toptab.is-active { color: var(--brand, #1f7a44); font-weight: 600; border-bottom-color: var(--brand, #1f7a44); }
 .mobile-staff-detail .mobile-staff-chat { flex: 1 1 auto; min-height: 0; }
-.mobile-staff-detail .mobile-staff-profile { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.mobile-staff-detail .mobile-staff-profile { flex: 1 1 auto; min-height: 0; }
+.mobile-staff-cfg-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* 打开时默认显示: 聊天 / 看后台 segmented toggle */
+.mobile-landing-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; background: #fff; border-bottom: 1px solid #eee;
+}
+.mobile-landing-seg { display: inline-flex; border: 1px solid #d8d4cc; border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
+.mobile-landing-opt {
+  border: 0; background: #fff; color: #555; font: inherit; font-size: 13px;
+  padding: 7px 12px; cursor: pointer;
+}
+.mobile-landing-opt + .mobile-landing-opt { border-left: 1px solid #d8d4cc; }
+.mobile-landing-opt.is-active { background: var(--brand, #1f7a44); color: #fff; }
 
 .mobile-staff-message-btn {
   width: 100%; min-height: 46px; margin: 4px 0 12px;

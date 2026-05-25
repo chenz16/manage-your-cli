@@ -2433,13 +2433,6 @@ function StaffProfile({
               </button>
             </div>
           </div>
-          {/* 看后台 — 放在配置最底部 (owner 2026-05-25). Secretary has no terminal. */}
-          {staff.role_name !== 'secretary' && (
-            <div className="mobile-staff-term-block">
-              <div className="mobile-me-label" style={{ marginTop: 14, marginBottom: 6 }}>看后台</div>
-              <StaffTerminal staffId={staff.id} />
-            </div>
-          )}
         </>
       )}
     </div>
@@ -4248,20 +4241,46 @@ function OwnerTodoStrip() {
   );
 }
 
-// ─── 员工详情 — 点进直接聊天;右上齿轮 ⚙ → 配置 (owner 2026-05-25) ────────────
-// WeChat-style: 1 tap = chat. Gear in the chat header opens config (attributes +
-// persona + 看后台 at the bottom). No top tab bar.
+// ─── 员工详情 — 点进默认落在 聊天 或 看后台(每员工可在配置里选);齿轮 ⚙ → 配置 ──
+// Owner 2026-05-25: one landing view per employee (chat OR terminal), chosen in
+// config. No top tab bar. Per-device preference in localStorage.
+const STAFF_LANDING_KEY = 'holon.mobile.staffLanding.v1';
+function getStaffLanding(id: string): 'chat' | 'terminal' {
+  if (typeof window === 'undefined') return 'chat';
+  try { return window.localStorage.getItem(`${STAFF_LANDING_KEY}.${id}`) === 'terminal' ? 'terminal' : 'chat'; }
+  catch { return 'chat'; }
+}
+function setStaffLanding(id: string, v: 'chat' | 'terminal'): void {
+  try { window.localStorage.setItem(`${STAFF_LANDING_KEY}.${id}`, v); } catch { /* noop */ }
+}
+
 function StaffDetail({ staff, onBack }: { staff: Staff; onBack: () => void }) {
-  const [mode, setMode] = useState<'chat' | 'config'>('chat'); // 点进默认聊天
+  const isSecretary = staff.role_name === 'secretary';
+  const [mode, setMode] = useState<'primary' | 'config'>('primary');
+  const [landing, setLanding] = useState<'chat' | 'terminal'>(() => (isSecretary ? 'chat' : getStaffLanding(staff.id)));
+
+  function pickLanding(v: 'chat' | 'terminal') { setLanding(v); setStaffLanding(staff.id, v); }
+
   if (mode === 'config') {
     return (
       <div className="mobile-staff-detail">
         <div className="mobile-chat-header">
-          <button type="button" className="mobile-chat-header-back" onClick={() => setMode('chat')} aria-label="返回聊天">‹</button>
+          <button type="button" className="mobile-chat-header-back" onClick={() => setMode('primary')} aria-label="返回">‹</button>
           <span className="mobile-chat-header-name">{staff.name} · 配置</span>
           <span className="mobile-chat-header-spacer" />
         </div>
-        <StaffProfile key={`cfg-${staff.id}`} staffId={staff.id} fallback={staff} embedded />
+        <div className="mobile-staff-cfg-scroll">
+          {!isSecretary && (
+            <div className="mobile-landing-toggle">
+              <span className="mobile-me-label" style={{ margin: 0 }}>打开时默认显示</span>
+              <div className="mobile-landing-seg">
+                <button type="button" className={`mobile-landing-opt${landing === 'chat' ? ' is-active' : ''}`} onClick={() => pickLanding('chat')}>💬 聊天</button>
+                <button type="button" className={`mobile-landing-opt${landing === 'terminal' ? ' is-active' : ''}`} onClick={() => pickLanding('terminal')}>🖥 看后台</button>
+              </div>
+            </div>
+          )}
+          <StaffProfile key={`cfg-${staff.id}`} staffId={staff.id} fallback={staff} embedded />
+        </div>
       </div>
     );
   }
@@ -4269,10 +4288,12 @@ function StaffDetail({ staff, onBack }: { staff: Staff; onBack: () => void }) {
     <div className="mobile-staff-detail">
       <div className="mobile-chat-header">
         <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回通讯录">‹</button>
-        <span className="mobile-chat-header-name">{staff.name}</span>
+        <span className="mobile-chat-header-name">{staff.name}{landing === 'terminal' ? ' · 后台' : ''}</span>
         <button type="button" className="mobile-chat-header-gear" onClick={() => setMode('config')} aria-label="配置">⚙</button>
       </div>
-      <StaffChat key={`chat-${staff.id}`} staff={staff} embedded />
+      {landing === 'terminal' && !isSecretary
+        ? <StaffTerminal staffId={staff.id} />
+        : <StaffChat key={`chat-${staff.id}`} staff={staff} embedded />}
     </div>
   );
 }
