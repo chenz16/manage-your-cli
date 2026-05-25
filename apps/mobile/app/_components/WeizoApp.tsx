@@ -2022,7 +2022,7 @@ function Contacts({
       {/* Pull-to-refresh indicator */}
       <div
         className="ptr-indicator"
-        style={{ height: refreshing ? 48 : pullY > 0 ? pullY : undefined, opacity: refreshing ? 1 : progress, overflow: 'hidden' }}
+        style={{ height: refreshing ? 48 : pullY > 0 ? pullY : 0, opacity: refreshing ? 1 : progress, overflow: 'hidden' }}
         aria-hidden={!refreshing && pullY === 0}
       >
         <div className={`ptr-spinner${refreshing ? ' ptr-spinner-spin' : ''}`}
@@ -3664,32 +3664,483 @@ function DelivSection() {
   );
 }
 
-function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
-  const [board, setBoard] = useState<'todo' | 'doing' | 'done'>('todo');
+// ─── KanbanBoard — Phase 1: unified single-scroll 4-section board ─────────────
+//
+// Sections (top→bottom, urgency-ordered):
+//   1. 老板要决定 — deliverables needing review (draft/final/revised) + stuck jobs
+//   2. 团队动态   — running/queued jobs with agent heartbeat
+//   3. 刚完成     — recently accepted deliverables (last 24h, up to 6)
+//   4. 待办积压   — pending todos (top 3 preview + see-all)
+//
+// Auto-refresh: 10s poll while tab visible; manual 刷新 button in header.
 
-  const BOARD_TABS: Array<{ key: 'todo' | 'doing' | 'done'; label: string }> = [
-    { key: 'todo', label: '待办' },
-    { key: 'doing', label: '进行中' },
-    { key: 'done', label: '交付' },
-  ];
+function KanbanSectionHeader({ label, count, extra }: { label: string; count?: number; extra?: string | undefined }) {
+  return (
+    <div className="kb-section-header">
+      <span className="kb-section-label">{label}</span>
+      {count !== undefined && <span className="kb-section-count">{count}</span>}
+      {extra && <span className="kb-section-extra">{extra}</span>}
+    </div>
+  );
+}
+
+function WorkTracker({ onTalkToSecretary }: { onTalkToSecretary: (text: string) => void }) {
+  // ── shared data ────────────────────────────────────────────────────────
+  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [staffNames, setStaffNames] = useState<Map<string, string>>(new Map());
+  const [latestOutput, setLatestOutput] = useState<Record<string, string>>({}); // staff_id → latest terminal line
+  const [liveStaffId, setLiveStaffId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  // deliverable detail/review overlay
+  const [openDelivId, setOpenDelivId] = useState<string | null>(null);
+  const [delivDetail, setDelivDetail] = useState<GetDeliverableResponse | null>(null);
+  const [delivDetailLoading, setDelivDetailLoading] = useState(false);
+  const [delivDetailError, setDelivDetailError] = useState('');
+  // todo add input (in section 4)
+  const [todoInput, setTodoInput] = useState('');
+  const [todoAdding, setTodoAdding] = useState(false);
+
+  // ── loaders ────────────────────────────────────────────────────────────
+  const loadAll = useCallback(async () => {
+    setError('');
+    try {
+      const [dRes, jRes, tRes, sRes] = await Promise.all([
+        holonApiFetch('/api/v1/deliverables', { cache: 'no-store' }),
+        holonApiFetch('/api/v1/jobs', { cache: 'no-store' }),
+        holonApiFetch('/api/v1/todos?status=pending', { cache: 'no-store' }),
+        holonApiFetch('/api/v1/staff', { cache: 'no-store' }),
+      ]);
+      const [dj, jj, tj, sj] = await Promise.all([
+        dRes.ok ? (dRes.json() as Promise<ListDeliverablesResponse>) : Promise.resolve({ items: [] }),
+        jRes.ok ? (jRes.json() as Promise<{ items?: JobRow[] }>) : Promise.resolve({ items: [] }),
+        tRes.ok ? (tRes.json() as Promise<ListTodosResponse>) : Promise.resolve({ items: [] }),
+        sRes.ok ? (sRes.json() as Promise<ListStaffResponse>) : Promise.resolve({ items: [] }),
+      ]);
+      setDeliverables(Array.isArray(dj.items) ? dj.items : []);
+      setJobs(Array.isArray(jj.items) ? jj.items : []);
+      const pending = Array.isArray(tj.items) ? tj.items.filter((t) => t.status === 'pending') : [];
+      pending.sort((a, b) => {
+        const pa = PRIORITY_ORDER[a.priority ?? 'medium'] ?? 1;
+        const pb = PRIORITY_ORDER[b.priority ?? 'medium'] ?? 1;
+        return pa - pb;
+      });
+      setTodos(pending);
+      const nm = new Map<string, string>();
+      for (const s of (Array.isArray(sj.items) ? sj.items : [])) {
+        if (s.name) nm.set(s.id, s.name);
+      }
+      setStaffNames(nm);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ── auto-refresh: 10s poll while visible ──────────────────────────────
+  useEffect(() => {
+    let h: ReturnType<typeof setInterval> | null = null;
+    const stop = () => { if (h !== null) { clearInterval(h); h = null; } };
+    const start = () => { if (h === null) h = setInterval(() => void loadAll(), 10000); };
+    const onVis = () => {
+      if (typeof document !== 'undefined' && document.hidden) { stop(); }
+      else { void loadAll(); start(); }
+    };
+    void loadAll();
+    if (typeof document === 'undefined' || !document.hidden) start();
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVis);
+    return () => { stop(); if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVis); };
+  }, [loadAll]);
+
+  // ── poll running jobs for latest terminal line ─────────────────────────
+  useEffect(() => {
+    const running = jobs.filter((j) => j.status === 'running' && j.staff_id);
+    if (running.length === 0) return;
+    let cancelled = false;
+    const pull = async () => {
+      const updates: Record<string, string> = {};
+      await Promise.all(running.map(async (j) => {
+        const sid = j.staff_id;
+        if (!sid) return;
+        try {
+          const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(sid)}/cli/output?lines=12`, { cache: 'no-store' });
+          if (!r.ok) return;
+          const x = await r.json() as { output?: string };
+          const line = (x.output ?? '').split('\n').map((s) => s.trim()).filter(Boolean).pop() ?? '';
+          if (line) updates[sid] = line.slice(0, 60);
+        } catch { /* keep last known */ }
+      }));
+      if (!cancelled && Object.keys(updates).length) setLatestOutput((p) => ({ ...p, ...updates }));
+    };
+    void pull();
+    const id = window.setInterval(() => void pull(), 5000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [jobs]);
+
+  // ── deliverable detail loader ─────────────────────────────────────────
+  useEffect(() => {
+    if (!openDelivId) { setDelivDetail(null); return; }
+    let cancelled = false;
+    setDelivDetailLoading(true);
+    setDelivDetailError('');
+    holonApiFetch(`/api/v1/deliverables/${encodeURIComponent(openDelivId)}`, { cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json() as GetDeliverableResponse;
+        if (!cancelled) setDelivDetail(j);
+      })
+      .catch((e) => { if (!cancelled) setDelivDetailError(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (!cancelled) setDelivDetailLoading(false); });
+    return () => { cancelled = true; };
+  }, [openDelivId]);
+
+  // ── deliverable review ────────────────────────────────────────────────
+  async function reviewDeliverable(id: string, status: 'accepted' | 'rejected') {
+    try {
+      const r = await holonApiFetch(`/api/v1/deliverables/${encodeURIComponent(id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json() as GetDeliverableResponse;
+      setDelivDetail(j);
+      setDeliverables((prev) => prev.map((d) => (d.id === id ? { ...d, status } : d)));
+    } catch (e) {
+      setDelivDetailError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // ── todo add ──────────────────────────────────────────────────────────
+  async function addTodo() {
+    const text = todoInput.trim();
+    if (!text || todoAdding) return;
+    setTodoAdding(true);
+    try {
+      const r = await holonApiFetch('/api/v1/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setTodoInput('');
+      await loadAll();
+    } catch { /* best-effort */ }
+    finally { setTodoAdding(false); }
+  }
+
+  // ── derived buckets ───────────────────────────────────────────────────
+  const needsReviewDeliv = deliverables.filter(
+    (d) => d.status === 'draft' || d.status === 'final' || d.status === 'revised',
+  );
+  const stuckJobs = jobs.filter((j) => {
+    if (j.status !== 'running') return false;
+    if (!j.created_at) return false;
+    const mins = (Date.now() - new Date(j.created_at).getTime()) / 60000;
+    return mins > 20;
+  });
+  const needsYouCount = needsReviewDeliv.length + stuckJobs.length;
+
+  const activeJobs = jobs.filter((j) => j.status === 'queued' || j.status === 'running');
+  const nonStuckActive = activeJobs.filter((j) => !stuckJobs.some((s) => s.id === j.id));
+
+  const cutoff24h = Date.now() - 86400 * 1000;
+  const recentDone = deliverables
+    .filter((d) => d.status === 'accepted' && d.created_at && new Date(d.created_at).getTime() > cutoff24h)
+    .slice(0, 6);
+
+  // ── deliverable detail view ────────────────────────────────────────────
+  if (openDelivId) {
+    const d = delivDetail?.deliverable;
+    const reviewable = d && (d.status === 'draft' || d.status === 'final' || d.status === 'revised');
+    return (
+      <div className="mobile-work" style={{ overflowY: 'auto' }}>
+        <button type="button" className="mobile-back-row" onClick={() => setOpenDelivId(null)}>‹ 看板</button>
+        {delivDetailLoading && !d && <div className="mobile-empty-panel">加载中…</div>}
+        {delivDetailError && <div className="mobile-error">加载失败：{delivDetailError}</div>}
+        {d && (
+          <article className="mobile-deliverable-detail">
+            <div className="mobile-detail-kicker">{STATUS_LABEL[d.status]} · {d.created_at?.slice(0, 10) ?? ''}</div>
+            <h2>{d.title}</h2>
+            <MarkdownView text={bodyText(d.body)} />
+          </article>
+        )}
+        {d && reviewable && (
+          <div className="mobile-deliv-review">
+            <button type="button" className="mobile-deliv-reject" onClick={() => void reviewDeliverable(d.id, 'rejected')}>
+              ✕ 拒绝
+            </button>
+            <button type="button" className="mobile-deliv-accept" onClick={() => void reviewDeliverable(d.id, 'accepted')}>
+              ✓ 接受
+            </button>
+          </div>
+        )}
+        {d && (d.status === 'accepted' || d.status === 'rejected') && (
+          <div className="mobile-deliv-reviewed">已{d.status === 'accepted' ? '接受' : '拒绝'} · 可下拉重看</div>
+        )}
+      </div>
+    );
+  }
+
+  function elapsedLabel(createdAt: string | undefined): string {
+    if (!createdAt) return '';
+    const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+    if (mins < 1) return '< 1分';
+    if (mins < 60) return `${mins}分`;
+    return `${Math.floor(mins / 60)}小时`;
+  }
 
   return (
-    <div className="mobile-work">
-      <div className="weizo-board-tabs">
-        {BOARD_TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`weizo-board-tab${board === t.key ? ' is-active' : ''}`}
-            onClick={() => setBoard(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
+    <div className="mobile-work" style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
+      {/* ── header ───────────────────────────────────────────────── */}
+      <div className="kb-header">
+        <span className="kb-header-title">看板</span>
+        <button
+          type="button"
+          className="kb-refresh-btn"
+          onClick={() => void loadAll()}
+          disabled={loading}
+          aria-label="刷新"
+        >
+          ↻
+        </button>
       </div>
-      {board === 'todo' && <TodoBacklog onTalkToSecretary={onTalkToSecretary} />}
-      {board === 'doing' && <ActiveJobs onTalkToSecretary={onTalkToSecretary} />}
-      {board === 'done' && <DelivSection />}
+
+      {error && <div className="mobile-error" style={{ margin: '8px 16px' }}>{error}</div>}
+      {loading && deliverables.length === 0 && jobs.length === 0 && todos.length === 0 && (
+        <div className="mobile-empty-panel">加载中…</div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────── */}
+      {/* Section 1: 老板要决定                                       */}
+      {/* ──────────────────────────────────────────────────────────── */}
+      <KanbanSectionHeader label="老板要决定" count={needsYouCount} />
+
+      {needsYouCount === 0 && (
+        <div className="kb-empty-row">暂无待决事项</div>
+      )}
+
+      {/* Deliverables needing review */}
+      {needsReviewDeliv.map((d) => {
+        const authorName = d.author_staff_id ? (staffNames.get(d.author_staff_id) ?? d.author_staff_id) : '—';
+        return (
+          <div key={d.id} className="kb-card kb-card-needs-you">
+            <div className="kb-card-accent kb-accent-orange" />
+            <div className="kb-card-body">
+              <div className="kb-card-row1">
+                <span className="kb-card-icon" aria-hidden="true">📄</span>
+                <span className="kb-card-title">{d.title}</span>
+                <span className="weizo-kanban-status-pill weizo-kanban-review-pending">待验收</span>
+              </div>
+              <div className="kb-card-row2">
+                <span className="kb-card-meta">👤 {authorName} · {d.created_at ? timeAgo(d.created_at) : '—'}</span>
+                <button
+                  type="button"
+                  className="kb-cta-btn"
+                  onClick={() => setOpenDelivId(d.id)}
+                >
+                  立即处理 →
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Stuck jobs */}
+      {stuckJobs.map((j) => {
+        const staffName = j.staff_id ? (staffNames.get(j.staff_id) ?? j.staff_id) : '—';
+        return (
+          <div key={j.id} className="kb-card kb-card-needs-you">
+            <div className="kb-card-accent kb-accent-red" />
+            <div className="kb-card-body">
+              <div className="kb-card-row1">
+                <span className="kb-card-icon" aria-hidden="true">⚠️</span>
+                <span className="kb-card-title">{j.brief ?? j.id}</span>
+                <span className="weizo-kanban-status-pill weizo-kanban-status-stuck">⚠卡住</span>
+              </div>
+              <div className="kb-card-row2">
+                <span className="kb-card-meta">👤 {staffName} · {elapsedLabel(j.created_at)}无响应</span>
+                <button
+                  type="button"
+                  className="kb-cta-btn"
+                  onClick={() => onTalkToSecretary(j.brief ?? j.id)}
+                >
+                  去对话 💬
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ──────────────────────────────────────────────────────────── */}
+      {/* Section 2: 团队动态                                         */}
+      {/* ──────────────────────────────────────────────────────────── */}
+      <KanbanSectionHeader
+        label="团队动态"
+        count={nonStuckActive.length}
+        {...(nonStuckActive.length > 0 ? { extra: '运行中' } : {})}
+      />
+
+      {nonStuckActive.length === 0 && (
+        <div className="kb-empty-row">暂无进行中的任务</div>
+      )}
+
+      {nonStuckActive.map((j) => {
+        const staffName = j.staff_id ? (staffNames.get(j.staff_id) ?? j.staff_id) : '未分配';
+        const initial = j.staff_id ? j.staff_id.charAt(0).toUpperCase() : '?';
+        const jobStatus: 'running' | 'queued' = j.status === 'running' ? 'running' : 'queued';
+        const elapsed = elapsedLabel(j.created_at);
+        const latestLine = j.staff_id ? latestOutput[j.staff_id] : undefined;
+        return (
+          <div key={j.id} className="kb-card kb-card-inflight">
+            <div className="kb-card-accent kb-accent-green" />
+            <div className="kb-card-body">
+              <div className="kb-card-row1">
+                <AssigneeAvatar initial={initial} />
+                <span className="kb-card-name">{staffName}</span>
+                <JobStatusPill status={jobStatus} />
+                {elapsed && <span className="weizo-kanban-elapsed">⏱ {elapsed}</span>}
+                <button
+                  type="button"
+                  className="kb-ghost-btn"
+                  disabled={!j.staff_id}
+                  onClick={() => j.staff_id && setLiveStaffId(j.staff_id)}
+                >
+                  实时
+                </button>
+              </div>
+              <div className="kb-card-latest">
+                &gt; {jobStatus === 'queued' ? '等待：排队中…' : (latestLine ?? '运行中…')}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ──────────────────────────────────────────────────────────── */}
+      {/* Section 3: 刚完成                                           */}
+      {/* ──────────────────────────────────────────────────────────── */}
+      <KanbanSectionHeader
+        label="刚完成"
+        count={recentDone.length}
+        {...(recentDone.length > 0 ? { extra: '今日' } : {})}
+      />
+
+      {recentDone.length === 0 && (
+        <div className="kb-empty-row">今日暂无完成交付</div>
+      )}
+
+      {recentDone.map((d) => {
+        const authorName = d.author_staff_id ? (staffNames.get(d.author_staff_id) ?? d.author_staff_id) : '—';
+        return (
+          <div key={d.id} className="kb-compact-row">
+            <span className="kb-done-check" aria-hidden="true">✓</span>
+            <span className="kb-compact-title">{d.title}</span>
+            <span className="kb-compact-meta"> · {authorName} · {d.created_at ? timeAgo(d.created_at) : '—'}</span>
+            <button
+              type="button"
+              className="kb-look-btn"
+              onClick={() => setOpenDelivId(d.id)}
+            >
+              看
+            </button>
+          </div>
+        );
+      })}
+
+      {/* ──────────────────────────────────────────────────────────── */}
+      {/* Section 4: 待办积压                                         */}
+      {/* ──────────────────────────────────────────────────────────── */}
+      <KanbanSectionHeader label="待办积压" count={todos.length} />
+
+      {/* Quick-add input */}
+      <div className="weizo-todo-compose" style={{ margin: '0 0 4px 0' }}>
+        <input
+          className="weizo-todo-input"
+          value={todoInput}
+          onChange={(ev) => setTodoInput(ev.target.value)}
+          onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); void addTodo(); } }}
+          placeholder="＋ 新增待办…"
+          disabled={todoAdding}
+        />
+        <button
+          type="button"
+          className="weizo-todo-add"
+          onClick={() => void addTodo()}
+          disabled={todoAdding || !todoInput.trim()}
+        >
+          {todoAdding ? '…' : '加'}
+        </button>
+      </div>
+
+      {todos.length === 0 && (
+        <div className="kb-empty-row">暂无待办积压</div>
+      )}
+
+      {todos.slice(0, 3).map((t) => {
+        const priority = t.priority ?? 'medium';
+        return (
+          <div key={t.id} className="kb-compact-row kb-todo-row">
+            <button
+              type="button"
+              className="weizo-priority-tag"
+              style={{ background: PRIORITY_COLOR[priority], marginRight: 6, flexShrink: 0 }}
+              title={`优先级：${PRIORITY_LABEL[priority]}`}
+              aria-label={`优先级 ${PRIORITY_LABEL[priority]}`}
+              onClick={() => {/* priority cycling not in compact view */}}
+            >
+              {PRIORITY_LABEL[priority]}
+            </button>
+            <span className="kb-compact-title" style={{ color: PRIORITY_TEXT_COLOR[priority] }}>{t.text}</span>
+            {t.due_date && (
+              <span className="weizo-todo-due" style={isOverdue(t.due_date) ? { color: '#e0533a', marginLeft: 4 } : { marginLeft: 4 }}>
+                📅 {shortDate(t.due_date)}
+              </span>
+            )}
+            <button
+              type="button"
+              className="kb-delegate-btn"
+              onClick={() => onTalkToSecretary(t.text)}
+              title="派给小秘"
+              aria-label="派活"
+            >
+              派活 💬
+            </button>
+          </div>
+        );
+      })}
+
+      {todos.length > 3 && (
+        <div className="kb-see-all-row">
+          <button
+            type="button"
+            className="kb-see-all-btn"
+            onClick={() => onTalkToSecretary(`查看全部 ${todos.length} 条待办`)}
+          >
+            查看全部 {todos.length} 条 →
+          </button>
+        </div>
+      )}
+
+      {/* ── terminal overlay ──────────────────────────────────────── */}
+      {liveStaffId && (
+        <div className="mobile-live-overlay" role="dialog" aria-modal="true">
+          <div className="mobile-live-sheet">
+            <div className="mobile-live-head">
+              <span>实时终端</span>
+              <button type="button" className="mobile-live-close" onClick={() => setLiveStaffId(null)}>关闭</button>
+            </div>
+            <StaffTerminal staffId={liveStaffId} />
+          </div>
+        </div>
+      )}
+
+      {/* bottom padding */}
+      <div style={{ height: 32 }} />
     </div>
   );
 }
@@ -5151,15 +5602,11 @@ function MeTab({
         <span className="mobile-collapse-chevron">›</span>
       </button>
       <div className="mobile-me-section">
-        <div className="mobile-me-label">应用版本</div>
-        <div className="mobile-me-value">
+        <div className="mobile-me-value" style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '4px 0' }}>
           微作 Weizo 0.1.0
-          {process.env.NEXT_PUBLIC_BUILD_SHA ? (
-            <span className="weizo-clilist-tokens" style={{ marginLeft: 6 }}>
-              {process.env.NEXT_PUBLIC_BUILD_SHA}
-              {process.env.NEXT_PUBLIC_BUILD_DATE ? ` · ${process.env.NEXT_PUBLIC_BUILD_DATE}` : ''}
-            </span>
-          ) : null}
+          {process.env.NEXT_PUBLIC_BUILD_SHA
+            ? ` · ${process.env.NEXT_PUBLIC_BUILD_SHA}${process.env.NEXT_PUBLIC_BUILD_DATE ? ` · ${process.env.NEXT_PUBLIC_BUILD_DATE}` : ''}`
+            : ''}
         </div>
       </div>
       <button type="button" className="mobile-feedback-button" onClick={() => setFeedbackOpen(true)}>
