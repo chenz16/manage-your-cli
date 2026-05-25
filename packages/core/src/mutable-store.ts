@@ -316,6 +316,16 @@ export function deleteMutableDeliverable(id: string): boolean {
   return S.deliverables.delete(id);
 }
 
+/** Update a deliverable's review status (accept/reject/etc.). Returns the updated
+ *  row, or null if the id isn't in the mutable store (fixture rows are read-only). */
+export function setMutableDeliverableStatus(id: string, status: Deliverable['status']): Deliverable | null {
+  const d = S.deliverables.get(id);
+  if (!d) return null;
+  const updated: Deliverable = { ...d, status };
+  S.deliverables.set(id, updated);
+  return updated;
+}
+
 /* ── Owner-assistant field overrides (for /me inline edit) ────────── */
 
 export function getOwnerOverrides(): OwnerAssistantPatch {

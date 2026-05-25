@@ -181,6 +181,7 @@ export {
   listDeliverables,
   getDeliverable,
   deleteDeliverable,
+  setDeliverableStatus,
   type ListDeliverablesQueryInput,
 } from './deliverables-service.js';
 
