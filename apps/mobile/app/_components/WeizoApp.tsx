@@ -3604,9 +3604,8 @@ function ScanConnectSection() {
 
 // ─── 集成列表 ─────────────────────────────────────────────────────────────────
 
-function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
+function IntegrationsSection({ meData, onRefresh }: {
   meData: MeOwnerData | null;
-  deskBaseUrl: string;
   onRefresh: () => void;
 }) {
   const [modal, setModal] = useState<IntegrationModal | null>(null);
@@ -3724,11 +3723,7 @@ function IntegrationsSection({ meData, deskBaseUrl, onRefresh }: {
 
   return (
     <>
-      {/* ── Agent Card QR ── */}
-      <AgentCardSection deskBaseUrl={deskBaseUrl} />
-
-      {/* ── 微信扫码找小秘 ── */}
-      <WechatQrSection />
+      {/* Agent Card + WeChat QR moved into the profile's 扫码连接 sheet. */}
 
       {/* ── 扫一扫 / 扫码连接 ── */}
       <ScanConnectSection />
@@ -4028,6 +4023,7 @@ function MeTab({
   const [savingLang, setSavingLang] = useState(false);
   const [cliUsage, setCliUsage] = useState<CliUsageResponse | null>(null);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [qrSheetOpen, setQrSheetOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -4135,12 +4131,19 @@ function MeTab({
         <span className="mobile-avatar mobile-avatar-owner">我</span>
         <span className="mobile-row-main">
           <span className="mobile-row-title">我</span>
-          {/* Desk IP folded into the status line; turns red on connection error. */}
-          <span className={`mobile-row-sub${error ? ' mobile-me-conn-error' : ''}`}>
-            {error ? '桌面连接异常 · ' : '桌面已连接 · '}
-            {connection.baseUrl.replace(/^https?:\/\//, '')}
+          {/* Simple status — online when reachable, else error. No IP. */}
+          <span className={`mobile-me-status${error ? ' mobile-me-conn-error' : ''}`}>
+            <span className="mobile-me-status-dot" aria-hidden="true" />
+            {error ? '连接异常' : '在线'}
           </span>
         </span>
+        {/* WeChat-style QR entry on the profile — opens the two connect QRs. */}
+        <button type="button" className="mobile-me-qr-btn" onClick={() => setQrSheetOpen(true)} aria-label="二维码">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v7h-7" />
+          </svg>
+        </button>
       </div>
       <div className="mobile-me-section">
         <div className="mobile-me-label">我的人设</div>
@@ -4182,7 +4185,7 @@ function MeTab({
         </div>
         <div className="mobile-me-note">小秘回复语言（默认中文）</div>
       </div>
-      <IntegrationsSection meData={meData} deskBaseUrl={connection.baseUrl} onRefresh={() => void load()} />
+      <IntegrationsSection meData={meData} onRefresh={() => void load()} />
       <button type="button" className="mobile-feedback-button" onClick={() => setUsageOpen(true)}>
         <span>Token 用量</span>
         {todaySummary && <span className="weizo-clilist-tokens" style={{ marginRight: 4 }}>{todaySummary}</span>}
@@ -4207,6 +4210,20 @@ function MeTab({
       <button type="button" className="mobile-disconnect-button" onClick={onDisconnect}>
         断开 / 重新配对
       </button>
+
+      {/* QR access point — all scan-to-connect codes live here (WeChat + A2A). */}
+      {qrSheetOpen && (
+        <div className="bug-modal-backdrop" onClick={() => setQrSheetOpen(false)}>
+          <div className="bug-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="bug-modal-header">
+              <h2 style={{ margin: 0, fontSize: 16 }}>扫码连接</h2>
+              <button type="button" className="bug-modal-close" onClick={() => setQrSheetOpen(false)} aria-label="关闭">×</button>
+            </div>
+            <AgentCardSection deskBaseUrl={connection.baseUrl} />
+            <WechatQrSection />
+          </div>
+        </div>
+      )}
 
       {personaSheetOpen && (
         <div

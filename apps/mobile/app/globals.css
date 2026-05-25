@@ -2185,7 +2185,14 @@ button, input, textarea, select { font: inherit; }
   background: #f5f3ee; color: #8a8a8a; font-size: 13px;
 }
 
+/* Profile status: ● 在线 / 连接异常 (no IP) + QR access button */
+.mobile-me-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #1f7a44; }
+.mobile-me-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .mobile-me-conn-error { color: #bf3d32 !important; font-weight: 600; }
+.mobile-me-qr-btn {
+  flex: 0 0 auto; border: 0; background: transparent; color: #4a4a4a; padding: 6px;
+  border-radius: 8px;
+}
 
 /* WeChat-style QR viewfinder: corner brackets + sweeping scan line */
 .mobile-qr-frame {
