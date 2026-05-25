@@ -11,8 +11,8 @@ const PATCHABLE: Array<keyof StaffPatch> = [
   'max_concurrent_jobs', 'avatar_data',
   // Legacy local-AI staff config fields kept for persisted records.
   'denied_skills', 'monthly_budget_millicents', 'proxy_staff_id',
-  // AI-agent config: TTS voice/style + reply language.
-  'tts_voice', 'tts_style', 'reply_language',
+  // AI-agent config: TTS voice/style/rate + reply language.
+  'tts_voice', 'tts_style', 'reply_language', 'tts_rate',
 ];
 
 export async function GET(_req: Request, ctx: Context): Promise<NextResponse> {
@@ -111,6 +111,12 @@ export async function PATCH(req: Request, ctx: Context): Promise<NextResponse> {
     const v = raw['reply_language'];
     if (v !== 'auto' && v !== 'zh-CN' && v !== 'en') {
       return NextResponse.json({ error: "reply_language must be 'auto', 'zh-CN', or 'en'", code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tts_rate' in raw) {
+    const v = raw['tts_rate'];
+    if (v !== 'inherit' && v !== 'slow' && v !== 'normal' && v !== 'fast') {
+      return NextResponse.json({ error: "tts_rate must be 'inherit', 'slow', 'normal', or 'fast'", code: 'invalid_field' }, { status: 400 });
     }
   }
   // --- End field validation ---

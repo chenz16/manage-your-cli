@@ -257,5 +257,10 @@ export const Staff = z.object({
   /** Language the staff should reply in.
    *  'auto' = follow the conversation language (default when absent). */
   reply_language: z.enum(['auto', 'zh-CN', 'en']).optional(),
+
+  /** TTS speech rate.
+   *  'inherit' = follow secretary's setting (employees only; secretary uses slow/normal/fast).
+   *  Absent = default (treated as inherit for employees, normal for secretary). */
+  tts_rate: z.enum(['inherit', 'slow', 'normal', 'fast']).optional(),
 });
 export type Staff = z.infer<typeof Staff>;

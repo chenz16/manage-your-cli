@@ -2258,12 +2258,15 @@ function StaffProfile({
   onMessage,
   onBack,
   embedded,
+  beforeRows,
 }: {
   staffId: string;
   fallback?: Staff;
   onMessage?: (staff: Staff) => void;
   onBack?: () => void;
   embedded?: boolean;
+  /** Optional node inserted between the hero and the row list (embedded mode only). */
+  beforeRows?: ReactNode;
 }) {
   const [staff, setStaff] = useState<Staff | null>(fallback ?? null);
   const [loading, setLoading] = useState(true);
@@ -2392,15 +2395,16 @@ function StaffProfile({
   }, [staffId]);
 
   // Row-list expand state (embedded mode only)
-  const [openRow, setOpenRow] = useState<'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'replyLang' | null>(null);
+  const [openRow, setOpenRow] = useState<'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'ttsRate' | 'replyLang' | null>(null);
 
-  function toggleRow(row: 'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'replyLang') {
+  function toggleRow(row: 'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'ttsRate' | 'replyLang') {
     setOpenRow((prev) => (prev === row ? null : row));
   }
 
   // TTS + reply language drafts (per-staff AI-agent config)
   const [ttsVoiceDraft, setTtsVoiceDraft] = useState('');
   const [ttsStyleDraft, setTtsStyleDraft] = useState('');
+  const [ttsRateDraft, setTtsRateDraft] = useState<'inherit' | 'slow' | 'normal' | 'fast'>('inherit');
   const [replyLangDraft, setReplyLangDraft] = useState<'auto' | 'zh-CN' | 'en'>('auto');
   const [savingAiCfg, setSavingAiCfg] = useState(false);
   const [aiCfgMsg, setAiCfgMsg] = useState('');
@@ -2408,6 +2412,7 @@ function StaffProfile({
   useEffect(() => {
     setTtsVoiceDraft(staff?.tts_voice ?? '');
     setTtsStyleDraft(staff?.tts_style ?? '');
+    setTtsRateDraft(staff?.tts_rate ?? 'inherit');
     setReplyLangDraft(staff?.reply_language ?? 'auto');
   }, [staff]);
 
@@ -2441,6 +2446,13 @@ function StaffProfile({
     { label: '热情', value: 'cheerful' },
     { label: '专业', value: 'serious' },
   ];
+  const isSecretaryProfile = staff?.role_name === 'secretary';
+  const TTS_RATE_OPTIONS: Array<{ label: string; value: 'inherit' | 'slow' | 'normal' | 'fast' }> = [
+    ...(isSecretaryProfile ? [] : [{ label: '跟随小秘', value: 'inherit' as const }]),
+    { label: '慢', value: 'slow' as const },
+    { label: '正常', value: 'normal' as const },
+    { label: '快', value: 'fast' as const },
+  ];
   const REPLY_LANG_OPTIONS: Array<{ label: string; value: 'auto' | 'zh-CN' | 'en' }> = [
     { label: '跟随', value: 'auto' },
     { label: '中文', value: 'zh-CN' },
@@ -2449,6 +2461,7 @@ function StaffProfile({
 
   const ttsVoiceLabel = TTS_VOICE_OPTIONS.find((o) => o.value === (staff?.tts_voice ?? ''))?.label ?? '默认';
   const ttsStyleLabel = TTS_STYLE_OPTIONS.find((o) => o.value === (staff?.tts_style ?? ''))?.label ?? '默认';
+  const ttsRateLabel = TTS_RATE_OPTIONS.find((o) => o.value === (staff?.tts_rate ?? (isSecretaryProfile ? 'normal' : 'inherit')))?.label ?? (isSecretaryProfile ? '正常' : '跟随小秘');
   const replyLangLabel = REPLY_LANG_OPTIONS.find((o) => o.value === (staff?.reply_language ?? 'auto'))?.label ?? '跟随';
 
   if (embedded && staff) {
@@ -2473,6 +2486,9 @@ function StaffProfile({
           )}
         </div>
 
+        {/* Slot between hero and rows (e.g. landing toggle in config mode) */}
+        {beforeRows}
+
         {/* Row list — WeChat 我-tab style */}
         <div className="mobile-me-section" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
@@ -2496,9 +2512,9 @@ function StaffProfile({
             </div>
           )}
 
-          {/* 角色标签 row */}
+          {/* 角色 row */}
           <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('roleLabel')}>
-            <span className="mobile-me-row-title">角色标签</span>
+            <span className="mobile-me-row-title">角色</span>
             <span className="mobile-collapse-summary">{staff.role_label || '—'}</span>
             <span className={`mobile-collapse-chevron${openRow === 'roleLabel' ? ' open' : ''}`}>›</span>
           </button>
@@ -2506,26 +2522,6 @@ function StaffProfile({
             <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
               <input id="staff-rolelabel-emb" className="mobile-staff-field" value={roleLabelDraft}
                 onChange={(e) => setRoleLabelDraft(e.target.value)} disabled={savingProps} />
-              <div className="mobile-persona-editor-actions">
-                {propsMsg && <span className="mobile-persona-editor-msg">{propsMsg}</span>}
-                <button type="button" className="mobile-persona-save-btn"
-                  onClick={() => { void saveProps().then(() => setOpenRow(null)); }} disabled={savingProps || !propsDirty}>
-                  {savingProps ? '保存中…' : '保存'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 角色名 row */}
-          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('roleName')}>
-            <span className="mobile-me-row-title">角色名</span>
-            <span className="mobile-collapse-summary">{staff.role_name || '—'}</span>
-            <span className={`mobile-collapse-chevron${openRow === 'roleName' ? ' open' : ''}`}>›</span>
-          </button>
-          {openRow === 'roleName' && (
-            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
-              <input id="staff-rolename-emb" className="mobile-staff-field" value={roleNameDraft}
-                onChange={(e) => setRoleNameDraft(e.target.value)} disabled={savingProps} />
               <div className="mobile-persona-editor-actions">
                 {propsMsg && <span className="mobile-persona-editor-msg">{propsMsg}</span>}
                 <button type="button" className="mobile-persona-save-btn"
@@ -2557,9 +2553,9 @@ function StaffProfile({
             </div>
           )}
 
-          {/* 人设 row */}
+          {/* 职责 row */}
           <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('persona')}>
-            <span className="mobile-me-row-title">人设（系统指令）</span>
+            <span className="mobile-me-row-title">职责</span>
             <span className="mobile-collapse-summary" style={{ maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {staff.system_prompt?.trim() ? staff.system_prompt.trim().slice(0, 30) + (staff.system_prompt.trim().length > 30 ? '…' : '') : '未设置'}
             </span>
@@ -2649,6 +2645,35 @@ function StaffProfile({
                 <button type="button" className="mobile-persona-save-btn"
                   onClick={() => { void saveAiCfgField({ tts_style: ttsStyleDraft }).then(() => setOpenRow(null)); }}
                   disabled={savingAiCfg || ttsStyleDraft === (staff?.tts_style ?? '')}>
+                  {savingAiCfg ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 朗读语速 row */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('ttsRate')}>
+            <span className="mobile-me-row-title">朗读语速</span>
+            <span className="mobile-collapse-summary">{ttsRateLabel}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'ttsRate' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'ttsRate' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              <select
+                className="mobile-staff-field"
+                value={ttsRateDraft}
+                onChange={(e) => setTtsRateDraft(e.target.value as 'inherit' | 'slow' | 'normal' | 'fast')}
+                disabled={savingAiCfg}
+              >
+                {TTS_RATE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <div className="mobile-persona-editor-actions">
+                <button type="button" className="mobile-persona-save-btn"
+                  onClick={() => { void saveAiCfgField({ tts_rate: ttsRateDraft }).then(() => setOpenRow(null)); }}
+                  disabled={savingAiCfg || ttsRateDraft === (staff?.tts_rate ?? (isSecretaryProfile ? 'normal' : 'inherit'))}>
                   {savingAiCfg ? '保存中…' : '保存'}
                 </button>
               </div>
@@ -3892,9 +3917,8 @@ function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary:
 
   return (
     <div className="mobile-work" style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
-      {/* ── header ───────────────────────────────────────────────── */}
+      {/* ── header — title is rendered by AppHeader above; only the refresh button lives here */}
       <div className="kb-header">
-        <span className="kb-header-title">看板</span>
         <button
           type="button"
           className="kb-refresh-btn"
@@ -3965,7 +3989,41 @@ function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary:
       })}
 
       {/* ──────────────────────────────────────────────────────────── */}
-      {/* Section 3: 刚完成                                           */}
+      {/* Section 3: 待验收 — deliverables awaiting review            */}
+      {/* ──────────────────────────────────────────────────────────── */}
+      {(() => {
+        const pendingReview = deliverables.filter(
+          (d) => d.status === 'draft' || d.status === 'final' || d.status === 'revised'
+        );
+        return (
+          <>
+            <KanbanSectionHeader label="待验收" count={pendingReview.length} />
+            {pendingReview.length === 0 && (
+              <div className="kb-empty-row">暂无待验收交付</div>
+            )}
+            {pendingReview.map((d) => {
+              const authorName = d.author_staff_id ? (staffNames.get(d.author_staff_id) ?? d.author_staff_id) : '—';
+              return (
+                <div key={d.id} className="kb-compact-row">
+                  <span className="kb-done-check" aria-hidden="true">📄</span>
+                  <span className="kb-compact-title">{d.title}</span>
+                  <span className="kb-compact-meta"> · {authorName} · {d.created_at ? timeAgo(d.created_at) : '—'}</span>
+                  <button
+                    type="button"
+                    className="kb-look-btn"
+                    onClick={() => setOpenDelivId(d.id)}
+                  >
+                    验收
+                  </button>
+                </div>
+              );
+            })}
+          </>
+        );
+      })()}
+
+      {/* ──────────────────────────────────────────────────────────── */}
+      {/* Section 4: 刚完成                                           */}
       {/* ──────────────────────────────────────────────────────────── */}
       <KanbanSectionHeader
         label="刚完成"
@@ -3996,9 +4054,9 @@ function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary:
       })}
 
       {/* ──────────────────────────────────────────────────────────── */}
-      {/* Section 4: 待办积压                                         */}
+      {/* Section 5: 待派                                             */}
       {/* ──────────────────────────────────────────────────────────── */}
-      <KanbanSectionHeader label="待办积压" count={todos.length} />
+      <KanbanSectionHeader label="待派" count={todos.length} />
 
       {/* Quick-add input */}
       <div className="weizo-todo-compose" style={{ margin: '0 0 4px 0' }}>
@@ -4021,7 +4079,7 @@ function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary:
       </div>
 
       {todos.length === 0 && (
-        <div className="kb-empty-row">暂无待办积压</div>
+        <div className="kb-empty-row">暂无待派任务</div>
       )}
 
       {todos.slice(0, 3).map((t) => {
@@ -5008,11 +5066,11 @@ function OwnerChatSearch() {
   );
 }
 
-// ─── 需要老板处理 strip — 小秘判断: 老板需要处理的所有事项 (chat + work-blockers) ──
+// ─── 请示 strip — real-time interrupts requiring the boss's instruction/decision ──
 // Union of:
 //   (a) chat-derived action items from /api/v1/chat/owner-actions
-//   (b) deliverables awaiting review (draft/final/revised) → secretary surfaces "待验收"
-//   (c) stuck jobs (running > 20min) → secretary surfaces "卡住"
+//   (b) stuck jobs (running > 20min) → secretary surfaces "卡住"
+// (待验收 deliverables moved to 看板)
 // Collapsed by default; auto-collapse on composer touch.
 const OWNER_ACTIONS_CACHE = 'holon.mobile.ownerActions.v1';
 
@@ -5026,17 +5084,15 @@ function readCachedActions(): string[] {
 }
 
 interface BlockerItem {
-  kind: 'deliv' | 'job';
+  kind: 'job';
   id: string;
   label: string;
   staffId?: string | undefined;
 }
 
 function OwnerTodoStrip({
-  onOpenBoard,
   onOpenStaff,
 }: {
-  onOpenBoard: (delivId?: string) => void;
   onOpenStaff: (staffId: string) => void;
 }) {
   const [chatItems, setChatItems] = useState<string[]>(() => readCachedActions());
@@ -5056,18 +5112,16 @@ function OwnerTodoStrip({
       .catch(() => undefined);
   }, []);
 
-  // (b)+(c) work-blocker detection: deliverables awaiting review + stuck jobs
+  // (b) stuck jobs (running > 20min) — real-time interrupt for the boss
   useEffect(() => {
     let cancelled = false;
     async function fetchBlockers() {
       try {
-        const [dRes, jRes, sRes] = await Promise.all([
-          holonApiFetch('/api/v1/deliverables', { cache: 'no-store' }),
+        const [jRes, sRes] = await Promise.all([
           holonApiFetch('/api/v1/jobs', { cache: 'no-store' }),
           holonApiFetch('/api/v1/staff', { cache: 'no-store' }),
         ]);
-        const [dj, jj, sj] = await Promise.all([
-          dRes.ok ? (dRes.json() as Promise<ListDeliverablesResponse>) : Promise.resolve({ items: [] }),
+        const [jj, sj] = await Promise.all([
           jRes.ok ? (jRes.json() as Promise<{ items?: JobRow[] }>) : Promise.resolve({ items: [] }),
           sRes.ok ? (sRes.json() as Promise<ListStaffResponse>) : Promise.resolve({ items: [] }),
         ]);
@@ -5079,14 +5133,6 @@ function OwnerTodoStrip({
         }
 
         const list: BlockerItem[] = [];
-
-        // deliverables awaiting review
-        const reviewDeliv = Array.isArray(dj.items)
-          ? dj.items.filter((d) => d.status === 'draft' || d.status === 'final' || d.status === 'revised')
-          : [];
-        for (const d of reviewDeliv) {
-          list.push({ kind: 'deliv', id: d.id, label: `📄 ${d.title} 待验收`, staffId: d.author_staff_id ?? undefined });
-        }
 
         // stuck jobs (running > 20min)
         const allJobs = Array.isArray(jj.items) ? jj.items : [];
@@ -5123,7 +5169,7 @@ function OwnerTodoStrip({
   return (
     <div className="mobile-todo-strip">
       <button type="button" className="mobile-todo-strip-head" onClick={() => setCollapsed((v) => !v)}>
-        <span className="mobile-todo-strip-title">需要老板处理 · {totalCount}</span>
+        <span className="mobile-todo-strip-title">请示 · {totalCount}</span>
         <span className="mobile-todo-strip-more">{collapsed ? '展开 ›' : '收起 ⌄'}</span>
       </button>
       {!collapsed && (
@@ -5135,12 +5181,8 @@ function OwnerTodoStrip({
               type="button"
               className="mobile-todo-line mobile-todo-line-tappable"
               onClick={() => {
-                if (b.kind === 'deliv') {
-                  onOpenBoard(b.id);
-                } else if (b.staffId) {
+                if (b.staffId) {
                   onOpenStaff(b.staffId);
-                } else {
-                  onOpenBoard();
                 }
               }}
             >
@@ -5187,20 +5229,24 @@ function StaffDetail({ staff, onBack, initialMode }: { staff: Staff; onBack: () 
       <div className="mobile-staff-detail">
         <div className="mobile-chat-header">
           <button type="button" className="mobile-chat-header-back" onClick={() => setMode('primary')} aria-label="返回">‹</button>
-          <span className="mobile-chat-header-name">{staff.name} · 配置</span>
           <span className="mobile-chat-header-spacer" />
         </div>
         <div className="mobile-staff-cfg-scroll">
-          {!isSecretary && (
-            <div className="mobile-landing-toggle">
-              <span className="mobile-me-label" style={{ margin: 0 }}>打开时默认显示</span>
-              <div className="mobile-landing-seg">
-                <button type="button" className={`mobile-landing-opt${landing === 'chat' ? ' is-active' : ''}`} onClick={() => pickLanding('chat')}>💬 聊天</button>
-                <button type="button" className={`mobile-landing-opt${landing === 'terminal' ? ' is-active' : ''}`} onClick={() => pickLanding('terminal')}>🖥 看后台</button>
+          <StaffProfile
+            key={`cfg-${staff.id}`}
+            staffId={staff.id}
+            fallback={staff}
+            embedded
+            beforeRows={!isSecretary ? (
+              <div className="mobile-landing-toggle">
+                <span className="mobile-me-label" style={{ margin: 0 }}>打开时默认显示</span>
+                <div className="mobile-landing-seg">
+                  <button type="button" className={`mobile-landing-opt${landing === 'chat' ? ' is-active' : ''}`} onClick={() => pickLanding('chat')}>前台（聊天）</button>
+                  <button type="button" className={`mobile-landing-opt${landing === 'terminal' ? ' is-active' : ''}`} onClick={() => pickLanding('terminal')}>后台（终端）</button>
+                </div>
               </div>
-            </div>
-          )}
-          <StaffProfile key={`cfg-${staff.id}`} staffId={staff.id} fallback={staff} embedded />
+            ) : undefined}
+          />
         </div>
       </div>
     );
@@ -6454,10 +6500,6 @@ export function WeizoApp() {
               </span>
             </div>
             <OwnerTodoStrip
-              onOpenBoard={(delivId) => {
-                setPendingDelivId(delivId ?? null);
-                setTab('work');
-              }}
               onOpenStaff={(staffId) => {
                 const found = staff.find((s) => s.id === staffId);
                 if (found) {
