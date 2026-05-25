@@ -4197,6 +4197,43 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
+// ─── 老板待办 strip — 挂在小秘聊天页顶部, top 3, 点→看板 (owner 2026-05-25) ─────
+function OwnerTodoStrip({ onOpenBoard }: { onOpenBoard: () => void }) {
+  const [todos, setTodos] = useState<Todo[]>([]);
+  useEffect(() => {
+    holonApiFetch('/api/v1/todos', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() as Promise<ListTodosResponse> : Promise.resolve(null)))
+      .then((d) => { if (d && Array.isArray(d.items)) setTodos(d.items); })
+      .catch(() => undefined);
+  }, []);
+
+  const top = useMemo(() => {
+    const doneRank = (t: Todo) => (t.status === 'done' ? 1 : 0); // 未完成在前
+    const prioRank = (p: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : 2);
+    return [...todos]
+      .sort((a, b) => doneRank(a) - doneRank(b) || prioRank(a.priority) - prioRank(b.priority) || b.created_at.localeCompare(a.created_at))
+      .slice(0, 3);
+  }, [todos]);
+
+  if (top.length === 0) return null;
+  const pending = todos.filter((t) => t.status !== 'done').length;
+
+  return (
+    <div className="mobile-todo-strip">
+      <button type="button" className="mobile-todo-strip-head" onClick={onOpenBoard}>
+        <span className="mobile-todo-strip-title">老板待办 · {pending}</span>
+        <span className="mobile-todo-strip-more">看板 ›</span>
+      </button>
+      {top.map((t) => (
+        <div key={t.id} className={`mobile-todo-line${t.status === 'done' ? ' is-done' : ''}`}>
+          <span className="mobile-todo-mark">{t.status === 'done' ? '✓' : '○'}</span>
+          <span className="mobile-todo-text">{t.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── 员工详情 — 顶部 [聊天 | 配置] tab, 默认聊天 (owner 2026-05-25) ────────────
 function StaffDetail({ staff, onBack }: { staff: Staff; onBack: () => void }) {
   const [tab, setTab] = useState<'chat' | 'config'>('chat'); // 默认进聊天
@@ -5453,6 +5490,7 @@ export function WeizoApp() {
             <div className="mobile-chat-header">
               <span className="mobile-chat-header-name">小秘</span>
             </div>
+            <OwnerTodoStrip onOpenBoard={() => openTab('work')} />
             <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />
           </div>
         )}
