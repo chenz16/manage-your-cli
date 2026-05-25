@@ -5824,7 +5824,9 @@ export function WeizoApp() {
           <div className="mobile-chat-panel">
             <div className="mobile-chat-header">
               <span className="mobile-chat-header-title">
-                <span className="mobile-chat-header-name">小秘</span>
+                {/* Single source of truth: the secretary's own staff name (renamable),
+                    so the chat header always matches 通讯录. Fallback 小秘 pre-load. */}
+                <span className="mobile-chat-header-name">{staff.find((s) => s.role_name === 'secretary')?.name || '小秘'}</span>
                 <span className="mobile-chat-header-sub">微作 AI 助理</span>
               </span>
             </div>
