@@ -3309,8 +3309,8 @@ function AgentCardSection({ deskBaseUrl }: { deskBaseUrl: string }) {
 
   return (
     <div className="mobile-me-section">
-      <div className="mobile-me-label">我的 Agent Card</div>
-      <div className="mobile-me-note" style={{ marginBottom: 8 }}>别人扫这个连你(A2A)</div>
+      <div className="mobile-me-label">连接 AI Agent</div>
+      <div className="mobile-me-note" style={{ marginBottom: 8 }}>让另一个 AI Agent 扫码连接你(A2A)</div>
       <div className="mobile-connector-qr-wrap">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -3542,7 +3542,7 @@ function ScanConnectSection() {
     <div className="mobile-me-section">
       <div className="mobile-me-label">扫码连接</div>
       <div className="mobile-me-note" style={{ marginBottom: 8 }}>
-        用摄像头扫另一个 Agent 的二维码，直接完成连接。
+        用摄像头扫另一个 AI Agent 的二维码，直接完成连接。
       </div>
       <button
         type="button"
