@@ -2185,6 +2185,20 @@ button, input, textarea, select { font: inherit; }
   background: #f5f3ee; color: #8a8a8a; font-size: 13px;
 }
 
+/* Generic mobile bottom-sheet overlay (QR access point, etc.) */
+.mobile-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-end;
+}
+.mobile-sheet {
+  width: 100%; max-height: 88vh; max-height: 88dvh; overflow-y: auto;
+  background: #f2f2f2; border-radius: 16px 16px 0 0;
+  padding: 12px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.mobile-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 8px; }
+.mobile-sheet-title { margin: 0; font-size: 16px; color: #111; }
+.mobile-sheet-close { border: 0; background: #e2e2e2; color: #555; border-radius: 50%; width: 28px; height: 28px; font-size: 18px; line-height: 1; padding: 0; }
+
 /* Profile status: ● 在线 / 连接异常 (no IP) + QR access button */
 .mobile-me-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #1f7a44; }
 .mobile-me-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }

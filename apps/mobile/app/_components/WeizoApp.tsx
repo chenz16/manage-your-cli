@@ -4211,13 +4211,13 @@ function MeTab({
         断开 / 重新配对
       </button>
 
-      {/* QR access point — all scan-to-connect codes live here (WeChat + A2A). */}
+      {/* QR access point — all scan-to-connect codes live here (AI Agent + WeChat). */}
       {qrSheetOpen && (
-        <div className="bug-modal-backdrop" onClick={() => setQrSheetOpen(false)}>
-          <div className="bug-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="bug-modal-header">
-              <h2 style={{ margin: 0, fontSize: 16 }}>扫码连接</h2>
-              <button type="button" className="bug-modal-close" onClick={() => setQrSheetOpen(false)} aria-label="关闭">×</button>
+        <div className="mobile-sheet-backdrop" onClick={() => setQrSheetOpen(false)}>
+          <div className="mobile-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="mobile-sheet-head">
+              <h2 className="mobile-sheet-title">扫码连接</h2>
+              <button type="button" className="mobile-sheet-close" onClick={() => setQrSheetOpen(false)} aria-label="关闭">×</button>
             </div>
             <AgentCardSection deskBaseUrl={connection.baseUrl} />
             <WechatQrSection />
