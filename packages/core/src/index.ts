@@ -208,6 +208,21 @@ export {
   type MessagingSendResult,
 } from './messaging-service.js';
 
+export {
+  type ReceiveTransport,
+  type IncomingChannelMessage,
+  type MessagingChannelAdapter,
+  channelAccountPath,
+  registerChannelAdapter,
+  getChannelAdapter,
+  listChannelAdapters,
+  _resetChannelRegistryForTests,
+  WeChatAdapter,
+  TelegramAdapter,
+  LineAdapter,
+  KakaoAdapter,
+} from './messaging-channels.js';
+
 // Feedback / bug-report (ported from holon-engineering main)
 export {
   startBugWatcher, stopBugWatcher, bugWatcherStatus,
