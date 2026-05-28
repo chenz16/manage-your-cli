@@ -11,6 +11,8 @@
  * using live tmux (watchable); this is the latency-critical owner path.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 interface WarmAgent {
   proc: ChildProcess;
@@ -73,6 +75,16 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
   const args = ['--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
     '--include-partial-messages', '--verbose', '--dangerously-skip-permissions',
     '--model', model, '--effort', effort];
+  // Explicitly load .mcp.json from cwd (stream-json + --print may NOT auto-
+  // discover the project mcp file the way the interactive TUI does). Without
+  // this the secretary spawns with no tools and just bashes work itself
+  // instead of dispatching to employees.
+  if (cwd) {
+    const mcpPath = join(cwd, '.mcp.json');
+    if (existsSync(mcpPath)) {
+      args.push('--mcp-config', mcpPath);
+    }
+  }
   const proc = spawn(binary, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
   const a: WarmAgent = {
     proc, buf: '', busy: false, assembled: '', idleTimer: null,
