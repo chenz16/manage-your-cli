@@ -32,9 +32,17 @@ But two real problems remain:
 - **For everyone else — the terminal is unfamiliar.** The most powerful AI tool on the
   planet is locked behind a command line most people won't touch.
 
-Today's tools try to *replace* the CLI with heavy custom stacks — and they suffer for
-it: **slow (high latency)**, and always a step behind the frontier because they
-re-implement intelligence instead of using the model directly.
+Today's tools take the opposite bet: each new agent framework rebuilds the **harness**
+— its own planner, tool router, memory layer, prompt-stack and orchestration engine — on
+top of the same underlying model. Our view: **the harness is exactly the part the
+frontier model itself will absorb next** (better tool-use, longer context, internal
+memory, native agent loops). Whatever a framework hard-codes today, the model will do
+inside its own loop tomorrow — and at that point the heavy harness becomes dead weight:
+**slower (high latency), more brittle, and always a step behind the frontier** because
+it re-implements intelligence instead of using the model directly.
+
+So we don't build a harness. We treat the CLI (which already ships the model's latest
+loop) as the harness, and add only the thin management layer it doesn't have.
 
 **We do the opposite: reuse the CLI, don't replace it.** We keep exactly what makes the
 CLI the fastest and most professional path, and add a thin management layer on top — a
