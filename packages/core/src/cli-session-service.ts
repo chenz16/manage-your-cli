@@ -151,6 +151,10 @@ export function listTmuxSessions(): DiscoveredTmuxSession[] {
   if (r.status !== 0 || typeof r.stdout !== 'string') return [];
   const adopted = new Set<string>();
   for (const s of listStaffMerged()) {
+    // Archived (retired) staff release their session binding — a deleted
+    // adopted employee (retireCliAgentStaff sets status='archived') must not
+    // permanently block re-adopting that tmux session.
+    if (s.status === 'archived') continue;
     const sub = s.substrate;
     if (sub?.kind === 'cli_agent' && sub.external_session?.trim()) adopted.add(sub.external_session.trim());
   }

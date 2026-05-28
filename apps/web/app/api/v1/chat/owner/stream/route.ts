@@ -1,6 +1,6 @@
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 import { spawn } from 'node:child_process';
-import { getOrCreateSecretaryStaff, readBossMemory, getProject, appendChatMessage, getOwner } from '@holon/core';
+import { getOrCreateSecretaryStaff, readBossMemory, getProject, appendChatMessage, getOwner, getSecretaryProject, secretaryProjectThreadId, listSecretaryProjects, getStaffMerged } from '@holon/core';
 import { getEffectiveLanguage } from '@/lib/i18n/get-effective-language';
 import { sendWarmTurn } from '@/lib/warm-agent';
 import { parseJsonRequestBody, extractChatMessages, extractLatestUserText, buildOwnerPrompt } from '@/lib/owner-chat-helpers';
@@ -58,9 +58,50 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
+  // Resolve secretary project scope.
+  // Priority: body.project_id (new multi-project mobile) → query param ?project=ID
+  // → default singleton secretary (back-compat).
+  const url = new URL(req.url);
+  const projectIdFromQuery = url.searchParams.get('project');
+  const projectIdFromBody =
+    typeof body === 'object' && body !== null && 'project_id' in body
+      ? (body as { project_id?: unknown }).project_id
+      : undefined;
+  const resolvedProjectId = typeof projectIdFromBody === 'string'
+    ? projectIdFromBody
+    : (projectIdFromQuery ?? null);
+
+  // Determine thread ID and secretary staff for this request.
+  let threadId: string = OWNER_THREAD_ID;
+  let resolvedSecretaryStaffId: string | null = null;
+
+  if (resolvedProjectId) {
+    const sproj = getSecretaryProject(resolvedProjectId);
+    if (sproj) {
+      threadId = secretaryProjectThreadId(resolvedProjectId);
+      resolvedSecretaryStaffId = sproj.secretary_staff_id;
+    } else {
+      // project_id provided but not found — fall back to first secretary project
+      const projects = listSecretaryProjects();
+      if (projects.length > 0 && projects[0]) {
+        threadId = secretaryProjectThreadId(projects[0].id);
+        resolvedSecretaryStaffId = projects[0].secretary_staff_id;
+      }
+    }
+  } else {
+    // No project specified — check if there are secretary projects; use first one.
+    // This provides back-compat: old clients that don't send project_id still work.
+    const projects = listSecretaryProjects();
+    if (projects.length > 0 && projects[0]) {
+      threadId = secretaryProjectThreadId(projects[0].id);
+      resolvedSecretaryStaffId = projects[0].secretary_staff_id;
+    }
+    // Otherwise keep threadId = 'owner' (pre-migration fallback)
+  }
+
   // Persist the user message immediately (before we await the LLM response)
   // so the desk transcript is visible even if the assistant reply is slow.
-  appendChatMessage(OWNER_THREAD_ID, { role: 'user', content: userText });
+  appendChatMessage(threadId, { role: 'user', content: userText });
 
   // Phase 1: active project memory injection (design doc § 9 item 8).
   // When the client passes `active_project_id`, read its boss-memory scope
@@ -95,7 +136,11 @@ export async function POST(req: Request): Promise<Response> {
   const owner = getOwner();
   const language = getEffectiveLanguage(owner);
 
-  const secretary = getOrCreateSecretaryStaff();
+  // Resolve the secretary to use: project-specific secretary or default singleton.
+  const defaultSecretary = getOrCreateSecretaryStaff();
+  const secretary = resolvedSecretaryStaffId
+    ? (getStaffMerged(resolvedSecretaryStaffId) ?? defaultSecretary)
+    : defaultSecretary;
   const substrate = secretary.substrate;
   const cwd = substrate.kind === 'cli_agent' ? substrate.cwd : undefined;
   const binary = substrate.kind === 'cli_agent' && substrate.binary ? substrate.binary : 'claude';
@@ -110,6 +155,14 @@ export async function POST(req: Request): Promise<Response> {
       const encoder = new TextEncoder();
       let assembled = '';
       let closed = false;
+
+      // iOS WKWebView buffers a streamed fetch response until ~2KB has arrived
+      // before handing the first chunk to the ReadableStream reader — so the
+      // mobile 小秘 reply appeared only after the FULL turn (~10s) instead of
+      // streaming token-by-token like the desk (~3s first token). Prime the
+      // stream with a padding SSE comment to cross that threshold immediately;
+      // the client ignores `:`-comment frames.
+      controller.enqueue(encoder.encode(`:${' '.repeat(2048)}\n\n`));
 
       const emit = (event: object) => {
         if (closed) return;
@@ -127,7 +180,7 @@ export async function POST(req: Request): Promise<Response> {
         // Persist the assistant reply to the desk transcript so mobile
         // (and desk on reload) can sync the full conversation.
         if (finalText) {
-          appendChatMessage(OWNER_THREAD_ID, { role: 'assistant', content: finalText });
+          appendChatMessage(threadId, { role: 'assistant', content: finalText });
         }
         console.log(JSON.stringify({
           audit: 'owner.chat_turn',

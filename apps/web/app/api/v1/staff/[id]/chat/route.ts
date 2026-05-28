@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { spawn } from 'node:child_process';
-import { getStaffMerged, appendChatMessage, getOwner } from '@holon/core';
+import { getStaffMerged, appendChatMessage, sendKeys, captureCliOutput } from '@holon/core';
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
-import { getEffectiveLanguage } from '@/lib/i18n/get-effective-language';
-import { sendWarmTurn } from '@/lib/warm-agent';
+import { scheduleAdoptedSummary } from '@/lib/adopted-summarizer';
 
 interface Context { params: Promise<{ id: string }> }
 
@@ -12,31 +10,18 @@ interface ChatMessage {
   content: string;
 }
 
-// Route files may only export handlers + config (next build route-type
-// validation), so prompt assembly stays as a local (non-exported) helper.
-function buildStaffPrompt(
-  staff: { name: string; role_label?: string | undefined; system_prompt?: string | undefined },
-  userText: string,
-  language: 'en' | 'zh-CN',
-): string {
-  const parts: string[] = [];
-  if (language === 'zh-CN') {
-    parts.push('[语言要求] 必须以中文为主回答，除非用户明确要求其他语言。', '');
-  } else {
-    parts.push('[Language] Reply in English unless the user explicitly asks otherwise.', '');
-  }
-  // Persona header — re-sent each turn (cheap, matches the owner-chat pattern);
-  // the warm process retains the running conversation, so we only send the
-  // latest user message as the actual turn content.
-  const persona = (staff.system_prompt ?? '').trim();
-  parts.push(`[角色] 你是「${staff.name}」${staff.role_label ? `（${staff.role_label}）` : ''}。`);
-  if (persona) parts.push(persona);
-  parts.push('', userText);
-  return parts.join('\n');
-}
-
-const TURN_TIMEOUT_MS = 120_000;
-
+/**
+ * POST /api/v1/staff/:id/chat — talk to an employee.
+ *
+ * UNIFIED tmux model (owner 2026-05-26): every employee is an official CLI in
+ * its own persistent tmux (CLAUDE.md: "watchable + driveable"). The 前台 message
+ * is piped straight INTO that tmux via send-keys, so 前台 and 后台 are the SAME
+ * session — NOT a separate warm `claude --print` process (that duplicated the
+ * Secretary pattern and produced a second, disconnected claude). The reply
+ * streams in the 后台 terminal; summarisation, if wanted, is done by the agent's
+ * own prompt. The Secretary is the ONLY warm headless relay and uses a different
+ * endpoint (/api/v1/chat/owner/stream).
+ */
 export async function POST(req: Request, ctx: Context): Promise<Response> {
   const auth = requireDeviceTokenForRemote(req);
   if (!auth.ok) return deviceAuthErrorResponse(auth);
@@ -52,10 +37,14 @@ export async function POST(req: Request, ctx: Context): Promise<Response> {
     return NextResponse.json({ error: 'invalid JSON body', code: 'invalid_json' }, { status: 400 });
   }
 
-  const raw = (body as { messages?: unknown })?.messages;
+  const b = body as { messages?: unknown; summarize?: unknown };
+  const raw = b.messages;
   if (!Array.isArray(raw)) {
     return NextResponse.json({ error: 'messages must be an array', code: 'invalid_messages' }, { status: 400 });
   }
+
+  // Optional opt-in field: body.summarize === true triggers the adopted-summarizer.
+  const wantSummary = b.summarize === true;
 
   const messages = raw
     .filter((m): m is ChatMessage =>
@@ -75,8 +64,6 @@ export async function POST(req: Request, ctx: Context): Promise<Response> {
   const userContent = latestUser.content.trim();
   appendChatMessage(threadId, { role: 'user', content: userContent });
 
-  // Resolve the staff's real CLI substrate. Subscription-only — drive the
-  // official CLI (claude warm process / codex exec). No API key, no stub.
   const substrate = staff.substrate;
   if (substrate.kind !== 'cli_agent') {
     return NextResponse.json(
@@ -84,78 +71,40 @@ export async function POST(req: Request, ctx: Context): Promise<Response> {
       { status: 409 },
     );
   }
-  const cwd = substrate.cwd;
-  const binary = substrate.binary || 'claude';
-  const language = getEffectiveLanguage(getOwner());
-  const prompt = buildStaffPrompt(staff, userContent, language);
 
-  let reply: string;
-  try {
-    reply = await runStaffTurn(staff.id, binary, cwd, prompt, req.signal);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({
-      audit: 'staff.chat_turn.failed', staff_id: staff.id, binary, error: message,
-      ts: new Date().toISOString(),
-    }));
-    // "agent busy with another turn" is a lock-contention condition, not a
-    // gateway failure — use 409 Conflict so callers don't retry blindly.
-    const status = message.includes('agent busy with another turn') ? 409 : 502;
-    return NextResponse.json({ error: message, code: 'cli_turn_failed' }, { status });
+  // Capture pane before send (needed for delta computation in summarizer).
+  const preCapture = wantSummary ? captureCliOutput(staff.id) : null;
+  const preScreen = preCapture?.ok ? (preCapture.output ?? '') : '';
+
+  // Pipe the message into the staff's own tmux session (send-keys + Enter).
+  const r = sendKeys(staff.id, userContent, true);
+  if (!r.ok) {
+    if (r.reason === 'no_session') {
+      const note = '该员工的终端当前未运行,请先在「后台」启动它再发消息。';
+      appendChatMessage(threadId, { role: 'assistant', content: note });
+      return NextResponse.json({ error: 'no_session', code: 'no_session', reply: note }, { status: 409 });
+    }
+    return NextResponse.json({ error: r.reason, code: 'cli_input_failed' }, { status: 500 });
   }
 
-  reply = reply.trim();
-  if (reply) appendChatMessage(threadId, { role: 'assistant', content: reply });
+  // Fire-and-forget summarizer when client opted in. Pass userContent so the
+  // haiku can subtract the echo and summarize ONLY the CLI's response.
+  if (wantSummary) {
+    scheduleAdoptedSummary(staff.id, substrate.cwd, preScreen, userContent);
+  }
 
+  // Owner: 不要把"已发送到终端"这种 note 也写进 thread — thread 里只留真正的总结。
+  // 返回给前端的 reply 仍然带这句作为瞬时提示,但不持久化。
+  const note = '已发送到终端。回复在「后台」实时查看。';
   console.log(JSON.stringify({
-    audit: 'staff.chat_turn', staff_id: staff.id, binary,
-    user_chars: userContent.length, reply_chars: reply.length, ts: new Date().toISOString(),
+    audit: 'staff.chat_turn.routed_tmux',
+    staff_id: staff.id,
+    external: !!substrate.external_session,
+    user_chars: userContent.length,
+    summarize: wantSummary,
+    ts: new Date().toISOString(),
   }));
-
-  return NextResponse.json({ reply, staff_id: staff.id });
-}
-
-/** Run one chat turn against the staff's CLI and resolve the full reply.
- *  claude → warm persistent process (~1.8s/turn warm). codex/other → `exec`. */
-function runStaffTurn(
-  key: string, binary: string, cwd: string | undefined, prompt: string, signal: AbortSignal,
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`CLI turn timed out after ${TURN_TIMEOUT_MS / 1000}s`)), TURN_TIMEOUT_MS);
-    const done = (fn: () => void) => { clearTimeout(timer); fn(); };
-
-    if (binary === 'claude') {
-      let assembled = '';
-      sendWarmTurn(key, binary, cwd, prompt, {
-        onText: (full) => { assembled = full; },
-        onDone: () => done(() => resolve(assembled)),
-        onError: (msg) => done(() => reject(new Error(msg))),
-        signal,
-      });
-      return;
-    }
-
-    // codex (or other): per-turn exec — no verified persistent stream mode yet.
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(binary, ['exec', prompt], { cwd, env: process.env });
-    } catch (err) {
-      done(() => reject(err instanceof Error ? err : new Error(String(err))));
-      return;
-    }
-    const onAbort = () => { try { child.kill('SIGTERM'); } catch { /* noop */ } done(() => reject(new Error('aborted'))); };
-    signal.addEventListener('abort', onAbort, { once: true });
-    let out = '';
-    let errOut = '';
-    child.stdout?.on('data', (b: Buffer) => { out += b.toString('utf8'); });
-    child.stderr?.on('data', (b: Buffer) => { errOut += b.toString('utf8'); });
-    child.on('error', (err: Error) => { signal.removeEventListener('abort', onAbort); done(() => reject(err)); });
-    child.on('close', (code: number | null) => {
-      signal.removeEventListener('abort', onAbort);
-      if ((code ?? 0) !== 0 && !out.trim()) { done(() => reject(new Error(errOut.trim() || `${binary} exited ${code}`))); return; }
-      done(() => resolve(out));
-    });
-  });
+  return NextResponse.json({ reply: note, staff_id: staff.id, routed: 'tmux' });
 }
 
 export const dynamic = 'force-dynamic';

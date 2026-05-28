@@ -134,6 +134,9 @@ export interface CreateStaffInput {
   max_concurrent_jobs?: number;  // default 1
   agent_profile_id?: string;     // default 'local_ai_generic_v1'
   tool_scope?: string[];          // default ['web_search', 'read_file']
+  /** Free-form tag labels (e.g. ['task_group:选题&研究', 'pack:youtube-creator']).
+   *  Defaults to [] when not provided. */
+  tags?: string[];
   /** Explicit substrate override — used by the connectors flow to create
    *  cli_agent staff for Claude Code / Codex without going through chat.
    *  When present, overrides all substrate-related defaults (agent_profile_id
@@ -177,7 +180,8 @@ export function createStaff(input: CreateStaffInput): Staff {
     denied_skills: [],
     // iter-012 Pass #4: free-form labels. Owner-created staff via chat
     // get no tags (only persona-seeded "suggested" staff carry one).
-    tags: [],
+    // Team-pack imports may supply tags like ['task_group:X', 'pack:Y'].
+    tags: input.tags ?? [],
     // Phase 1: no project affiliation by default (shared/cross-project).
     project_ids: [],
   };

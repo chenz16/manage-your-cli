@@ -13,6 +13,8 @@ const PATCHABLE: Array<keyof StaffPatch> = [
   'denied_skills', 'monthly_budget_millicents', 'proxy_staff_id',
   // AI-agent config: TTS voice/style/rate + reply language.
   'tts_voice', 'tts_style', 'reply_language', 'tts_rate',
+  // Free-form labels (e.g. project scoping, task_group).
+  'tags',
 ];
 
 export async function GET(_req: Request, ctx: Context): Promise<NextResponse> {
@@ -117,6 +119,12 @@ export async function PATCH(req: Request, ctx: Context): Promise<NextResponse> {
     const v = raw['tts_rate'];
     if (v !== 'inherit' && v !== 'slow' && v !== 'normal' && v !== 'fast') {
       return NextResponse.json({ error: "tts_rate must be 'inherit', 'slow', 'normal', or 'fast'", code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tags' in raw) {
+    const v = raw['tags'];
+    if (!Array.isArray(v) || !v.every((t) => typeof t === 'string')) {
+      return NextResponse.json({ error: 'tags must be an array of strings', code: 'invalid_field' }, { status: 400 });
     }
   }
   // --- End field validation ---

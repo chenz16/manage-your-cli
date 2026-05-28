@@ -26,6 +26,7 @@ interface PairConfirmOk {
   device_token: string;
   device_id: string;
   paired_at: string;
+  lan_candidates?: unknown;
 }
 
 interface PairConfirmErr {
@@ -107,7 +108,17 @@ export function PairingForm() {
       }
 
       const ok = data as PairConfirmOk;
-      writeDesktopConnection({ baseUrl: normalizeBaseUrl(baseUrl), deviceToken: ok.device_token });
+      const parsedCandidates = Array.isArray(ok.lan_candidates)
+        ? (ok.lan_candidates as unknown[])
+            .filter((u): u is string => typeof u === 'string')
+            .map(normalizeBaseUrl)
+            .filter((u, i, a) => a.indexOf(u) === i)
+        : undefined;
+      writeDesktopConnection({
+        baseUrl: normalizeBaseUrl(baseUrl),
+        deviceToken: ok.device_token,
+        ...(parsedCandidates !== undefined ? { candidates: parsedCandidates } : {}),
+      });
       installMobileApiFetchProxy();
       window.dispatchEvent(new Event('holon:mobile-paired'));
       window.location.href = '/';

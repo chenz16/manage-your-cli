@@ -88,6 +88,7 @@ export {
 } from './a2a-peer-store.js';
 export {
   bossMemoryRoot,
+  projectMemoryRoot,
   readBossMemory,
   readBossMemoryLog,
   writeBossMemory,
@@ -133,6 +134,13 @@ export {
   personaToolScope,
   type PersonaPreset,
 } from './persona-catalog.js';
+
+export {
+  TEAM_PACKS,
+  getTeamPack,
+  type TeamPack,
+  type TeamPackStaff,
+} from './team-pack-catalog.js';
 
 export {
   listSkills,
@@ -272,3 +280,34 @@ export {
   clearChatTranscript,
   type TranscriptMessage,
 } from './chat-transcript-store.js';
+
+// Secretary projects service (multi-project / multi-secretary UI)
+export {
+  listSecretaryProjects,
+  getSecretaryProject,
+  createSecretaryProject,
+  updateSecretaryProject,
+  deleteSecretaryProject,
+  secretaryProjectThreadId,
+  _resetSecretaryProjectMigrationForTests,
+  type SecretaryProject,
+  type CreateSecretaryProjectInput,
+} from './secretary-projects-service.js';
+
+// Meeting rooms service
+export {
+  listRooms,
+  getRoom,
+  createRoom,
+  renameRoom,
+  deleteRoom,
+  listMembers,
+  addMember,
+  removeMember,
+  clearRoomsStore,
+  getOrCreateDefaultTeamRoom,
+  DEFAULT_TEAM_ROOM_ID,
+  type CreateRoomInput,
+  type MemberSeed,
+  type AddMemberInput,
+} from './rooms-service.js';

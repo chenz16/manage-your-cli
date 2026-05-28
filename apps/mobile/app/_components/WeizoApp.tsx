@@ -6,12 +6,15 @@
 // All API calls go through holonApiFetch (proxied to paired desktop).
 
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
+  type ComponentProps,
   type PointerEvent,
   type ReactNode,
   type TouchEvent,
@@ -39,25 +42,66 @@ import type {
   GetStaffResponse,
   ListDeliverablesResponse,
   ListStaffResponse,
+  Room,
+  RoomMember,
   Staff,
   Todo,
   TodoPriority,
   ListTodosResponse,
 } from '@holon/api-contract';
-import type { PersonaPreset, SkillDescriptor, SkillKind } from '@holon/core';
+import type { PersonaPreset, SkillDescriptor, SkillKind, TeamPack, SecretaryProject } from '@holon/core';
 import {
   clearDesktopConnection,
   holonApiFetch,
   installMobileApiFetchProxy,
   normalizeBaseUrl,
+  pickLiveBaseUrl,
   readDesktopConnection,
   writeDesktopConnection,
   type MobileDesktopConnection,
 } from '../_lib/mobile-runtime';
 import { discoverDeskOnLan } from '../_lib/desk-discovery';
-import { speak as deviceTtsSpeak, stop as deviceTtsStop } from '../_lib/tts';
+import { speak as deviceTtsSpeak, stop as deviceTtsStop, primeAudio as ttsPrimeAudio, type TtsOpts } from '../_lib/tts';
 import * as nativeStt from '../_lib/native-stt';
 import { deskOrigin } from '../_lib/desk-origin';
+
+// ─── TTS staff context ────────────────────────────────────────────────────────
+//
+// Provides the Staff record whose TTS config (tts_voice, tts_style, tts_rate,
+// reply_language) should be applied when MessageActionStrip calls speak().
+//
+// - Owner-chat thread: provider supplies the secretary staff record.
+// - StaffChat thread: MessageActionStrip receives opts directly as a prop.
+//
+const TtsStaffContext = createContext<Staff | null>(null);
+
+/** Map Staff.reply_language / text content → BCP 47 language tag for TTS. */
+function resolveTtsLang(staff: Staff | null, text: string): string {
+  const raw = staff?.reply_language ?? 'auto';
+  if (raw === 'zh-CN') return 'zh-CN';
+  if (raw === 'en') return 'en-US';
+  // auto: infer from message text — CJK block presence → zh-CN, else en-US
+  return /[一-鿿㐀-䶿]/.test(text) ? 'zh-CN' : 'en-US';
+}
+
+/** Map Staff.tts_rate enum → numeric rate for plugin / Web Speech API. */
+function resolveTtsRate(staff: Staff | null, fallback: number = 1.0): number {
+  const raw = staff?.tts_rate;
+  if (raw === 'slow') return 0.7;
+  if (raw === 'fast') return 1.3;
+  if (raw === 'normal') return 1.0;
+  // 'inherit' or absent: use the provided fallback (normally 1.0 for secretary,
+  // and callers for employees fall back to the secretary rate).
+  return fallback;
+}
+
+/** Build TtsOpts from a Staff record and the text being spoken. */
+function buildTtsOpts(staff: Staff | null, text: string): TtsOpts {
+  return {
+    lang: resolveTtsLang(staff, text),
+    rate: resolveTtsRate(staff),
+  };
+}
 
 // ─── Chat auto-scroll hook ────────────────────────────────────────────────────
 //
@@ -141,6 +185,11 @@ interface StreamEvent {
 type TabKey = 'chats' | 'contacts' | 'work' | 'me';
 type StaffChatMessage = { role: 'user' | 'assistant'; content: string };
 type BadgedTabKey = 'chats' | 'work';
+
+/** SecretaryProject with inlined staff record from the API response. */
+interface SecretaryProjectWithStaff extends SecretaryProject {
+  secretary_staff: Staff | null;
+}
 
 /** A pending attachment chosen by the user, before/after upload. */
 interface PendingAttachment {
@@ -477,7 +526,7 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
 
   function deliverTranscript(text: string) {
     if (onTranscript) onTranscript(text);
-    else insertTranscriptIntoComposer(text, true); // 语音→直接发送,不弹键盘
+    else insertTranscriptIntoComposer(text, getVoiceAutoSend()); // 语音→直接发送 or 先填入可编辑
   }
 
   // ── PRIMARY: native on-device STT ─────────────────────────────────────────
@@ -489,6 +538,10 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
     if (state !== 'idle') return;
     pointerIdRef.current = ev.pointerId;
     ev.currentTarget.setPointerCapture(ev.pointerId);
+    // iOS WKWebView audio-autoplay gate: unlock here while we still have a real
+    // user gesture, so the auto-TTS that fires async after the reply lands can
+    // actually play. No-op after first call.
+    ttsPrimeAudio();
     setHint('');
     setPartialText('');
 
@@ -691,7 +744,26 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
         onPointerCancel={onPointerUp}
         onContextMenu={(ev) => ev.preventDefault()}
       >
-        {state === 'transcribing' ? '…' : '🎙'}
+        {state === 'transcribing' ? (
+          '…'
+        ) : (
+          <svg
+            className="mobile-voice-icon"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="22" />
+          </svg>
+        )}
       </button>
       {(state === 'recording' || state === 'transcribing' || hint) && (
         <span className="mobile-voice-hint" role="status">
@@ -735,7 +807,18 @@ function IconCopy() {
 
 // Tap-bubble → action strip (朗读 + 复制) with 3s auto-dismiss.
 // Long-press → WeChat-style context menu.
-function MessageActionStrip({ id, text }: { id: string; text: string }) {
+// ttsOptsOverride: callers that already have the Staff object (StaffChat) can
+// pass pre-built opts directly; owner-chat reads them from TtsStaffContext.
+function MessageActionStrip({
+  id,
+  text,
+  ttsOptsOverride,
+}: {
+  id: string;
+  text: string;
+  ttsOptsOverride?: TtsOpts;
+}) {
+  const contextStaff = useContext(TtsStaffContext);
   const [showStrip, setShowStrip] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [ttsState, setTtsState] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
@@ -788,10 +871,11 @@ function MessageActionStrip({ id, text }: { id: string; text: string }) {
     setTtsState('loading');
     disarmDismiss();
     try {
-      // TODO: pass per-staff tts_voice + tts_style here once MessageActionStrip
-      // receives the current staff's AI-agent config (tts_voice, tts_style).
-      // Deferred — fields are stored on Staff but not yet threaded to the speak call.
-      await deviceTtsSpeak(text);
+      // Resolve TTS opts: caller-provided override first (StaffChat passes the
+      // employee's staff record opts), then fall back to TtsStaffContext
+      // (owner-chat thread sets secretary staff) or plain defaults.
+      const opts: TtsOpts = ttsOptsOverride ?? buildTtsOpts(contextStaff, text);
+      await deviceTtsSpeak(text, opts);
       setTtsState('idle');
     } catch {
       setTtsState('error');
@@ -921,7 +1005,7 @@ function MessageActionStrip({ id, text }: { id: string; text: string }) {
 
 // ─── Owner chat (小秘 SSE) ────────────────────────────────────────────────────
 
-function makeMobileOwnerAdapter(): ChatModelAdapter {
+function makeMobileOwnerAdapter(projectId?: string | null): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
       const payload = messages
@@ -930,10 +1014,12 @@ function makeMobileOwnerAdapter(): ChatModelAdapter {
 
       let assembled = '';
       try {
+        const body: Record<string, unknown> = { messages: payload, client: 'mobile' };
+        if (projectId) body.project_id = projectId;
         const response = await holonApiFetch('/api/v1/chat/owner/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: payload, client: 'mobile' }),
+          body: JSON.stringify(body),
           signal: abortSignal,
         });
 
@@ -1222,16 +1308,20 @@ const OWNER_CHAT_ID = 'owner';
  *      than the local cache, call runtime.thread.reset() to replace
  *      the thread WITHOUT triggering the LLM (reset() = state-only).
  */
-function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocalRuntime> }) {
+function OwnerChatHistorySync({ runtime, projectId }: { runtime: ReturnType<typeof useLocalRuntime>; projectId?: string | null | undefined }) {
   const thread = useThread();
   const restoredRef = useRef(false);
   const deskSyncedRef = useRef(false);
+  // Chat cache key: project-scoped when projectId present, else legacy 'owner'.
+  const chatCacheId = projectId ? `project:${projectId}` : OWNER_CHAT_ID;
+  // Desk thread URL: project-scoped or legacy owner.
+  const deskThreadParam = projectId ? `project:${projectId}` : 'owner';
 
   // Step 1: instant first-paint from local cache (offline fallback)
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
-    const cached = loadChatMessages(OWNER_CHAT_ID);
+    const cached = loadChatMessages(chatCacheId);
     if (cached.length === 0) return;
     const seed: ThreadMessageLike[] = cached.map((m) => ({
       role: m.role,
@@ -1246,7 +1336,7 @@ function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocal
   useEffect(() => {
     if (deskSyncedRef.current) return;
     deskSyncedRef.current = true;
-    holonApiFetch('/api/v1/chat/history?thread=owner', { cache: 'no-store' })
+    holonApiFetch(`/api/v1/chat/history?thread=${encodeURIComponent(deskThreadParam)}`, { cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) return;
         const data = await res.json().catch(() => ({})) as {
@@ -1265,7 +1355,7 @@ function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocal
           }));
         if (deskMsgs.length === 0) return;
         // Write-through to local cache (keeps offline fallback fresh)
-        saveChatMessages(OWNER_CHAT_ID, deskMsgs);
+        saveChatMessages(chatCacheId, deskMsgs);
         // Re-seed if desk has more messages than what is currently displayed
         if (deskMsgs.length > thread.messages.length) {
           const seed: ThreadMessageLike[] = deskMsgs.map((m) => ({
@@ -1296,7 +1386,54 @@ function OwnerChatHistorySync({ runtime }: { runtime: ReturnType<typeof useLocal
         return { role: m.role as 'user' | 'assistant', content: text };
       })
       .filter((m) => m.content.length > 0);
-    if (toSave.length > 0) saveChatMessages(OWNER_CHAT_ID, toSave);
+    if (toSave.length > 0) saveChatMessages(chatCacheId, toSave);
+  // chatCacheId is stable for the component lifetime (projectId is a prop)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.messages]);
+
+  // Kimi-mode auto-TTS: speak every new assistant reply once it stops streaming.
+  // Secretary streams token-by-token; firing speak() on each chunk would create
+  // overlapping audio that interrupts itself. Debounce: only speak after the
+  // last message's text has been stable for 1.5s.
+  const lastSpokenOwnerIdxRef = useRef<number>(-1);
+  const ownerSpeakBaselineRef = useRef(false);
+  const ttsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const msgs = thread.messages;
+    if (!ownerSpeakBaselineRef.current && msgs.length > 0) {
+      lastSpokenOwnerIdxRef.current = msgs.length - 1;
+      ownerSpeakBaselineRef.current = true;
+      return;
+    }
+    if (!getVoiceAutoSend()) return;
+    const lastIdx = msgs.length - 1;
+    if (lastIdx < 0) return;
+    const last = msgs[lastIdx];
+    if (!last || last.role !== 'assistant') return;
+    const text = last.content
+      .filter((p): p is { type: 'text'; text: string } => p.type === 'text' && typeof (p as { text?: unknown }).text === 'string')
+      .map((p) => (p as { text: string }).text)
+      .join('').trim();
+    if (!text) return;
+    // Reset debounce on every update — fires only after 1500ms of no change.
+    if (ttsDebounceRef.current) clearTimeout(ttsDebounceRef.current);
+    ttsDebounceRef.current = setTimeout(() => {
+      // Re-check: only speak if this is still a fresh, unspoken message.
+      if (lastIdx <= lastSpokenOwnerIdxRef.current) return;
+      lastSpokenOwnerIdxRef.current = lastIdx;
+      void (async () => {
+        try {
+          const opts = buildTtsOpts(null, text);
+          await deviceTtsSpeak(text, opts);
+        } catch { /* best-effort */ }
+      })();
+    }, 1500);
+    return () => {
+      if (ttsDebounceRef.current) {
+        clearTimeout(ttsDebounceRef.current);
+        ttsDebounceRef.current = null;
+      }
+    };
   }, [thread.messages]);
 
   return null;
@@ -1418,7 +1555,7 @@ function SkillCard({ s, onPick }: { s: SkillDescriptor; onPick: (s: SkillDescrip
 }
 
 function SkillSheet({ onClose, onPick }: { onClose: () => void; onPick: (text: string) => void }) {
-  const [skills, setSkills] = useState<SkillDescriptor[]>([]);
+  const [skills, setSkills] = useState<SkillDescriptor[]>(() => getCachedSkills());
   const [loadErr, setLoadErr] = useState('');
   const [recentIds, setRecentIds] = useState<string[]>(() => readRecentSkillIds());
   const [creating, setCreating] = useState(false);
@@ -1433,7 +1570,9 @@ function SkillSheet({ onClose, onPick }: { onClose: () => void; onPick: (text: s
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json() as { items?: SkillDescriptor[] };
-        setSkills(Array.isArray(j.items) ? j.items : []);
+        const items = Array.isArray(j.items) ? j.items : [];
+        setSkills(items);
+        setCachedSkills(items);
         setLoadErr('');
       })
       .catch((e) => setLoadErr(e instanceof Error ? e.message : String(e)));
@@ -1596,9 +1735,11 @@ function SkillUsageView({ onClose, onOpenDesk }: { onClose: () => void; onOpenDe
         ]);
         if (!skRes.ok) throw new Error(`技能 HTTP ${skRes.status}`);
         const skills = ((await skRes.json()) as { items?: SkillDescriptor[] }).items ?? [];
-        const titles: string[] = dvRes && dvRes.ok
-          ? (((await dvRes.json()) as { items?: Array<{ title?: string }> }).items ?? [])
-              .map((d) => (d.title ?? '').toLowerCase()).filter(Boolean)
+        setCachedSkills(skills);
+        const delivJson = dvRes && dvRes.ok ? (await dvRes.json()) as { items?: Array<{ title?: string }> } : null;
+        if (delivJson?.items) setCachedDeliverables(delivJson.items as Deliverable[]);
+        const titles: string[] = delivJson
+          ? (delivJson.items ?? []).map((d) => (d.title ?? '').toLowerCase()).filter(Boolean)
           : [];
         const msgs: string[] = hxRes && hxRes.ok
           ? (((await hxRes.json()) as { messages?: Array<{ content?: unknown }> }).messages ?? [])
@@ -1656,19 +1797,527 @@ function SkillUsageView({ onClose, onOpenDesk }: { onClose: () => void; onOpenDe
   );
 }
 
+// ─── Project list (聊天 tab root) ─────────────────────────────────────────────
+//
+// Shows a WeChat-style list of secretary projects. Each row has:
+//   - color dot / secretary avatar letter
+//   - project name + secretary name
+//   - last message preview from localStorage cache
+// Tapping a row → enters that project's chat thread (sets activeProjectId).
+// + button top-right → create-project dialog.
+
+function ProjectListTab({
+  projects,
+  onEnter,
+  onProjectCreated,
+}: {
+  projects: SecretaryProjectWithStaff[];
+  onEnter: (projectId: string) => void;
+  onProjectCreated: (project: SecretaryProjectWithStaff) => void;
+}) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  async function handleCreate() {
+    if (!newName.trim()) return;
+    setCreating(true);
+    setCreateError('');
+    try {
+      const r = await holonApiFetch('/api/v1/secretary-projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({})) as { error?: string };
+        setCreateError(err.error ?? `创建失败 (${r.status})`);
+        return;
+      }
+      const data = await r.json() as { project?: SecretaryProjectWithStaff };
+      if (data.project) {
+        onProjectCreated(data.project);
+        setNewName('');
+        setShowCreate(false);
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : '网络错误');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function lastMsgPreview(projectId: string): string {
+    const msgs = loadChatMessages(`project:${projectId}`);
+    if (msgs.length === 0) return '暂无消息';
+    const last = msgs[msgs.length - 1];
+    if (!last) return '暂无消息';
+    const text = last.content.trim();
+    return text.length > 60 ? `${text.slice(0, 60)}…` : text;
+  }
+
+  return (
+    <div className="project-list-tab">
+      <div className="project-list-header">
+        <span className="project-list-title">聊天</span>
+        <button
+          type="button"
+          className="project-list-add"
+          onClick={() => setShowCreate(true)}
+          aria-label="新建项目"
+        >
+          ＋
+        </button>
+      </div>
+
+      {projects.length === 0 ? (
+        <div className="project-list-empty">
+          <p>暂无项目</p>
+          <button type="button" className="project-list-empty-btn" onClick={() => setShowCreate(true)}>
+            新建项目
+          </button>
+        </div>
+      ) : (
+        <ul className="project-list-items">
+          {projects.map((p) => {
+            const avatarLetter = (p.secretary_staff?.name ?? p.name).slice(0, 1).toUpperCase();
+            const bgColor = p.color ?? '#4e6ef2';
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="project-list-row"
+                  onClick={() => onEnter(p.id)}
+                >
+                  <span
+                    className="project-list-avatar"
+                    style={{ background: bgColor }}
+                    aria-hidden="true"
+                  >
+                    {avatarLetter}
+                  </span>
+                  <span className="project-list-info">
+                    <span className="project-list-name">{p.name}</span>
+                    <span className="project-list-sub">
+                      {p.secretary_staff?.name ?? '小秘'} · {lastMsgPreview(p.id)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {showCreate && (
+        <div className="project-create-overlay" onClick={() => setShowCreate(false)}>
+          <div className="project-create-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3 className="project-create-title">新建项目</h3>
+            <input
+              type="text"
+              className="project-create-input"
+              placeholder="项目名称"
+              value={newName}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+              autoFocus
+              maxLength={50}
+            />
+            {createError && <p className="project-create-error">{createError}</p>}
+            <div className="project-create-actions">
+              <button
+                type="button"
+                className="project-create-cancel"
+                onClick={() => { setShowCreate(false); setCreateError(''); setNewName(''); }}
+                disabled={creating}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="project-create-confirm"
+                onClick={() => void handleCreate()}
+                disabled={creating || !newName.trim()}
+              >
+                {creating ? '创建中…' : '创建'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ProjectSwipeArea ────────────────────────────────────────────────────────
+// Single-pane swipe between project chats with finger-follow + opacity crossfade
+// on commit. Simpler + more reliable than a 3-pane carousel; React doesn't have
+// to re-key sibling components when activeProjectId changes.
+function ProjectSwipeArea({
+  projects,
+  activeProjectId,
+  onSwitch,
+  renderChat,
+}: {
+  projects: SecretaryProjectWithStaff[];
+  activeProjectId: string | null;
+  onSwitch: (nextId: string) => void;
+  renderChat: (projectId: string) => ReactNode;
+}) {
+  const [dragX, setDragX] = useState(0);
+  const [animating, setAnimating] = useState(false);
+  const dragOrigin = useRef<{ x: number; y: number; locked: 'h' | 'v' | null } | null>(null);
+  const hapticFired = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  // Owner: 大拇指 1/2 屏宽就该触发. Width-relative threshold beats fixed px.
+  const threshold = width > 0 ? width * 0.5 : 100;
+  const hapticAt = width > 0 ? width * 0.25 : 60;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setWidth(el.offsetWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const idx = projects.findIndex((p) => p.id === activeProjectId);
+  const n = projects.length;
+  const hasNeighbors = n >= 2 && idx >= 0;
+  const nextProj = hasNeighbors ? projects[(idx + 1) % n]! : null;
+  const prevProj = hasNeighbors ? projects[(idx - 1 + n) % n]! : null;
+
+  function vibrate(ms: number) {
+    try { (navigator as { vibrate?: (n: number) => boolean }).vibrate?.(ms); } catch { /* noop */ }
+  }
+
+  function reset(snap = true) {
+    if (snap) setAnimating(true);
+    setDragX(0);
+    hapticFired.current = false;
+    dragOrigin.current = null;
+    if (snap) setTimeout(() => setAnimating(false), 220);
+  }
+
+  function commit(direction: 'next' | 'prev') {
+    if (projects.length < 2 || idx < 0) { reset(); return; }
+    const target = direction === 'next' ? nextProj : prevProj;
+    if (!target) { reset(); return; }
+    const liveW = containerRef.current?.offsetWidth ?? width ?? 360;
+    setAnimating(true);
+    setDragX(direction === 'next' ? -liveW : liveW);
+    vibrate(20);
+    // Animate slide-out + fade. After 200ms, swap project (new chat appears at
+    // translateX=0 instantly), then animate fade-in over 150ms.
+    setTimeout(() => {
+      onSwitch(target.id);
+      // Snap to new project position WITHOUT animation, then fade in.
+      setAnimating(false);
+      setDragX(0);
+      hapticFired.current = false;
+      dragOrigin.current = null;
+    }, 200);
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="mobile-chat-swipe-area"
+      style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', touchAction: 'pan-y' }}
+      onPointerDown={(e) => {
+        if (projects.length < 2 || idx < 0) return;
+        // Sync width from DOM right now in case ResizeObserver hasn't fired yet
+        // — protects against state lag that was causing swipes to bounce.
+        const liveW = containerRef.current?.offsetWidth ?? 0;
+        if (liveW > 0 && liveW !== width) setWidth(liveW);
+        dragOrigin.current = { x: e.clientX, y: e.clientY, locked: null };
+        hapticFired.current = false;
+      }}
+      onPointerMove={(e) => {
+        const o = dragOrigin.current;
+        if (!o) return;
+        const dx = e.clientX - o.x;
+        const dy = e.clientY - o.y;
+        // Loose horizontal detect: if the move is more horizontal than vertical,
+        // treat as swipe. If clearly vertical (dy dominates), don't translate
+        // (let ThreadPrimitive's own scroll handle it). No sticky direction lock.
+        if (Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(dy) > 12) {
+          // Vertical scroll dominates — release the swipe attempt.
+          setDragX(0);
+          return;
+        }
+        const liveW = containerRef.current?.offsetWidth ?? width ?? 360;
+        const clamped = Math.max(-liveW, Math.min(liveW, dx));
+        setDragX(clamped);
+        const hAt = liveW * 0.25;
+        if (!hapticFired.current && Math.abs(dx) >= hAt) {
+          hapticFired.current = true;
+          vibrate(15);
+        } else if (hapticFired.current && Math.abs(dx) < hAt * 0.6) {
+          hapticFired.current = false;
+        }
+      }}
+      onPointerUp={(e) => {
+        const o = dragOrigin.current;
+        if (!o) return;
+        const dx = e.clientX - o.x;
+        const dy = e.clientY - o.y;
+        dragOrigin.current = null;
+        // Reject only obvious vertical scrolls; otherwise commit on >= 1/3 width.
+        if (Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(dy) > 12) { reset(false); return; }
+        const liveW = containerRef.current?.offsetWidth ?? width ?? 360;
+        const liveThreshold = liveW > 0 ? liveW * 0.33 : 100;
+        if (Math.abs(dx) >= liveThreshold) {
+          commit(dx < 0 ? 'next' : 'prev');
+        } else {
+          reset();
+        }
+      }}
+      onPointerCancel={() => { reset(); }}
+    >
+      {/* Carousel track — three slides side by side, offset by `dragX`. Each slide
+          is absolutely positioned at width offsets so layout flexbox isn't fighting
+          us. Only the active slide is interactive (composer focus etc); neighbours
+          are visual previews. pointer-events:none on neighbours prevents them from
+          stealing input. */}
+      {/* Single chat pane that follows the finger and crossfades on commit. */}
+      <div
+        style={{
+          flex: 1, minHeight: 0,
+          display: 'flex', flexDirection: 'column',
+          transform: `translate3d(${dragX}px, 0, 0)`,
+          opacity: animating ? Math.max(0, 1 - Math.abs(dragX) / (containerRef.current?.offsetWidth || 360)) : 1,
+          transition: animating ? 'transform 200ms ease-out, opacity 200ms ease-out' : 'none',
+          willChange: 'transform, opacity',
+        }}
+      >
+        {activeProjectId && renderChat(activeProjectId)}
+      </div>
+      {/* Peer-name hint that fades in as the user drags toward it. */}
+      {dragX !== 0 && hasNeighbors && (
+        <div
+          style={{
+            position: 'absolute', top: '46%',
+            ...(dragX < 0 ? { right: 18 } : { left: 18 }),
+            background: 'rgba(0,0,0,0.65)', color: '#fff',
+            borderRadius: 14, padding: '8px 16px',
+            fontSize: 14, fontWeight: 500,
+            opacity: Math.min(1, Math.abs(dragX) / ((containerRef.current?.offsetWidth || 360) * 0.5)),
+            pointerEvents: 'none', zIndex: 99,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {dragX < 0 ? `→ ${nextProj?.name ?? ''}` : `← ${prevProj?.name ?? ''}`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ProjectChatHeader ────────────────────────────────────────────────────────
+// Chat header for the active secretary project. Supports:
+//   • Long-press on project name → inline rename (blur/Enter saves, Esc cancels)
+//   • ⋯ overflow → action sheet: 重命名 / 删除项目
+function ProjectChatHeader({
+  projectId,
+  projects,
+  onBack,
+  onRename,
+  onDeleted,
+  onCreateProject,
+}: {
+  projectId: string;
+  projects: SecretaryProjectWithStaff[];
+  onBack: () => void;
+  onRename: (id: string, newName: string) => void;
+  onDeleted: () => void;
+  onCreateProject?: () => void;
+}) {
+  const proj = projects.find((p) => p.id === projectId);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const [renameError, setRenameError] = useState('');
+  const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function startEdit() {
+    setEditValue(proj?.name ?? '');
+    setRenameError('');
+    setEditing(true);
+    setShowMenu(false);
+    // focus after state flushes
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  async function commitRename() {
+    const trimmed = editValue.trim();
+    if (!trimmed) { setRenameError('名称不能为空'); return; }
+    if (trimmed.length > 50) { setRenameError('最多 50 个字符'); return; }
+    try {
+      const r = await holonApiFetch(`/api/v1/secretary-projects/${encodeURIComponent(projectId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!r.ok) { setRenameError('重命名失败'); return; }
+      onRename(projectId, trimmed);
+      setEditing(false);
+    } catch {
+      setRenameError('网络错误');
+    }
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setRenameError('');
+  }
+
+  function onLongPressStart() {
+    longPressTimer.current = setTimeout(() => { startEdit(); }, 500);
+  }
+  function onLongPressEnd() {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+  }
+
+  async function doDelete() {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const r = await holonApiFetch(`/api/v1/secretary-projects/${encodeURIComponent(projectId)}`, {
+        method: 'DELETE',
+      });
+      if (r.status === 409) {
+        setDeleteError('至少保留 1 个项目');
+        setDeleting(false);
+        return;
+      }
+      if (!r.ok) {
+        setDeleteError('删除失败');
+        setDeleting(false);
+        return;
+      }
+      setShowDeleteConfirm(false);
+      onDeleted();
+    } catch {
+      setDeleteError('网络错误');
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="mobile-chat-header">
+        {/* Owner: 聊天 tab 始终是某项目 chat, 没"列表页"可返回. 多于 1 项目时显示
+            ‹ 切换上一个; 单项目时不渲染. */}
+        {/* No back arrow — owner: 聊天 tab 始终是某项目 chat, 用 swipe 切换. */}
+        <span className="mobile-chat-header-title">
+          {editing ? (
+            <span className="mobile-chat-header-rename-wrap">
+              <input
+                ref={inputRef}
+                type="text"
+                className="mobile-chat-header-rename-input"
+                value={editValue}
+                maxLength={50}
+                onChange={(e) => { setEditValue(e.target.value); setRenameError(''); }}
+                onBlur={() => { void commitRename(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); void commitRename(); }
+                  if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                }}
+                aria-label="项目名称"
+              />
+              {renameError && <span className="mobile-chat-header-rename-err">{renameError}</span>}
+            </span>
+          ) : (
+            <>
+              <span
+                className="mobile-chat-header-name"
+                onMouseDown={onLongPressStart}
+                onMouseUp={onLongPressEnd}
+                onMouseLeave={onLongPressEnd}
+                onTouchStart={onLongPressStart}
+                onTouchEnd={onLongPressEnd}
+                onTouchCancel={onLongPressEnd}
+                title="长按重命名"
+              >
+                {proj?.name ?? '小秘'}
+              </span>
+              <span className="mobile-chat-header-sub">{proj?.secretary_staff?.name ?? '小秘'}</span>
+            </>
+          )}
+        </span>
+        <button
+          type="button"
+          className="mobile-chat-header-overflow"
+          aria-label="更多操作"
+          onClick={() => setShowMenu((v) => !v)}
+        >
+          ⋯
+        </button>
+      </div>
+      {showMenu && (
+        <div className="mobile-proj-menu-backdrop" onClick={() => setShowMenu(false)}>
+          <div className="mobile-proj-menu-sheet" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="mobile-proj-menu-item" onClick={startEdit}>重命名</button>
+            {onCreateProject && (
+              <button type="button" className="mobile-proj-menu-item" onClick={() => { setShowMenu(false); onCreateProject(); }}>新建项目</button>
+            )}
+            <button type="button" className="mobile-proj-menu-item mobile-proj-menu-danger" onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }}>删除项目</button>
+            <button type="button" className="mobile-proj-menu-cancel" onClick={() => setShowMenu(false)}>取消</button>
+          </div>
+        </div>
+      )}
+      {showDeleteConfirm && (
+        <div className="mobile-proj-menu-backdrop" onClick={() => { if (!deleting) setShowDeleteConfirm(false); }}>
+          <div className="mobile-proj-confirm-sheet" onClick={(e) => e.stopPropagation()}>
+            <p className="mobile-proj-confirm-msg">确定删除项目「{proj?.name ?? projectId}」?<br />聊天记录会保留。不可恢复.</p>
+            {deleteError && <p className="mobile-proj-confirm-err">{deleteError}</p>}
+            <div className="mobile-proj-confirm-actions">
+              <button type="button" className="mobile-proj-confirm-cancel" disabled={deleting} onClick={() => setShowDeleteConfirm(false)}>取消</button>
+              <button type="button" className="mobile-proj-confirm-delete" disabled={deleting} onClick={() => { void doDelete(); }}>
+                {deleting ? '删除中…' : '删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function MobileOwnerChat({
   staff,
   seed,
   onSeedConsumed,
+  onComposerActiveChange,
+  projectId,
 }: {
   staff: readonly Staff[];
   seed: string | null;
   onSeedConsumed: () => void;
+  onComposerActiveChange?: (active: boolean) => void;
+  projectId?: string | null;
 }) {
-  const adapter = useMemo(() => makeMobileOwnerAdapter(), []);
+  const adapter = useMemo(() => makeMobileOwnerAdapter(projectId), [projectId]);
   const runtime = useLocalRuntime(adapter);
   const [mounted, setMounted] = useState(false);
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+
+  // Secretary staff record — used to supply per-staff TTS config (lang/rate)
+  // to MessageActionStrip via TtsStaffContext.
+  const secretaryStaff = useMemo(
+    () => staff.find((s) => s.role_name === 'secretary') ?? null,
+    [staff],
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -1684,8 +2333,9 @@ function MobileOwnerChat({
   }
 
   return (
+    <TtsStaffContext.Provider value={secretaryStaff}>
     <AssistantRuntimeProvider runtime={runtime}>
-      <OwnerChatHistorySync runtime={runtime} />
+      <OwnerChatHistorySync runtime={runtime} projectId={projectId} />
       <ComposerSeeder seed={seed} onSeedConsumed={onSeedConsumed} />
       {mounted && <OwnerChatVvScroller />}
       <ThreadPrimitive.Root className="chat-thread mobile-chat-thread">
@@ -1712,7 +2362,13 @@ function MobileOwnerChat({
                 onAttach={(a) => setAttachment(a)}
                 disabled={attachment !== null}
               />
-              <ComposerPrimitive.Input rows={1} className="chat-input" placeholder="发消息给小秘…" />
+              <ComposerPrimitive.Input
+                rows={1}
+                className="chat-input"
+                placeholder="发消息给小秘…"
+                onFocus={() => onComposerActiveChange?.(true)}
+                onBlur={() => onComposerActiveChange?.(false)}
+              />
               <OwnerAttachAwareSend
                 attachment={attachment}
                 onAttachmentUpdate={(a) => setAttachment(a)}
@@ -1733,6 +2389,7 @@ function MobileOwnerChat({
         {mounted && <MobileMentionTypeahead staff={staff} />}
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
+    </TtsStaffContext.Provider>
   );
 }
 
@@ -1745,19 +2402,65 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Reset textarea height when text is cleared (e.g. after send) — otherwise
+  // the auto-grow inline height stays at whatever the largest message was.
+  useEffect(() => {
+    if (!text && inputRef.current) inputRef.current.style.height = '';
+  }, [text]);
+
+  // Kimi-style voice chat: when 语音直发 is ON, ALSO auto-read every new
+  // assistant reply aloud. Owner: 跟 Kimi 一样,语音聊天就自动读。
+  // Anchors on staffChatId so opening a different staff resets the baseline.
+  const lastSpokenIdxRef = useRef<number>(-1);
+  const baselineSetRef = useRef(false);
+  useEffect(() => {
+    // First time we see messages for this staff, mark everything as "already
+    // seen" so we don't speak the entire history on entry.
+    if (!baselineSetRef.current && messages.length > 0) {
+      lastSpokenIdxRef.current = messages.length - 1;
+      baselineSetRef.current = true;
+      return;
+    }
+    if (!getVoiceAutoSend()) return;
+    const lastIdx = messages.length - 1;
+    if (lastIdx <= lastSpokenIdxRef.current) return;
+    const last = messages[lastIdx];
+    if (!last || last.role !== 'assistant') return;
+    const content = last.content.trim();
+    if (!content) return;
+    lastSpokenIdxRef.current = lastIdx;
+    // Fire async; ignore failures (TTS is enhancement, not critical).
+    void (async () => {
+      try {
+        const opts = buildTtsOpts(staff, content);
+        await deviceTtsSpeak(content, opts);
+      } catch { /* best-effort */ }
+    })();
+  }, [messages, staff]);
+
+  // Reset auto-speak baseline when navigating to a different staff.
+  useEffect(() => {
+    lastSpokenIdxRef.current = -1;
+    baselineSetRef.current = false;
+  }, [staffChatId]);
 
   // Step 1: instant first-paint from local cache (offline fallback)
-  // Step 2: desk-primary sync — fetch desk transcript and reconcile
+  // Step 2: desk-primary sync — fetch desk transcript and reconcile, then POLL
+  // (every 2.5s) so async-appended messages show up live — e.g. the adopted-CLI
+  // front-stage summary that the desk appends ~1-2s after the turn settles.
   useEffect(() => {
     // Immediate: seed from local cache for first-paint
     const cached = loadChatMessages(staffChatId);
     if (cached.length > 0) setMessages(cached);
 
-    // Async: fetch the shared desk transcript as primary source of truth
     const encodedThread = encodeURIComponent(staffChatId);
-    holonApiFetch(`/api/v1/chat/history?thread=${encodedThread}`, { cache: 'no-store' })
-      .then(async (res) => {
-        if (!res.ok) return;
+    let stopped = false;
+    async function syncFromDesk() {
+      try {
+        const res = await holonApiFetch(`/api/v1/chat/history?thread=${encodedThread}`, { cache: 'no-store' });
+        if (!res.ok || stopped) return;
         const data = await res.json().catch(() => ({})) as {
           messages?: Array<{ role?: unknown; content?: unknown }>;
         };
@@ -1768,21 +2471,26 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
             typeof m.content === 'string' &&
             (m.content as string).length > 0,
           )
-          .map((m) => ({
-            role: m.role as 'user' | 'assistant',
-            content: m.content as string,
-          }));
-        if (deskMsgs.length === 0) return;
-        // Write-through to local cache for offline use
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content as string }));
+        if (deskMsgs.length === 0 || stopped) return;
         saveChatMessages(staffChatId, deskMsgs);
-        // Update state if desk has more messages than what we showed from cache
-        setMessages((current) =>
-          deskMsgs.length > current.length ? deskMsgs : current,
-        );
-      })
-      .catch(() => {
+        // Desk is source of truth. Adopt when desk has MORE messages OR when
+        // the last-message content changed (summarizer wipes a "正在总结…"
+        // placeholder with the final story — same count, new text).
+        setMessages((current) => {
+          if (deskMsgs.length > current.length) return deskMsgs;
+          const a = deskMsgs[deskMsgs.length - 1];
+          const b = current[current.length - 1];
+          if (a && b && a.content !== b.content) return deskMsgs;
+          return current;
+        });
+      } catch {
         // Desk unreachable — local cache already shown, no action needed
-      });
+      }
+    }
+    void syncFromDesk();
+    const id = window.setInterval(() => void syncFromDesk(), 2500);
+    return () => { stopped = true; window.clearInterval(id); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffChatId]);
 
@@ -1804,8 +2512,8 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
     });
   }
 
-  async function send() {
-    let content = text.trim();
+  async function send(overrideText?: string) {
+    let content = (overrideText ?? text).trim();
     if ((!content && !attachment) || sending) return;
 
     // Upload attachment if pending
@@ -1838,10 +2546,11 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
     // Force scroll on send regardless of scroll position
     forceRef.current = true;
     try {
+      const summarize = getSummaryEnabled(staff.id);
       const res = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staff.id)}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify(summarize ? { messages: next, summarize: true } : { messages: next }),
       });
       const data = await res.json().catch(() => ({})) as { reply?: string; error?: string };
       if (!res.ok || typeof data.reply !== 'string') {
@@ -1856,6 +2565,9 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
   }
 
   return (
+    // Provide this employee's staff record as TTS context so MessageActionStrip
+    // uses the correct language/rate for each message bubble.
+    <TtsStaffContext.Provider value={staff}>
     <div className="mobile-staff-chat">
       {/* thin WeChat-style chat header: ‹ back + name (skipped when embedded
           in StaffDetail — the 聊天|配置 shell provides the bar). */}
@@ -1908,17 +2620,79 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
             onRemove={clearAttachment}
           />
         )}
+        {/* Drag-to-resize handle: a wider, more obvious bar above the input.
+            Tap = toggle between default (3-row) and large (60vh). Drag = manual
+            sizing. Owner: 要看到能拉大的 affordance + 一键放大。 */}
+        <div
+          className="chat-input-grab"
+          aria-label="拖动或点击放大输入框"
+          onClick={() => {
+            const el = inputRef.current; if (!el) return;
+            const big = Math.floor(window.innerHeight * 0.6);
+            const cur = el.getBoundingClientRect().height;
+            // toggle: if already enlarged, collapse to natural (clear inline → CSS min-height takes over).
+            if (cur >= big - 8) el.style.height = '';
+            else el.style.height = big + 'px';
+          }}
+          onPointerDown={(ev) => {
+            const el = inputRef.current; if (!el) return;
+            (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+            const startY = ev.clientY;
+            const startH = el.getBoundingClientRect().height;
+            const maxH = Math.floor(window.innerHeight * 0.7);
+            let moved = false;
+            const onMove = (e: globalThis.PointerEvent) => {
+              const dy = startY - e.clientY;
+              if (Math.abs(dy) > 4) moved = true;
+              const h = Math.max(40, Math.min(startH + dy, maxH));
+              el.style.height = h + 'px';
+            };
+            const onUp = (e: globalThis.PointerEvent) => {
+              try { (ev.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+              window.removeEventListener('pointermove', onMove);
+              window.removeEventListener('pointerup', onUp);
+              window.removeEventListener('pointercancel', onUp);
+              // suppress click toggle if user actually dragged
+              if (moved) (ev.currentTarget as HTMLElement).dataset.justDragged = '1';
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+            window.addEventListener('pointercancel', onUp);
+          }}
+        >
+          <span className="chat-input-grab-bar" aria-hidden="true" />
+        </div>
         <div className="composer-input-row">
-          <MobileVoiceRecorderButton onTranscript={(transcript) => setText((current) => current ? `${current} ${transcript}` : transcript)} />
+          <MobileVoiceRecorderButton onTranscript={(transcript) => {
+            // Honor 语音模式 setting: 直接发送 → send with transcript NOW (don't
+            // rely on the next-render's text closure — that read the OLD text);
+            // 识别编辑 → just fill the box for review.
+            const autoSend = getVoiceAutoSend();
+            if (autoSend) {
+              setText('');
+              void send(transcript);
+            } else {
+              setText((current) => current ? `${current} ${transcript}` : transcript);
+            }
+          }} />
           <MobileAttachButton
             onAttach={(a) => setAttachment(a)}
             disabled={attachment !== null}
           />
           <textarea
-            rows={1}
-            className="chat-input"
+            ref={inputRef}
+            rows={3}
+            className="chat-input chat-input-grow"
             value={text}
-            onChange={(ev) => setText(ev.target.value)}
+            onChange={(ev) => {
+              setText(ev.target.value);
+              // Auto-grow up to ~50% of viewport; past that it scrolls inside.
+              // Owner: 默认就要够大,矫正时直接能看见整段。
+              const el = ev.target as HTMLTextAreaElement;
+              el.style.height = 'auto';
+              const cap = Math.max(180, Math.floor(window.innerHeight * 0.5));
+              el.style.height = Math.min(el.scrollHeight, cap) + 'px';
+            }}
             onKeyDown={(ev) => {
               if (ev.key === 'Enter' && !ev.shiftKey) {
                 ev.preventDefault();
@@ -1940,6 +2714,7 @@ function StaffChat({ staff, onBack, embedded }: { staff: Staff; onBack?: () => v
         </div>
       </div>
     </div>
+    </TtsStaffContext.Provider>
   );
 }
 
@@ -1954,6 +2729,20 @@ function staffModelLabel(s: Staff): string {
   return 'local';
 }
 
+const CONTACTS_GROUPS_KEY = 'holon.mobile.contactGroups.v1';
+
+function readContactGroupsState(): Record<string, boolean> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(CONTACTS_GROUPS_KEY);
+    return raw ? JSON.parse(raw) as Record<string, boolean> : {};
+  } catch { return {}; }
+}
+
+function writeContactGroupsState(state: Record<string, boolean>) {
+  try { window.localStorage.setItem(CONTACTS_GROUPS_KEY, JSON.stringify(state)); } catch { /* quota */ }
+}
+
 function Contacts({
   staff,
   agentUsage,
@@ -1961,6 +2750,8 @@ function Contacts({
   onOpenConfig,
   onRefresh,
   refreshing,
+  rooms,
+  onOpenRoom,
 }: {
   staff: readonly Staff[];
   agentUsage: Record<string, AgentUsage>;
@@ -1968,6 +2759,8 @@ function Contacts({
   onOpenConfig: (s: Staff) => void;
   onRefresh: () => void;
   refreshing: boolean;
+  rooms: Room[];
+  onOpenRoom: (r: Room) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const startY = useRef<number | null>(null);
@@ -1975,9 +2768,9 @@ function Contacts({
   const [pullY, setPullY] = useState(0);
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
-  const filtered = query
-    ? staff.filter((s) => `${s.name} ${s.role_label} ${s.role_name}`.toLowerCase().includes(query))
-    : staff;
+
+  // task_group collapsible state — persisted in localStorage, defaults to all expanded.
+  const [groupsExpanded, setGroupsExpanded] = useState<Record<string, boolean>>(() => readContactGroupsState());
 
   const TRIGGER_PX = 64;
   const MAX_PULL_PX = 96;
@@ -2007,7 +2800,88 @@ function Contacts({
     if (shouldFire) onRefresh();
   }
 
+  function toggleGroup(groupName: string) {
+    setGroupsExpanded((prev) => {
+      const next = { ...prev, [groupName]: !(prev[groupName] ?? true) };
+      writeContactGroupsState(next);
+      return next;
+    });
+  }
+
+  // Build ordered list of groups (first-seen order), '其他' always last.
+  // Owner: 一个人可能在多个 task_group(多团队). Collect ALL task_group: tags from
+  // each staff and place that staff in every group they belong to. Fallback to
+  // '其他' only when staff has no task_group tags at all.
+  const { groupOrder, groupedStaff } = useMemo(() => {
+    const orderMap: string[] = [];
+    const buckets: Record<string, Staff[]> = {};
+    const pushTo = (label: string, s: Staff) => {
+      if (!buckets[label]) {
+        buckets[label] = [];
+        if (label !== '其他') orderMap.push(label);
+      }
+      buckets[label]!.push(s);
+    };
+    for (const s of staff) {
+      const labels: string[] = [];
+      for (const t of s.tags ?? []) {
+        if (typeof t === 'string' && t.startsWith('task_group:')) {
+          const v = t.slice('task_group:'.length).trim();
+          if (v && !labels.includes(v)) labels.push(v);
+        }
+      }
+      if (labels.length === 0) {
+        pushTo('其他', s as Staff);
+      } else {
+        for (const label of labels) pushTo(label, s as Staff);
+      }
+    }
+    if (buckets['其他']?.length) orderMap.push('其他');
+    return { groupOrder: orderMap, groupedStaff: buckets };
+  }, [staff]);
+
+  // Search filter: flatten across all groups. When searching, bypass group view.
+  const filteredFlat = useMemo(() => {
+    if (!query) return null; // null = use grouped rendering
+    return staff.filter((s) =>
+      `${s.name} ${s.role_label ?? ''} ${s.role_name ?? ''} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(query)
+    );
+  }, [staff, query]);
+
   const progress = Math.min(1, pullY / TRIGGER_PX);
+
+  function renderStaffRow(s: Staff) {
+    const usage = agentUsage[s.id];
+    const model = staffModelLabel(s);
+    return (
+      <button key={s.id} type="button" className="mobile-row" onClick={() => onOpen(s)}>
+        <StaffAvatar staff={s} size={44} />
+        <span className="mobile-row-main">
+          <span className="mobile-row-title">{s.name}</span>
+          {s.role_label && s.role_label !== s.name && (
+            <span className="mobile-row-sub">{s.role_label}</span>
+          )}
+          <span className="mobile-row-usage">
+            <span className="mobile-row-model">{model}</span>
+            {usage
+              ? <span className="mobile-row-tokens">今日 {fmtTokens(usage.today_tokens)} · 累计 {fmtTokens(usage.total_tokens)}</span>
+              : <span className="mobile-row-tokens mobile-row-tokens-na">暂无统计</span>}
+          </span>
+        </span>
+        <button
+          type="button"
+          className="mobile-row-action"
+          onClick={(e) => { e.stopPropagation(); onOpenConfig(s); }}
+          aria-label={`配置 ${s.name}`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </button>
+    );
+  }
 
   return (
     <div
@@ -2028,7 +2902,8 @@ function Contacts({
         <div className={`ptr-spinner${refreshing ? ' ptr-spinner-spin' : ''}`}
           style={{ transform: refreshing ? undefined : `rotate(${progress * 270}deg)` }} />
       </div>
-      {/* WeChat-style search bar */}
+      {/* WeChat-style: search at the very top, then a flat list (team room +
+          employees) sharing one row treatment. Owner: 会议室是员工的一个,不要隔着. */}
       <div className="mobile-search-bar">
         <span className="mobile-search-icon" aria-hidden="true">🔍</span>
         <input
@@ -2040,43 +2915,38 @@ function Contacts({
         />
         {q && <button type="button" className="mobile-search-clear" onClick={() => setQ('')} aria-label="清除">×</button>}
       </div>
-      {staff.length === 0 ? (
-        <div className="mobile-empty-panel">还没有员工。</div>
-      ) : filtered.length === 0 ? (
-        <div className="mobile-empty-panel">没有匹配「{q}」的员工。</div>
-      ) : filtered.map((s) => {
-        const usage = agentUsage[s.id];
-        const model = staffModelLabel(s);
+      {/* Team room row — always at top, NOT inside a folder */}
+      {(() => {
+        // v1: always show the singleton default team room; fetch member count from rooms list.
+        const DEFAULT_ID = 'room_default_team';
+        const teamRoom = rooms.find((r) => r.id === DEFAULT_ID) ?? rooms[0];
+        if (!teamRoom) return null; // skip silently while rooms loads — no awkward "加载中" row
+        const memberCount = (teamRoom as Room & { _memberCount?: number })._memberCount ?? staff.filter((s) => s.role_name !== 'secretary').length;
         return (
-          <button key={s.id} type="button" className="mobile-row" onClick={() => onOpen(s)}>
-            <StaffAvatar staff={s} size={44} />
+          <button type="button" className="mobile-row" onClick={() => onOpenRoom(teamRoom)}>
+            <span className="mobile-contacts-team-avatar">🏢</span>
             <span className="mobile-row-main">
-              <span className="mobile-row-title">{s.name}</span>
-              {s.role_label && s.role_label !== s.name && (
-                <span className="mobile-row-sub">{s.role_label}</span>
-              )}
-              <span className="mobile-row-usage">
-                <span className="mobile-row-model">{model}</span>
-                {usage
-                  ? <span className="mobile-row-tokens">今日 {fmtTokens(usage.today_tokens)} · 累计 {fmtTokens(usage.total_tokens)} tokens</span>
-                  : <span className="mobile-row-tokens mobile-row-tokens-na">暂无统计</span>}
-              </span>
+              <span className="mobile-row-title">{teamRoom.name} · {memberCount} 人</span>
+              <span className="mobile-row-sub">团队成员</span>
             </span>
-            <button
-              type="button"
-              className="mobile-row-action"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 4px', color: '#888', display: 'flex', alignItems: 'center' }}
-              onClick={(e) => { e.stopPropagation(); onOpenConfig(s); }}
-              aria-label={`配置 ${s.name}`}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-              </svg>
-            </button>
           </button>
         );
-      })}
+      })()}
+      {/* Staff list — flat when searching, grouped by task_group otherwise */}
+      {staff.length === 0 ? (
+        <div className="mobile-empty-panel">还没有员工。</div>
+      ) : filteredFlat !== null ? (
+        // Search mode: flat list across all groups
+        filteredFlat.length === 0 ? (
+          <div className="mobile-empty-panel">没有匹配「{q}」的员工。</div>
+        ) : (
+          filteredFlat.map((s) => renderStaffRow(s))
+        )
+      ) : (
+        // Owner: 员工跟小秘走, 不分 group. 项目里就是项目自己的员工, 直接 flat list.
+        // task_group 分组已删, staff 顺序按 first-seen.
+        staff.map((s) => renderStaffRow(s))
+      )}
     </div>
   );
 }
@@ -2171,24 +3041,189 @@ function resizeImageToDataUrl(file: File, size: number): Promise<string> {
   });
 }
 
+/** Strip claude-TUI chrome from a captured pane so the mobile terminal reads
+ *  clean: drop pure box-drawing/rule lines (────, │ │ borders), the persistent
+ *  "bypass permissions … / for agents" footer, and collapse blank runs. */
+function cleanTerminal(raw: string): string {
+  const BOX = /[─━│┃┌┐└┘├┤┬┴┼╭╮╰╯═║╔╗╚╝▏▕▎▔▁]/g;
+  const out: string[] = [];
+  let blanks = 0;
+  for (const line of raw.split('\n')) {
+    if (/bypass permissions|shift\+tab to cycle|⌫ for agents|⏵⏵/i.test(line)) continue;
+    // Remove box-drawing chars and the trailing padding tmux adds to fill the
+    // pane width — otherwise every line carries a long tail of spaces.
+    const cleaned = line.replace(BOX, '').replace(/[ \t]+$/, '');
+    if (cleaned.trim() === '') { blanks++; if (blanks <= 1) out.push(''); continue; }
+    blanks = 0;
+    out.push(cleaned);
+  }
+  // Dedent: claude's box adds a uniform left gutter (the padding after the │
+  // border). Strip the smallest common leading indent across non-blank lines so
+  // text reads flush-left instead of carrying a wide blank margin.
+  const indents = out.filter((l) => l.trim() !== '').map((l) => (l.match(/^ */)?.[0].length ?? 0));
+  const minIndent = indents.length ? Math.min(...indents) : 0;
+  const dedented = minIndent > 0 ? out.map((l) => l.slice(minIndent)) : out;
+  return dedented.join('\n').trim();
+}
+
 function StaffTerminal({ staffId }: { staffId: string }) {
-  const [output, setOutput] = useState('');
+  // Instant first-paint from local cache (owner: "刚开始时停留在那边"). The initial
+  // fetch then runs silently — no loading-state flash, no UI churn.
+  const cached = useMemo(() => getCachedTerminal(staffId), [staffId]);
+  const [output, setOutput] = useState<string>(() => cached?.output ?? '');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [cmd, setCmd] = useState('');
   const [sending, setSending] = useState(false);
   const preRef = useRef<HTMLPreElement>(null);
+  const termInputRef = useRef<HTMLTextAreaElement>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // Summary panel pref — read on mount; update live via event.
+  const [summaryEnabled, setSummaryEnabled_] = useState<boolean>(() => getSummaryEnabled(staffId));
+  useEffect(() => {
+    function onPrefChange(e: Event) {
+      const ev = e as CustomEvent<{ staffId: string; enabled: boolean }>;
+      if (ev.detail?.staffId === staffId) setSummaryEnabled_(ev.detail.enabled);
+    }
+    window.addEventListener('holon:summaryEnabledChange', onPrefChange);
+    return () => window.removeEventListener('holon:summaryEnabledChange', onPrefChange);
+  }, [staffId]);
+
+  // Summary side panel state.
+  const [panelOpen, setPanelOpen] = useState(false);
+  type SummaryMsg = { role: string; content: string };
+  // Instant first-paint of the summary panel from localStorage cache (owner:
+  // "打开的时候不要每次都去抓"). Background poll then refreshes; only re-renders
+  // when the count actually changes (avoids needless flicker).
+  const [summaryMsgs, setSummaryMsgs] = useState<SummaryMsg[]>(() => getCachedSummary(staffId));
+
+  // Transient "正在总结…" placeholder: set when user sends a command with
+  // summarize on; cleared when the summary poll detects a new assistant entry.
+  // NOT persisted — purely render-time.
+  const [pendingSummary, setPendingSummary] = useState(false);
+  const prevSummaryCountRef = useRef(summaryMsgs.length);
+
+  // Fetch summary thread when panel is open; poll every 3s.
+  useEffect(() => {
+    if (!panelOpen) return;
+    let stopped = false;
+    async function fetchSummary() {
+      try {
+        const thread = encodeURIComponent(`staff:${staffId}`);
+        const res = await holonApiFetch(`/api/v1/chat/history?thread=${thread}`, { cache: 'no-store' });
+        if (!res.ok || stopped) return;
+        const data = await res.json().catch(() => ({})) as { messages?: Array<{ role?: unknown; content?: unknown }> };
+        const raw = Array.isArray(data.messages) ? data.messages : [];
+        const msgs: SummaryMsg[] = raw
+          .filter((m) => m.role === 'assistant' && typeof m.content === 'string' && (m.content as string).trim())
+          .map((m) => ({ role: 'assistant', content: m.content as string }));
+        if (stopped) return;
+        // Only commit + write-through cache when something actually changed.
+        setSummaryMsgs((prev) => {
+          if (prev.length === msgs.length
+            && prev[prev.length - 1]?.content === msgs[msgs.length - 1]?.content) return prev;
+          setCachedSummary(staffId, msgs);
+          return msgs;
+        });
+      } catch { /* desk unreachable — keep stale */ }
+    }
+    void fetchSummary();
+    const id = window.setInterval(() => void fetchSummary(), 3000);
+    return () => { stopped = true; window.clearInterval(id); };
+  }, [panelOpen, staffId]);
+
+  // Clear pendingSummary when a new assistant summary entry lands (count went up).
+  // Also Kimi-mode: if 语音直发 is ON, auto-TTS the newest summary so the owner
+  // hears each turn's outcome without tapping a button.
+  const lastSpokenSummaryIdxRef = useRef<number>(-1);
+  const summaryBaselineRef = useRef(false);
+  useEffect(() => {
+    if (summaryMsgs.length > prevSummaryCountRef.current) {
+      setPendingSummary(false);
+    }
+    prevSummaryCountRef.current = summaryMsgs.length;
+    // Baseline on first observation — skip speaking the cache on entry.
+    if (!summaryBaselineRef.current && summaryMsgs.length > 0) {
+      lastSpokenSummaryIdxRef.current = summaryMsgs.length - 1;
+      summaryBaselineRef.current = true;
+      return;
+    }
+    if (!getVoiceAutoSend()) return;
+    const lastIdx = summaryMsgs.length - 1;
+    if (lastIdx <= lastSpokenSummaryIdxRef.current) return;
+    const last = summaryMsgs[lastIdx];
+    if (!last || !last.content?.trim()) return;
+    lastSpokenSummaryIdxRef.current = lastIdx;
+    void (async () => {
+      try {
+        const opts = buildTtsOpts(null, last.content);
+        await deviceTtsSpeak(last.content, opts);
+      } catch { /* best-effort */ }
+    })();
+  }, [summaryMsgs]);
+
+  // Reset baseline when navigating to a different staff terminal.
+  useEffect(() => {
+    lastSpokenSummaryIdxRef.current = -1;
+    summaryBaselineRef.current = false;
+  }, [staffId]);
+
+  // Swipe detection: horizontal-dominant pointer drag on the terminal area.
+  // RIGHT-to-LEFT (dx < -60): open panel. LEFT-to-RIGHT (dx > 60): close.
+  const swipeStartX = useRef<number | null>(null);
+  const swipeStartY = useRef<number | null>(null);
+  const swipeLocked = useRef<'h' | 'v' | null>(null);
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (!summaryEnabled) return;
+    swipeStartX.current = e.clientX;
+    swipeStartY.current = e.clientY;
+    swipeLocked.current = null;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (!summaryEnabled || swipeStartX.current === null || swipeStartY.current === null) return;
+    const dx = e.clientX - swipeStartX.current;
+    const dy = e.clientY - swipeStartY.current;
+    if (!swipeLocked.current) {
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        swipeLocked.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+    }
+    // Prevent vertical scroll only when we've locked onto a horizontal swipe.
+    if (swipeLocked.current === 'h') e.preventDefault();
+  }
+  function onPointerUp(e: React.PointerEvent) {
+    if (!summaryEnabled || swipeStartX.current === null || swipeLocked.current !== 'h') {
+      swipeStartX.current = null; swipeStartY.current = null; swipeLocked.current = null;
+      return;
+    }
+    const dx = e.clientX - swipeStartX.current;
+    swipeStartX.current = null; swipeStartY.current = null; swipeLocked.current = null;
+    if (dx < -60) setPanelOpen(true);
+    if (dx > 60) setPanelOpen(false);
+  }
+
+  const hashRef = useRef(cached?.hash ?? '');
+  // Delta/conditional poll: send the last hash we saw; the desk returns a tiny
+  // {unchanged:true} when the pane hasn't changed (stateless per-client — works
+  // across multiple devices since each holds its own hash). `silent` skips the
+  // loading flicker on background polls.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staffId)}/cli/output?lines=300`, { cache: 'no-store' });
-      const j = await r.json().catch(() => ({})) as { ok?: boolean; output?: string; reason?: string };
-      if (j.ok && typeof j.output === 'string') { setOutput(j.output); setReason(''); }
-      else { setReason(j.reason ?? '该员工当前没有运行中的终端会话'); }
+      const q = `lines=300${hashRef.current ? `&hash=${encodeURIComponent(hashRef.current)}` : ''}`;
+      const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staffId)}/cli/output?${q}`, { cache: 'no-store' });
+      const j = await r.json().catch(() => ({})) as { ok?: boolean; output?: string; hash?: string; unchanged?: boolean; reason?: string };
+      if (j.ok && j.unchanged) { setReason(''); return; } // no change — keep current output
+      if (j.ok && typeof j.output === 'string') {
+        if (j.hash) hashRef.current = j.hash;
+        setOutput(j.output); setReason('');
+        if (j.hash) setCachedTerminal(staffId, j.output, j.hash); // write-through cache
+      } else { setReason(j.reason ?? '该员工当前没有运行中的终端会话'); }
     } catch (e) {
       setReason(e instanceof Error ? e.message : String(e));
-    } finally { setLoading(false); }
+    } finally { if (!silent) setLoading(false); }
   }, [staffId]);
 
   // Send a command (keystrokes + Enter) straight into the agent's tmux session.
@@ -2199,11 +3234,18 @@ function StaffTerminal({ staffId }: { staffId: string }) {
     if (!text || sending) return;
     setSending(true);
     try {
+      const summarize = getSummaryEnabled(staffId);
       const r = await holonApiFetch(`/api/v1/staff/${encodeURIComponent(staffId)}/cli/input`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: text, enter: true }),
+        body: JSON.stringify(summarize ? { input: text, enter: true, summarize: true } : { input: text, enter: true }),
       });
-      if (r.ok) { setCmd(''); window.setTimeout(() => void load(), 400); }
+      if (r.ok) {
+        setCmd('');
+        // Show placeholder immediately so the panel feels responsive while
+        // the desk settle-watch + Haiku summarize runs in the background.
+        if (summarize) setPendingSummary(true);
+        window.setTimeout(() => void load(), 400);
+      }
       else {
         const j = await r.json().catch(() => ({})) as { error?: string };
         setReason(j.error === 'no_session' ? '该员工没有运行中的终端会话' : (j.error ?? '发送失败'));
@@ -2214,8 +3256,10 @@ function StaffTerminal({ staffId }: { staffId: string }) {
   }
 
   useEffect(() => {
-    void load();
-    const id = window.setInterval(() => void load(), 3000);
+    // Initial fetch is SILENT (cache already painted the screen — no need to
+    // flash "刷新中").
+    void load(true);
+    const id = window.setInterval(() => void load(true), 1500);
     return () => window.clearInterval(id);
   }, [load]);
 
@@ -2224,24 +3268,149 @@ function StaffTerminal({ staffId }: { staffId: string }) {
 
   return (
     <div className="mobile-term-wrap">
-      <div className="mobile-persona-editor-head">
-        <span className="mobile-config-dt">实时后台</span>
-        <button type="button" className="mobile-term-refresh" onClick={() => void load()} disabled={loading}>
-          {loading ? '刷新中…' : '刷新'}
+      {/* Swipe-out summary panel (only rendered when pref is on) */}
+      {summaryEnabled && (
+        <>
+          {/* Dim left strip when panel open — tap to close */}
+          {panelOpen && (
+            <div
+              className="mobile-summary-backdrop"
+              onClick={() => setPanelOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+          <div className={`mobile-summary-panel${panelOpen ? ' is-open' : ''}`} aria-label="总结面板">
+            <div className="mobile-summary-panel-header">
+              <span className="mobile-summary-panel-title">总结</span>
+              <button
+                type="button"
+                className="mobile-summary-panel-speak"
+                onClick={() => {
+                  // Owner: 喇叭按钮读最新一条总结(手动触发,不等 Kimi 自动)。
+                  ttsPrimeAudio();
+                  const last = summaryMsgs[summaryMsgs.length - 1];
+                  const text = last?.content?.trim();
+                  if (!text) return;
+                  void deviceTtsStop().catch(() => { /* noop */ });
+                  void (async () => {
+                    try {
+                      const opts = buildTtsOpts(null, text);
+                      await deviceTtsSpeak(text, opts);
+                    } catch { /* best-effort */ }
+                  })();
+                }}
+                aria-label="朗读最新总结"
+              >🔊</button>
+              <button
+                type="button"
+                className="mobile-summary-panel-close"
+                onClick={() => setPanelOpen(false)}
+                aria-label="关闭总结面板"
+              >×</button>
+            </div>
+            <div className="mobile-summary-panel-body">
+              {/* Placeholder entry: shown immediately after send, replaced in-place
+                  when the real summary arrives (like voice-to-text live caption). */}
+              {pendingSummary && (
+                <div className="mobile-summary-item mobile-summary-item--pending">
+                  <span className="mobile-summary-state-pill is-pending">进行中</span>
+                  正在总结…
+                </div>
+              )}
+              {summaryMsgs.length === 0 && !pendingSummary ? (
+                <div className="mobile-summary-empty">暂无总结。发送一条消息后自动生成。</div>
+              ) : (
+                // Latest on top for quick scan.
+                [...summaryMsgs].reverse().map((m, i) => (
+                  <div key={i} className="mobile-summary-item">
+                    {m.content}
+                    <span className="mobile-summary-state-pill is-done">已完成</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Visible entry to the summary panel — discoverable affordance beside the
+          swipe gesture (owner: "右滑就是总结之类的 你可以加个那个东西"). */}
+      {summaryEnabled && !panelOpen && (
+        <button
+          type="button"
+          className="mobile-term-summary-btn"
+          onClick={() => setPanelOpen(true)}
+          aria-label="打开总结面板"
+        >
+          总结 ›
         </button>
+      )}
+
+      {/* Terminal area with swipe handlers when summary pref is on */}
+      <div
+        className="mobile-term-swipe-area"
+        onPointerDown={summaryEnabled ? onPointerDown : undefined}
+        onPointerMove={summaryEnabled ? onPointerMove : undefined}
+        onPointerUp={summaryEnabled ? onPointerUp : undefined}
+        style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+      >
+        {output ? (
+          <>
+            {reason && <div className="mobile-term-status">{reason}</div>}
+            <pre ref={preRef} className="mobile-term-screen">{cleanTerminal(output)}</pre>
+          </>
+        ) : (
+          <div className="mobile-term-empty">{reason || (loading ? '加载中…' : '加载中…')}</div>
+        )}
       </div>
-      {output
-        ? <pre ref={preRef} className="mobile-term-screen">{output}</pre>
-        : <div className="mobile-term-empty">{reason || '加载中…'}</div>}
+
       {/* Direct CLI control: speak/type a command → straight into the tmux session. */}
+      {/* Owner: 员工 CLI 输入框默认 3 行 + 灰 bar 点击放大 / 拖拽缩放,跟员工
+          聊天那边一样的可调大小。原来是单行 input,语音转写整段看不见。 */}
+      <div
+        className="chat-input-grab"
+        aria-label="拖动或点击放大输入框"
+        onClick={() => {
+          const el = termInputRef.current; if (!el) return;
+          const big = Math.floor(window.innerHeight * 0.6);
+          const cur = el.getBoundingClientRect().height;
+          if (cur >= big - 8) el.style.height = '';
+          else el.style.height = big + 'px';
+        }}
+        onPointerDown={(ev) => {
+          const el = termInputRef.current; if (!el) return;
+          (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+          const startY = ev.clientY;
+          const startH = el.getBoundingClientRect().height;
+          const maxH = Math.floor(window.innerHeight * 0.7);
+          const onMove = (e: globalThis.PointerEvent) => {
+            const dy = startY - e.clientY;
+            const h = Math.max(40, Math.min(startH + dy, maxH));
+            el.style.height = h + 'px';
+          };
+          const onUp = (e: globalThis.PointerEvent) => {
+            try { (ev.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+          };
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+          window.addEventListener('pointercancel', onUp);
+        }}
+      >
+        <span className="chat-input-grab-bar" aria-hidden="true" />
+      </div>
       <div className="mobile-term-input-row">
         <MobileVoiceRecorderButton onTranscript={(t) => setCmd((c) => (c ? `${c} ${t}` : t))} />
-        <input
+        <textarea
+          ref={termInputRef}
+          rows={3}
           className="mobile-term-input"
           value={cmd}
           onChange={(e) => setCmd(e.target.value)}
-          placeholder="输入命令…（语音或打字,回车执行）"
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void sendCmd(); } }}
+          placeholder="输入命令…（语音或打字,回车执行;Shift+回车换行）"
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendCmd(); } }}
           disabled={sending}
         />
         <button type="button" className="mobile-term-send" onClick={() => void sendCmd()} disabled={sending || !cmd.trim()}>
@@ -2395,11 +3564,20 @@ function StaffProfile({
   }, [staffId]);
 
   // Row-list expand state (embedded mode only)
-  const [openRow, setOpenRow] = useState<'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'ttsRate' | 'replyLang' | null>(null);
+  const [openRow, setOpenRow] = useState<'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'ttsRate' | 'replyLang' | 'voiceAutoSend' | 'showOwnerTodo' | 'summaryEnabled' | null>(null);
 
-  function toggleRow(row: 'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'ttsRate' | 'replyLang') {
+  function toggleRow(row: 'name' | 'roleLabel' | 'roleName' | 'maxJobs' | 'persona' | 'ttsVoice' | 'ttsStyle' | 'ttsRate' | 'replyLang' | 'voiceAutoSend' | 'showOwnerTodo' | 'summaryEnabled') {
     setOpenRow((prev) => (prev === row ? null : row));
   }
+
+  // Feature 2: voice auto-send pref (secretary only, localStorage)
+  const [voiceAutoSend, setVoiceAutoSendState] = useState<boolean>(() => getVoiceAutoSend());
+  // Feature 3: show/hide 请示 strip pref (secretary only, localStorage)
+  const [showOwnerTodoPref, setShowOwnerTodoPrefState] = useState<boolean>(() => getShowOwnerTodo());
+  // Feature 4: summary panel pref (non-secretary cli_agent, per-staff, localStorage)
+  const [summaryEnabledPref, setSummaryEnabledPrefState] = useState<boolean>(() =>
+    staff !== null ? getSummaryEnabled(staff.id) : false,
+  );
 
   // TTS + reply language drafts (per-staff AI-agent config)
   const [ttsVoiceDraft, setTtsVoiceDraft] = useState('');
@@ -2556,14 +3734,14 @@ function StaffProfile({
           {/* 职责 row */}
           <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('persona')}>
             <span className="mobile-me-row-title">职责</span>
-            <span className="mobile-collapse-summary" style={{ maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span className="mobile-collapse-summary">
               {staff.system_prompt?.trim() ? staff.system_prompt.trim().slice(0, 30) + (staff.system_prompt.trim().length > 30 ? '…' : '') : '未设置'}
             </span>
             <span className={`mobile-collapse-chevron${openRow === 'persona' ? ' open' : ''}`}>›</span>
           </button>
           {openRow === 'persona' && (
-            <div className="mobile-persona-editor" style={{ margin: '0 0 8px' }}>
-              {personaMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{personaMsg}</span>}
+            <div className="mobile-persona-editor">
+              {personaMsg && <span className="mobile-persona-editor-msg">{personaMsg}</span>}
               <textarea
                 className="mobile-persona-editor-textarea"
                 value={personaDraft}
@@ -2601,7 +3779,7 @@ function StaffProfile({
           </button>
           {openRow === 'ttsVoice' && (
             <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
-              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" >{aiCfgMsg}</span>}
               <select
                 className="mobile-staff-field"
                 value={ttsVoiceDraft}
@@ -2630,7 +3808,7 @@ function StaffProfile({
           </button>
           {openRow === 'ttsStyle' && (
             <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
-              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" >{aiCfgMsg}</span>}
               <select
                 className="mobile-staff-field"
                 value={ttsStyleDraft}
@@ -2659,7 +3837,7 @@ function StaffProfile({
           </button>
           {openRow === 'ttsRate' && (
             <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
-              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" >{aiCfgMsg}</span>}
               <select
                 className="mobile-staff-field"
                 value={ttsRateDraft}
@@ -2688,7 +3866,7 @@ function StaffProfile({
           </button>
           {openRow === 'replyLang' && (
             <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
-              {aiCfgMsg && <span className="mobile-persona-editor-msg" style={{ display: 'block', marginBottom: 4 }}>{aiCfgMsg}</span>}
+              {aiCfgMsg && <span className="mobile-persona-editor-msg" >{aiCfgMsg}</span>}
               <select
                 className="mobile-staff-field"
                 value={replyLangDraft}
@@ -2707,6 +3885,85 @@ function StaffProfile({
                 </button>
               </div>
             </div>
+          )}
+
+          {/* 语音模式 row — owner: employees should also have this (was secretary-
+              only by mistake). Pref is a global localStorage key shared by all
+              staff configs — toggling it anywhere applies app-wide. */}
+          <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('voiceAutoSend')}>
+            <span className="mobile-me-row-title">语音模式</span>
+            <span className="mobile-collapse-summary">{voiceAutoSend ? '直接发送' : '识别编辑'}</span>
+            <span className={`mobile-collapse-chevron${openRow === 'voiceAutoSend' ? ' open' : ''}`}>›</span>
+          </button>
+          {openRow === 'voiceAutoSend' && (
+            <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+              <div className="mobile-landing-seg">
+                <button
+                  type="button"
+                  className={`mobile-landing-opt${voiceAutoSend ? ' is-active' : ''}`}
+                  onClick={() => { setVoiceAutoSend(true); setVoiceAutoSendState(true); setOpenRow(null); }}
+                >直接发送</button>
+                <button
+                  type="button"
+                  className={`mobile-landing-opt${!voiceAutoSend ? ' is-active' : ''}`}
+                  onClick={() => { setVoiceAutoSend(false); setVoiceAutoSendState(false); setOpenRow(null); }}
+                >识别编辑</button>
+              </div>
+            </div>
+          )}
+
+          {/* 请示提醒 row — secretary only (Feature 3) */}
+          {isSecretaryProfile && (
+            <>
+              <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('showOwnerTodo')}>
+                <span className="mobile-me-row-title">请示提醒</span>
+                <span className="mobile-collapse-summary">{showOwnerTodoPref ? '显示' : '隐藏'}</span>
+                <span className={`mobile-collapse-chevron${openRow === 'showOwnerTodo' ? ' open' : ''}`}>›</span>
+              </button>
+              {openRow === 'showOwnerTodo' && (
+                <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+                  <div className="mobile-landing-seg">
+                    <button
+                      type="button"
+                      className={`mobile-landing-opt${showOwnerTodoPref ? ' is-active' : ''}`}
+                      onClick={() => { setShowOwnerTodo(true); setShowOwnerTodoPrefState(true); setOpenRow(null); }}
+                    >显示</button>
+                    <button
+                      type="button"
+                      className={`mobile-landing-opt${!showOwnerTodoPref ? ' is-active' : ''}`}
+                      onClick={() => { setShowOwnerTodo(false); setShowOwnerTodoPrefState(false); setOpenRow(null); }}
+                    >隐藏</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 总结面板 row — non-secretary cli_agent employees (Feature 4) */}
+          {!isSecretaryProfile && staff?.substrate.kind === 'cli_agent' && (
+            <>
+              <button type="button" className="mobile-collapse-head" onClick={() => toggleRow('summaryEnabled')}>
+                <span className="mobile-me-row-title">总结面板</span>
+                <span className="mobile-collapse-summary">{summaryEnabledPref ? '显示' : '关闭'}</span>
+                <span className={`mobile-collapse-chevron${openRow === 'summaryEnabled' ? ' open' : ''}`}>›</span>
+              </button>
+              {openRow === 'summaryEnabled' && (
+                <div className="mobile-staff-edit" style={{ paddingBottom: 8 }}>
+                  <div className="mobile-landing-seg">
+                    <button
+                      type="button"
+                      className={`mobile-landing-opt${summaryEnabledPref ? ' is-active' : ''}`}
+                      onClick={() => { if (staff) { setSummaryEnabled(staff.id, true); setSummaryEnabledPrefState(true); } setOpenRow(null); }}
+                    >显示</button>
+                    <button
+                      type="button"
+                      className={`mobile-landing-opt${!summaryEnabledPref ? ' is-active' : ''}`}
+                      onClick={() => { if (staff) { setSummaryEnabled(staff.id, false); setSummaryEnabledPrefState(false); } setOpenRow(null); }}
+                    >关闭</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
         </div>
@@ -3538,21 +4795,24 @@ function MarkdownView({ text }: { text: string }) {
 }
 
 function DelivSection() {
-  const [items, setItems] = useState<Deliverable[]>([]);
+  const [items, setItems] = useState<Deliverable[]>(() => getCachedDeliverables().slice(0, 8));
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<GetDeliverableResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => getCachedDeliverables().length === 0);
   const [error, setError] = useState('');
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     holonApiFetch('/api/v1/deliverables', { cache: 'no-store' })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json() as ListDeliverablesResponse;
-        if (!cancelled) setItems(Array.isArray(j.items) ? j.items.slice(0, 8) : []);
+        if (!cancelled) {
+          const fetched = Array.isArray(j.items) ? j.items : [];
+          setItems(fetched.slice(0, 8));
+          setCachedDeliverables(fetched);
+        }
       })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -3712,13 +4972,14 @@ function KanbanSectionHeader({ label, count, extra }: { label: string; count?: n
 
 function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary: (text: string) => void; initialDelivId?: string | null }) {
   // ── shared data ────────────────────────────────────────────────────────
-  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
-  const [jobs, setJobs] = useState<JobRow[]>([]);
+  // Lazy-init from kanban cache for instant first-paint (no loading flash).
+  const [deliverables, setDeliverables] = useState<Deliverable[]>(() => getCachedKanban()?.deliverables ?? []);
+  const [jobs, setJobs] = useState<JobRow[]>(() => getCachedKanban()?.jobs ?? []);
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [staffNames, setStaffNames] = useState<Map<string, string>>(new Map());
+  const [staffNames, setStaffNames] = useState<Map<string, string>>(() => new Map(getCachedKanban()?.staffNames ?? []));
   const [latestOutput, setLatestOutput] = useState<Record<string, string>>({}); // staff_id → latest terminal line
   const [liveStaffId, setLiveStaffId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => getCachedKanban() === null);
   const [error, setError] = useState('');
   // deliverable detail/review overlay
   const [openDelivId, setOpenDelivId] = useState<string | null>(() => initialDelivId ?? null);
@@ -3745,8 +5006,11 @@ function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary:
         tRes.ok ? (tRes.json() as Promise<ListTodosResponse>) : Promise.resolve({ items: [] }),
         sRes.ok ? (sRes.json() as Promise<ListStaffResponse>) : Promise.resolve({ items: [] }),
       ]);
-      setDeliverables(Array.isArray(dj.items) ? dj.items : []);
-      setJobs(Array.isArray(jj.items) ? jj.items : []);
+      const delivItems = Array.isArray(dj.items) ? dj.items : [];
+      const jobItems = Array.isArray(jj.items) ? jj.items : [];
+      setDeliverables(delivItems);
+      setCachedDeliverables(delivItems);
+      setJobs(jobItems);
       const pending = Array.isArray(tj.items) ? tj.items.filter((t) => t.status === 'pending') : [];
       pending.sort((a, b) => {
         const pa = PRIORITY_ORDER[a.priority ?? 'medium'] ?? 1;
@@ -3759,6 +5023,8 @@ function WorkTracker({ onTalkToSecretary, initialDelivId }: { onTalkToSecretary:
         if (s.name) nm.set(s.id, s.name);
       }
       setStaffNames(nm);
+      // Write-through kanban composite cache
+      setCachedKanban({ deliverables: delivItems, jobs: jobItems, staffNames: [...nm.entries()] });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -4183,13 +5449,15 @@ function fmtTokens(n: number): string {
 // ─── Token 用量 — drill-in detail view ───────────────────────────────────────
 
 function UsageDetail({ onBack }: { onBack: () => void }) {
-  const [data, setData] = useState<CliUsageResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Instant first-paint from local cache (owner: "token使用量也要缓存,不能每次都去抓").
+  // Then refresh silently — no loading flash when cache is present.
+  const [data, setData] = useState<CliUsageResponse | null>(() => getCachedUsage());
+  const [loading, setLoading] = useState<boolean>(() => getCachedUsage() === null);
 
   useEffect(() => {
     holonApiFetch('/api/v1/usage', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() as Promise<CliUsageResponse> : Promise.resolve(null))
-      .then((d) => { setData(d); })
+      .then((d) => { if (d) { setData(d); setCachedUsage(d); } })
       .catch(() => undefined)
       .finally(() => setLoading(false));
   }, []);
@@ -4899,6 +6167,18 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
     setSubmitting(true);
     setResult('');
     try {
+      // Encode attached screenshots as data URLs so the desk can persist them.
+      const screenshots = await Promise.all(
+        attachments.map(
+          (a) =>
+            new Promise<{ data_url: string; filename: string | null }>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve({ data_url: String(reader.result), filename: a.file.name || null });
+              reader.onerror = () => reject(new Error('读取截图失败'));
+              reader.readAsDataURL(a.file);
+            }),
+        ),
+      );
       const response = await holonApiFetch('/api/v1/admin/bugs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4907,12 +6187,16 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
           url: window.location.href,
           route: window.location.pathname,
           ts: new Date().toISOString(),
+          viewport: { w: window.innerWidth, h: window.innerHeight },
+          user_agent: navigator.userAgent,
+          screenshots,
         }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string; bug_id?: string };
       if (!response.ok) throw new Error(body.error ?? `提交失败 HTTP ${response.status}`);
       setResult(`已提交：${body.bug_id ?? '反馈已收到'}`);
       setDescription('');
+      setAttachments([]);
     } catch (err) {
       setResult(`提交失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -4942,9 +6226,12 @@ function MeFeedbackDialog({ open, onClose }: { open: boolean; onClose: () => voi
             onChange={(ev) => setDescription(ev.target.value)}
             rows={5}
             className="bug-modal-textarea mobile-feedback-textarea"
-            placeholder="请描述你遇到的问题或建议。"
-            autoFocus
+            placeholder="请描述你遇到的问题或建议（可语音）。"
           />
+          <div className="mobile-feedback-voice-row">
+            <MobileVoiceRecorderButton onTranscript={(t) => setDescription((d) => (d ? `${d} ${t}` : t))} />
+            <span className="mobile-feedback-voice-hint">按住说话，自动转文字</span>
+          </div>
           <label className="mobile-feedback-label" htmlFor="weizo-feedback-files">
             截图（可选，最多 {MAX_FEEDBACK_SCREENSHOTS} 张）
           </label>
@@ -5171,6 +6458,12 @@ function OwnerTodoStrip({
       <button type="button" className="mobile-todo-strip-head" onClick={() => setCollapsed((v) => !v)}>
         <span className="mobile-todo-strip-title">请示 · {totalCount}</span>
         <span className="mobile-todo-strip-more">{collapsed ? '展开 ›' : '收起 ⌄'}</span>
+        <button
+          type="button"
+          aria-label="隐藏请示"
+          onClick={(e) => { e.stopPropagation(); setShowOwnerTodo(false); }}
+          style={{ background: 'none', border: 'none', padding: '0 4px', cursor: 'pointer', fontSize: 16, lineHeight: 1, color: 'inherit', opacity: 0.5 }}
+        >×</button>
       </button>
       {!collapsed && (
         <>
@@ -5209,16 +6502,610 @@ function OwnerTodoStrip({
 // config. No top tab bar. Per-device preference in localStorage.
 const STAFF_LANDING_KEY = 'holon.mobile.staffLanding.v1';
 function getStaffLanding(id: string): 'chat' | 'terminal' {
-  if (typeof window === 'undefined') return 'chat';
-  try { return window.localStorage.getItem(`${STAFF_LANDING_KEY}.${id}`) === 'terminal' ? 'terminal' : 'chat'; }
-  catch { return 'chat'; }
+  // Default = 'terminal': all employees are tmux-driven now (unified model);
+  // open straight to the 后台 terminal unless the owner explicitly picked 前台.
+  if (typeof window === 'undefined') return 'terminal';
+  try { return window.localStorage.getItem(`${STAFF_LANDING_KEY}.${id}`) === 'chat' ? 'chat' : 'terminal'; }
+  catch { return 'terminal'; }
 }
 function setStaffLanding(id: string, v: 'chat' | 'terminal'): void {
   try { window.localStorage.setItem(`${STAFF_LANDING_KEY}.${id}`, v); } catch { /* noop */ }
 }
 
-function StaffDetail({ staff, onBack, initialMode }: { staff: Staff; onBack: () => void; initialMode?: 'primary' | 'config' }) {
+// ─── 语音输入模式偏好 (Feature 2) ──────────────────────────────────────────────
+// '1' = 直接发送 (default), '0' = 先填入可编辑
+const VOICE_AUTO_SEND_KEY = 'holon.mobile.voiceAutoSend.v1';
+function getVoiceAutoSend(): boolean {
+  if (typeof window === 'undefined') return true;
+  try { return window.localStorage.getItem(VOICE_AUTO_SEND_KEY) !== '0'; }
+  catch { return true; }
+}
+function setVoiceAutoSend(b: boolean): void {
+  try { window.localStorage.setItem(VOICE_AUTO_SEND_KEY, b ? '1' : '0'); } catch { /* noop */ }
+}
+
+// ─── 请示提醒显示偏好 ────────────────────────────────────────────────────────
+// '1' = 显示 (default), '0' = 隐藏
+const SHOW_OWNER_TODO_KEY = 'holon.mobile.showOwnerTodo.v1';
+function getShowOwnerTodo(): boolean {
+  if (typeof window === 'undefined') return true;
+  try { return window.localStorage.getItem(SHOW_OWNER_TODO_KEY) !== '0'; }
+  catch { return true; }
+}
+function setShowOwnerTodo(b: boolean): void {
+  try {
+    window.localStorage.setItem(SHOW_OWNER_TODO_KEY, b ? '1' : '0');
+    window.dispatchEvent(new Event('holon:ownerTodoPrefChange'));
+  } catch { /* noop */ }
+}
+
+// ─── 总结面板偏好 (每员工 per-staff, localStorage) ───────────────────────────
+// '1' = 显示, '0' = 关闭 (default 关闭)
+const SUMMARY_ENABLED_KEY = 'holon.mobile.summaryEnabled.v1';
+function getSummaryEnabled(staffId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try { return window.localStorage.getItem(`${SUMMARY_ENABLED_KEY}.${staffId}`) === '1'; }
+  catch { return false; }
+}
+function setSummaryEnabled(staffId: string, b: boolean): void {
+  try {
+    window.localStorage.setItem(`${SUMMARY_ENABLED_KEY}.${staffId}`, b ? '1' : '0');
+    window.dispatchEvent(new CustomEvent('holon:summaryEnabledChange', { detail: { staffId, enabled: b } }));
+  } catch { /* noop */ }
+}
+
+// ─── Generic local-cache helper (SSR-safe, JSON, best-effort) ────────────────
+// localCache.get<T>(key) → T | null (null on miss / SSR / parse error)
+// localCache.set(key, value) → void (swallows localStorage errors)
+const localCache = {
+  get<T>(key: string): T | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw) as T;
+    } catch { return null; }
+  },
+  set<T>(key: string, value: T): void {
+    if (typeof window === 'undefined') return;
+    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* noop */ }
+  },
+};
+
+// ─── Staff cache ─────────────────────────────────────────────────────────────
+const STAFF_CACHE_KEY = 'holon.mobile.staffCache.v1';
+function getCachedStaff(): Staff[] {
+  return localCache.get<Staff[]>(STAFF_CACHE_KEY) ?? [];
+}
+function setCachedStaff(items: Staff[]): void {
+  localCache.set(STAFF_CACHE_KEY, items);
+}
+
+// ─── Deliverables cache ───────────────────────────────────────────────────────
+const DELIVERABLES_CACHE_KEY = 'holon.mobile.deliverablesCache.v1';
+function getCachedDeliverables(): Deliverable[] {
+  return localCache.get<Deliverable[]>(DELIVERABLES_CACHE_KEY) ?? [];
+}
+function setCachedDeliverables(items: Deliverable[]): void {
+  localCache.set(DELIVERABLES_CACHE_KEY, items);
+}
+
+// ─── Kanban composite cache ───────────────────────────────────────────────────
+interface KanbanCached { deliverables: Deliverable[]; staffNames: Array<[string, string]>; jobs: JobRow[] }
+const KANBAN_CACHE_KEY = 'holon.mobile.kanbanCache.v1';
+function getCachedKanban(): KanbanCached | null {
+  return localCache.get<KanbanCached>(KANBAN_CACHE_KEY);
+}
+function setCachedKanban(v: KanbanCached): void {
+  localCache.set(KANBAN_CACHE_KEY, v);
+}
+
+// ─── Skills cache ─────────────────────────────────────────────────────────────
+const SKILLS_CACHE_KEY = 'holon.mobile.skillsCache.v1';
+function getCachedSkills(): SkillDescriptor[] {
+  return localCache.get<SkillDescriptor[]>(SKILLS_CACHE_KEY) ?? [];
+}
+function setCachedSkills(items: SkillDescriptor[]): void {
+  localCache.set(SKILLS_CACHE_KEY, items);
+}
+
+// ─── References count cache ───────────────────────────────────────────────────
+const REFERENCES_CACHE_KEY = 'holon.mobile.referencesCache.v1';
+function getCachedReferenceCount(): number | null {
+  return localCache.get<number>(REFERENCES_CACHE_KEY);
+}
+function setCachedReferenceCount(n: number): void {
+  localCache.set(REFERENCES_CACHE_KEY, n);
+}
+
+// ─── Owner snapshot cache ─────────────────────────────────────────────────────
+const OWNER_SNAPSHOT_CACHE_KEY = 'holon.mobile.ownerSnapshotCache.v1';
+function getCachedOwnerSnapshot(): OwnerSnapshot | null {
+  return localCache.get<OwnerSnapshot>(OWNER_SNAPSHOT_CACHE_KEY);
+}
+function setCachedOwnerSnapshot(v: OwnerSnapshot): void {
+  localCache.set(OWNER_SNAPSHOT_CACHE_KEY, v);
+}
+
+// ─── Room members per-room cache ──────────────────────────────────────────────
+const ROOM_MEMBERS_CACHE_PREFIX = 'holon.mobile.roomMembersCache.v1.';
+function getCachedRoomMembers(roomId: string): RoomMember[] {
+  return localCache.get<RoomMember[]>(`${ROOM_MEMBERS_CACHE_PREFIX}${roomId}`) ?? [];
+}
+function setCachedRoomMembers(roomId: string, members: RoomMember[]): void {
+  localCache.set(`${ROOM_MEMBERS_CACHE_PREFIX}${roomId}`, members);
+}
+
+// ─── Personas cache ───────────────────────────────────────────────────────────
+const PERSONAS_CACHE_KEY = 'holon.mobile.personasCache.v1';
+function getCachedPersonas(): PersonaPreset[] {
+  return localCache.get<PersonaPreset[]>(PERSONAS_CACHE_KEY) ?? [];
+}
+function setCachedPersonas(items: PersonaPreset[]): void {
+  localCache.set(PERSONAS_CACHE_KEY, items);
+}
+
+// ─── Owner-actions cache ──────────────────────────────────────────────────────
+// Separate key from legacy OWNER_ACTIONS_CACHE used by OwnerTodoStrip.
+const OWNER_ACTIONS_CACHE_KEY = 'holon.mobile.ownerActionsCache.v1';
+function getCachedOwnerActionsNew(): string[] {
+  return localCache.get<string[]>(OWNER_ACTIONS_CACHE_KEY) ?? [];
+}
+function setCachedOwnerActionsNew(items: string[]): void {
+  localCache.set(OWNER_ACTIONS_CACHE_KEY, items);
+}
+
+// ─── 终端本地缓存 (instant first-paint; silent background refresh) ────────────
+// Owner: "刚开始时停留在那边,后来抓的时候也不要通知客户" — don't make me wait for the
+// fetch every time I open 看后台. Cache last seen output + hash per staff; on
+// mount, populate from cache instantly + initial load runs silently.
+const TERM_CACHE_KEY = 'holon.mobile.termCache.v1';
+interface TermCache { output: string; hash: string }
+function getCachedTerminal(staffId: string): TermCache | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(`${TERM_CACHE_KEY}.${staffId}`);
+    if (!raw) return null;
+    const j = JSON.parse(raw) as Partial<TermCache>;
+    if (typeof j.output !== 'string' || typeof j.hash !== 'string') return null;
+    return { output: j.output, hash: j.hash };
+  } catch { return null; }
+}
+function setCachedTerminal(staffId: string, output: string, hash: string): void {
+  try { window.localStorage.setItem(`${TERM_CACHE_KEY}.${staffId}`, JSON.stringify({ output, hash })); }
+  catch { /* localStorage full / disabled — fine, it's a perf cache */ }
+}
+
+// ─── 总结面板本地缓存 (instant first-paint; only new summaries shown) ─────────
+const SUMMARY_CACHE_KEY = 'holon.mobile.summaryCache.v1';
+interface CachedSummary { role: string; content: string }
+function getCachedSummary(staffId: string): CachedSummary[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(`${SUMMARY_CACHE_KEY}.${staffId}`);
+    if (!raw) return [];
+    const j = JSON.parse(raw) as unknown;
+    if (!Array.isArray(j)) return [];
+    return j
+      .filter((x): x is CachedSummary => typeof x === 'object' && x !== null
+        && typeof (x as { role?: unknown }).role === 'string'
+        && typeof (x as { content?: unknown }).content === 'string')
+      .map((x) => ({ role: x.role, content: x.content }));
+  } catch { return []; }
+}
+function setCachedSummary(staffId: string, msgs: CachedSummary[]): void {
+  try { window.localStorage.setItem(`${SUMMARY_CACHE_KEY}.${staffId}`, JSON.stringify(msgs)); }
+  catch { /* noop */ }
+}
+
+// ─── Token usage 本地缓存 (instant first-paint) ─────────────────────────────
+const USAGE_CACHE_KEY = 'holon.mobile.usageCache.v1';
+function getCachedUsage(): CliUsageResponse | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(USAGE_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as CliUsageResponse;
+  } catch { return null; }
+}
+function setCachedUsage(d: CliUsageResponse): void {
+  try { window.localStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(d)); }
+  catch { /* noop */ }
+}
+
+// ─── Room localStorage helpers ────────────────────────────────────────────────
+
+const ROOMS_LIST_CACHE_KEY = 'holon.mobile.roomsListCache.v1';
+const ROOM_MSGS_CACHE_PREFIX = 'holon.mobile.roomMessagesCache.v1.';
+
+// ─── Secretary projects cache ─────────────────────────────────────────────────
+const SECRETARY_PROJECTS_CACHE_KEY = 'holon.mobile.secretaryProjectsCache.v1';
+function getCachedSecretaryProjects(): SecretaryProjectWithStaff[] {
+  return localCache.get<SecretaryProjectWithStaff[]>(SECRETARY_PROJECTS_CACHE_KEY) ?? [];
+}
+function setCachedSecretaryProjects(items: SecretaryProjectWithStaff[]): void {
+  localCache.set(SECRETARY_PROJECTS_CACHE_KEY, items);
+}
+
+interface RoomMsgCached { role: 'user' | 'assistant'; content: string; ts: string; author?: { kind: string; ref_id: string; display_name: string } }
+
+function getCachedRooms(): Room[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(ROOMS_LIST_CACHE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Room[];
+  } catch { return []; }
+}
+function setCachedRooms(rooms: Room[]): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(ROOMS_LIST_CACHE_KEY, JSON.stringify(rooms)); } catch { /* noop */ }
+}
+function getCachedRoomMsgs(roomId: string): RoomMsgCached[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(`${ROOM_MSGS_CACHE_PREFIX}${roomId}`);
+    if (!raw) return [];
+    return JSON.parse(raw) as RoomMsgCached[];
+  } catch { return []; }
+}
+function setCachedRoomMsgs(roomId: string, msgs: RoomMsgCached[]): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(`${ROOM_MSGS_CACHE_PREFIX}${roomId}`, JSON.stringify(msgs)); } catch { /* noop */ }
+}
+
+// ─── RoomView — full-screen meeting room chat ─────────────────────────────────
+
+function RoomView({
+  room,
+  allStaff,
+  onBack,
+  onRename,
+}: {
+  room: Room;
+  allStaff: readonly Staff[];
+  onBack: () => void;
+  onRename: (newName: string) => void;
+}) {
+  const [members, setMembers] = useState<RoomMember[]>(() => getCachedRoomMembers(room.id));
+  const [messages, setMessages] = useState<RoomMsgCached[]>(() => getCachedRoomMsgs(room.id));
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const [mention, setMention] = useState<{ staff_id: string; name: string } | null>(null);
+  const [showMembers, setShowMembers] = useState(false);
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(room.name);
+
+  const { scrollRef, scrollToBottom, forceRef } = useChatAutoScroll<HTMLDivElement>([messages, sending]);
+
+  // Load members on mount — cache-first, then background refresh
+  useEffect(() => {
+    let stopped = false;
+    holonApiFetch(`/api/v1/rooms/${encodeURIComponent(room.id)}`, { cache: 'no-store' })
+      .then(async (r) => {
+        if (!r.ok || stopped) return;
+        const j = await r.json().catch(() => ({})) as { members?: RoomMember[] };
+        if (stopped) return;
+        const fetched = Array.isArray(j.members) ? j.members : [];
+        setMembers(fetched);
+        setCachedRoomMembers(room.id, fetched);
+      })
+      .catch(() => undefined);
+    return () => { stopped = true; };
+  }, [room.id]);
+
+  // Poll history every 2.5s — mirrors StaffChat polling pattern.
+  useEffect(() => {
+    let stopped = false;
+    async function syncHistory() {
+      try {
+        const r = await holonApiFetch(`/api/v1/rooms/${encodeURIComponent(room.id)}/history`, { cache: 'no-store' });
+        if (!r.ok || stopped) return;
+        const j = await r.json().catch(() => ({})) as { messages?: RoomMsgCached[] };
+        const raw = Array.isArray(j.messages) ? j.messages : [];
+        if (stopped) return;
+        setMessages((prev) => {
+          if (prev.length === raw.length && prev[prev.length - 1]?.ts === raw[raw.length - 1]?.ts) return prev;
+          setCachedRoomMsgs(room.id, raw);
+          return raw;
+        });
+      } catch { /* desk unreachable */ }
+    }
+    void syncHistory();
+    const id = window.setInterval(() => void syncHistory(), 2500);
+    return () => { stopped = true; window.clearInterval(id); };
+  }, [room.id]);
+
+  async function sendMessage(overrideText?: string) {
+    const content = (overrideText ?? text).trim();
+    if (!content || sending) return;
+    setSending(true);
+    setError('');
+    forceRef.current = true;
+    const body: Record<string, unknown> = { text: content };
+    if (mention) body.mention = { staff_id: mention.staff_id };
+    try {
+      const r = await holonApiFetch(`/api/v1/rooms/${encodeURIComponent(room.id)}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({})) as { error?: string; code?: string };
+      if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
+      setText('');
+      setMention(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function addMemberStaff(staffId: string, staffName: string) {
+    setAddingStaff(true);
+    try {
+      const r = await holonApiFetch(`/api/v1/rooms/${encodeURIComponent(room.id)}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staff_id: staffId }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? `HTTP ${r.status}`);
+      }
+      const j = await r.json().catch(() => ({})) as { member?: RoomMember };
+      if (j.member) setMembers((prev) => [...prev, j.member!]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAddingStaff(false);
+    }
+  }
+
+  async function removeMemberParty(partyId: string) {
+    try {
+      await holonApiFetch(`/api/v1/rooms/${encodeURIComponent(room.id)}/members/${encodeURIComponent(partyId)}`, {
+        method: 'DELETE',
+      });
+      setMembers((prev) => prev.filter((m) => m.party_id !== partyId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function saveRename() {
+    const name = renameDraft.trim();
+    if (!name || name === room.name) { setRenaming(false); return; }
+    try {
+      const r = await holonApiFetch(`/api/v1/rooms/${encodeURIComponent(room.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? `HTTP ${r.status}`);
+      }
+      onRename(name);
+      setRenaming(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const isDefaultTeamRoom = room.id === 'room_default_team';
+  const aiMembers = members.filter((m) => m.kind === 'ai_agent');
+  const nonMemberStaff = allStaff.filter((s) => !aiMembers.some((m) => m.ref_id === s.id));
+
+  return (
+    <div className="mobile-room-shell">
+      {/* ── Header ── */}
+      <div className="mobile-chat-header mobile-room-header">
+        <button type="button" className="mobile-chat-header-back" onClick={onBack} aria-label="返回通讯录">‹</button>
+        {!isDefaultTeamRoom && renaming ? (
+          <input
+            className="mobile-staff-field mobile-room-rename-input"
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onBlur={() => void saveRename()}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void saveRename(); } if (e.key === 'Escape') setRenaming(false); }}
+            autoFocus
+          />
+        ) : (
+          <span
+            className="mobile-chat-header-name"
+            role={isDefaultTeamRoom ? undefined : 'button'}
+            tabIndex={isDefaultTeamRoom ? undefined : 0}
+            onClick={isDefaultTeamRoom ? undefined : () => { setRenameDraft(room.name); setRenaming(true); }}
+            onKeyDown={isDefaultTeamRoom ? undefined : (e) => { if (e.key === 'Enter') { setRenameDraft(room.name); setRenaming(true); } }}
+          >
+            {room.name}
+          </span>
+        )}
+        {/* Gear hidden for v1 default team room — its members auto-sync from the
+            staff list; the owner doesn't manage them manually. Future non-default
+            rooms (v2) will navigate to a contacts picker for 邀请. */}
+        {!isDefaultTeamRoom && (
+          <button type="button" className="mobile-chat-header-gear" onClick={() => setShowMembers((v) => !v)} aria-label="成员管理" aria-pressed={showMembers}>
+            ⓘ
+          </button>
+        )}
+      </div>
+
+      {/* ── Members strip ── */}
+      <div className="mobile-room-members">
+        {aiMembers.map((m) => (
+          <button
+            key={m.party_id}
+            type="button"
+            className="mobile-room-member-chip"
+            title={m.display_name}
+            onClick={() => {
+              if (showMembers) void removeMemberParty(m.party_id);
+              else setMention({ staff_id: m.ref_id, name: m.display_name });
+            }}
+          >
+            <span
+              className="mobile-room-member-chip-avatar"
+              style={{ background: `linear-gradient(160deg, ${staffPaletteColor(m.ref_id)} 0%, ${darkenHex(staffPaletteColor(m.ref_id))} 100%)` }}
+              aria-hidden="true"
+            >
+              {staffInitial(m.display_name)}
+            </span>
+            <span className="mobile-room-member-name">{m.display_name}</span>
+            {showMembers && <span className="mobile-room-member-remove" aria-hidden="true">×</span>}
+          </button>
+        ))}
+        {/* Add-member toggle — hidden for default team room in v1 */}
+        {!isDefaultTeamRoom && (
+          <button
+            type="button"
+            className="mobile-room-member-add"
+            onClick={() => setShowMembers((v) => !v)}
+            aria-label="添加成员"
+          >＋</button>
+        )}
+      </div>
+
+      {/* Add-member panel (slides in when showMembers + non-default room) */}
+      {showMembers && !isDefaultTeamRoom && nonMemberStaff.length > 0 && (
+        <div className="mobile-room-add-panel">
+          <span className="mobile-room-add-label">添加成员</span>
+          <div className="mobile-room-add-chips">
+            {nonMemberStaff.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="mobile-persona-save-btn"
+                disabled={addingStaff}
+                onClick={() => void addMemberStaff(s.id, s.name)}
+              >
+                ＋ {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Chat thread ── */}
+      <div ref={scrollRef} className="mobile-chat-viewport mobile-staff-chat-scroll mobile-room-chat">
+        {messages.length === 0 ? (
+          <div className="mobile-room-empty">
+            <span>和团队聊聊。@提名某位成员让他单独回答。</span>
+          </div>
+        ) : messages.map((m, i) => {
+          const isUser = m.role === 'user';
+          const authorName = m.author?.display_name ?? (isUser ? '我' : '助理');
+          const initial = staffInitial(authorName);
+          return isUser ? (
+            <div key={i} className="chatmsg chatmsg-user">
+              <div className="chatmsg-bubble chatmsg-bubble-user">{m.content}</div>
+            </div>
+          ) : (
+            <div key={i} className="chatmsg chatmsg-assistant">
+              <span
+                className="chatmsg-avatar"
+                style={{ background: `linear-gradient(160deg, ${staffPaletteColor(m.author?.ref_id ?? authorName)} 0%, ${darkenHex(staffPaletteColor(m.author?.ref_id ?? authorName))} 100%)` }}
+                title={authorName}
+                aria-hidden="true"
+              >{initial}</span>
+              <div className="chatmsg-body">
+                <span className="mobile-room-agent-name">{authorName}</span>
+                <div className="chatmsg-bubble chatmsg-bubble-assistant">{m.content}</div>
+              </div>
+            </div>
+          );
+        })}
+        {sending && (
+          <div className="chatmsg chatmsg-assistant">
+            <div className="chatmsg-avatar" aria-hidden="true">…</div>
+            <div className="chatmsg-body">
+              <div className="chatmsg-bubble chatmsg-bubble-assistant chat-typing-bubble">
+                <span className="chat-typing-dots" aria-label="正在回复"><i /><i /><i /></span>
+              </div>
+            </div>
+          </div>
+        )}
+        {error && <div className="mobile-error">发送失败：{error}</div>}
+      </div>
+
+      {/* ── Composer ── */}
+      <div className="mobile-chat-composer">
+        {/* @ mention pill */}
+        {mention && (
+          <div className="mobile-room-mention-pill">
+            <span>@{mention.name}</span>
+            <button type="button" className="mobile-room-mention-clear" onClick={() => setMention(null)} aria-label="取消提及">✕</button>
+          </div>
+        )}
+        {/* @ picker popover */}
+        {mentionPickerOpen && aiMembers.length > 0 && (
+          <div className="mobile-room-at-picker">
+            {aiMembers.map((m) => (
+              <button
+                key={m.party_id}
+                type="button"
+                className="mobile-row"
+                onClick={() => { setMention({ staff_id: m.ref_id, name: m.display_name }); setMentionPickerOpen(false); }}
+              >
+                <span
+                  className="mobile-room-at-picker-avatar"
+                  style={{ background: `linear-gradient(160deg, ${staffPaletteColor(m.ref_id)} 0%, ${darkenHex(staffPaletteColor(m.ref_id))} 100%)` }}
+                  aria-hidden="true"
+                >{staffInitial(m.display_name)}</span>
+                <span>{m.display_name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="composer-input-row">
+          <MobileVoiceRecorderButton onTranscript={(t) => {
+            const autoSend = getVoiceAutoSend();
+            if (autoSend) {
+              setText('');
+              void sendMessage(t);
+            } else {
+              setText((c) => c ? `${c} ${t}` : t);
+            }
+          }} />
+          <button
+            type="button"
+            className="mobile-attach-button"
+            aria-label="@提及成员"
+            aria-pressed={mentionPickerOpen}
+            onClick={() => setMentionPickerOpen((v) => !v)}
+          >@</button>
+          <textarea
+            rows={1}
+            className="chat-input"
+            value={text}
+            onChange={(ev) => setText(ev.target.value)}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void sendMessage(); }
+            }}
+            onFocus={() => { forceRef.current = true; scrollToBottom(); }}
+            placeholder={mention ? `发消息给 ${mention.name}…` : '发消息到团队…'}
+          />
+          <button
+            type="button"
+            className="chat-send"
+            onClick={() => void sendMessage()}
+            disabled={sending || !text.trim()}
+            aria-label="发送"
+          >↑</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StaffDetail({ staff, onBack, initialMode, onOpenTeamRoom }: { staff: Staff; onBack: () => void; initialMode?: 'primary' | 'config'; onOpenTeamRoom?: () => void }) {
   const isSecretary = staff.role_name === 'secretary';
+  // Unified tmux model: all employees open straight to the 后台 terminal
+  // (getStaffLanding now defaults 'terminal'); only the secretary is 前台 chat.
   const [mode, setMode] = useState<'primary' | 'config'>(initialMode ?? 'primary');
   const [landing, setLanding] = useState<'chat' | 'terminal'>(() => (isSecretary ? 'chat' : getStaffLanding(staff.id)));
 
@@ -5237,15 +7124,6 @@ function StaffDetail({ staff, onBack, initialMode }: { staff: Staff; onBack: () 
             staffId={staff.id}
             fallback={staff}
             embedded
-            beforeRows={!isSecretary ? (
-              <div className="mobile-landing-toggle">
-                <span className="mobile-me-label" style={{ margin: 0 }}>打开时默认显示</span>
-                <div className="mobile-landing-seg">
-                  <button type="button" className={`mobile-landing-opt${landing === 'chat' ? ' is-active' : ''}`} onClick={() => pickLanding('chat')}>前台（聊天）</button>
-                  <button type="button" className={`mobile-landing-opt${landing === 'terminal' ? ' is-active' : ''}`} onClick={() => pickLanding('terminal')}>后台（终端）</button>
-                </div>
-              </div>
-            ) : undefined}
           />
         </div>
       </div>
@@ -5312,7 +7190,7 @@ function AssetsView({
         <div className="mobile-asset-cell is-static">
           <span className="mobile-asset-icon">📦</span>
           <span className="mobile-asset-name">交付物</span>
-          <span className="mobile-asset-sub">{delivCount === null ? '…' : `${delivCount} 份`}</span>
+          <span className="mobile-asset-sub">{delivCount === null ? '…' : delivCount === 0 ? '暂无' : `${delivCount} 份`}</span>
         </div>
         <div className="mobile-asset-cell is-static">
           <span className="mobile-asset-icon">📁</span>
@@ -5332,24 +7210,341 @@ function AssetsView({
   );
 }
 
+// ─── Marketplace (商店) views ────────────────────────────────────────────────
+
+function PackDetailView({
+  pack,
+  onBack,
+  onImportDone,
+  activeProjectId,
+}: {
+  pack: TeamPack;
+  onBack: () => void;
+  onImportDone: () => void;
+  activeProjectId?: string | null | undefined;
+}) {
+  // Build ordered group list preserving pack order.
+  const groups: Array<{ label: string; items: TeamPack['staff'] }> = [];
+  const seenGroups = new Set<string>();
+  for (const s of pack.staff) {
+    const g = s.task_group ?? '其他';
+    if (!seenGroups.has(g)) { seenGroups.add(g); groups.push({ label: g, items: [] }); }
+    const grp = groups.find((x) => x.label === g);
+    if (grp) grp.items.push(s);
+  }
+
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(pack.staff.map((s) => s.name)));
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState('');
+  // Conflict mode — default 'skip' preserves v1 behaviour.
+  const [conflictMode, setConflictMode] = useState<'skip' | 'rename' | 'replace'>('skip');
+  // Existing staff names for collision detection.
+  const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
+  // workspace_hint overrides keyed by staff name.
+  const [workspaceOverrides, setWorkspaceOverrides] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const s of pack.staff) { init[s.name] = s.workspace_hint ?? ''; }
+    return init;
+  });
+
+  // Fetch existing staff names once when the detail view mounts.
+  useEffect(() => {
+    holonApiFetch('/api/v1/staff', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<{ items?: Array<{ name: string }> }> : Promise.resolve({ items: [] }))
+      .then((j) => {
+        const names = new Set<string>(Array.isArray(j.items) ? j.items.map((s) => s.name) : []);
+        setExistingNames(names);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  function toggle(name: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) { next.delete(name); } else { next.add(name); }
+      return next;
+    });
+  }
+
+  async function doImport() {
+    if (importing) return;
+    const selected = pack.staff.map((s) => s.name).filter((n) => checked.has(n));
+    if (selected.length === 0) { setResult('请至少勾选一名成员'); return; }
+    setImporting(true);
+    setResult('');
+    // Build workspace_overrides — only include entries that differ from the pack default.
+    const overrides: Record<string, string> = {};
+    for (const name of selected) {
+      const defaultHint = pack.staff.find((s) => s.name === name)?.workspace_hint ?? '';
+      const edited = workspaceOverrides[name] ?? defaultHint;
+      if (edited !== defaultHint) overrides[name] = edited;
+    }
+    try {
+      const body: Record<string, unknown> = {
+        selected_staff_names: selected,
+        conflict: conflictMode,
+      };
+      if (Object.keys(overrides).length > 0) body.workspace_overrides = overrides;
+      // Scope import to the active project when one is selected.
+      if (activeProjectId) body.project_id = activeProjectId;
+      const r = await holonApiFetch(`/api/v1/team-packs/${pack.id}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json() as { created?: string[]; skipped?: string[]; error?: string };
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+      const createdCount = j.created?.length ?? 0;
+      const skippedCount = j.skipped?.length ?? 0;
+      setResult(`已导入 ${createdCount} 人${skippedCount > 0 ? `（跳过 ${skippedCount}）` : ''}`);
+      window.setTimeout(() => { onImportDone(); }, 1200);
+    } catch (err) {
+      setResult(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const conflictOptions: Array<{ value: 'skip' | 'rename' | 'replace'; label: string }> = [
+    { value: 'skip', label: '跳过' },
+    { value: 'rename', label: '重命名' },
+    { value: 'replace', label: '替换' },
+  ];
+
+  return (
+    <div className="mobile-subview-page">
+      <div className="mobile-subview-header">
+        <button type="button" className="mobile-subview-back" onClick={onBack} aria-label="返回">‹</button>
+        <span className="mobile-subview-title">{pack.name}</span>
+      </div>
+      <div className="mobile-pack-detail-body">
+        <p className="mobile-pack-card-meta" style={{ margin: '0 0 16px' }}>{pack.description}</p>
+        {groups.map((g) => (
+          <div key={g.label}>
+            <div className="mobile-pack-detail-group-header">{g.label}</div>
+            {g.items.map((s) => {
+              const hasCollision = existingNames.has(s.name);
+              return (
+                <label key={s.name} className="mobile-pack-import-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={checked.has(s.name)}
+                    onChange={() => toggle(s.name)}
+                    style={{ marginRight: 10, accentColor: '#1f7a44', flexShrink: 0 }}
+                  />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 500 }}>{s.name}</span>
+                      {hasCollision && (
+                        <span className="mobile-pack-collision-warn" title="已存在同名员工">⚠</span>
+                      )}
+                      <span className="mobile-pack-card-meta">{s.role_label}</span>
+                    </span>
+                    {s.workspace_hint !== undefined && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                        <span className="mobile-pack-card-meta" style={{ flexShrink: 0 }}>工作区:</span>
+                        <input
+                          type="text"
+                          className="mobile-pack-workspace-input"
+                          value={workspaceOverrides[s.name] ?? s.workspace_hint}
+                          onChange={(e) => setWorkspaceOverrides((prev) => ({ ...prev, [s.name]: e.target.value }))}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`${s.name} 工作区路径`}
+                        />
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        ))}
+        {/* Conflict resolution control */}
+        <div className="mobile-pack-conflict-row">
+          <span className="mobile-pack-conflict-label">同名冲突:</span>
+          {conflictOptions.map((opt) => (
+            <label key={opt.value} className="mobile-pack-conflict-option">
+              <input
+                type="radio"
+                name={`conflict-${pack.id}`}
+                value={opt.value}
+                checked={conflictMode === opt.value}
+                onChange={() => setConflictMode(opt.value)}
+                style={{ accentColor: '#1f7a44' }}
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="mobile-pack-import-bar">
+        {result && <div className="mobile-me-note" style={{ textAlign: 'center', marginBottom: 6 }}>{result}</div>}
+        <button
+          type="button"
+          className="mobile-green-cta"
+          disabled={importing}
+          onClick={() => { void doImport(); }}
+        >
+          {importing ? '导入中…' : `导入全队 (${checked.size} 人)`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MarketplaceView({
+  onBack,
+  onImportDone,
+  activeProjectId,
+}: {
+  onBack: () => void;
+  onImportDone: () => void;
+  activeProjectId?: string | null | undefined;
+}) {
+  // SWR cache: instant render from localStorage on entry, then revalidate in
+  // background. Owner: 商店打开 第一次冷 compile 慢, 之后秒开。
+  const cached = useMemo(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem('holon.mobile.teamPacks.v1');
+      return raw ? JSON.parse(raw) as TeamPack[] : [];
+    } catch { return []; }
+  }, []);
+  const [packs, setPacks] = useState<TeamPack[]>(cached);
+  const [loading, setLoading] = useState(cached.length === 0);
+  const [error, setError] = useState('');
+  const [selectedPack, setSelectedPack] = useState<TeamPack | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>('全部');
+  const [searchQ, setSearchQ] = useState('');
+
+  useEffect(() => {
+    holonApiFetch('/api/v1/team-packs', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() as Promise<{ items?: TeamPack[] }> : Promise.resolve({ items: [] }))
+      .then((j) => {
+        const items = Array.isArray(j.items) ? j.items : [];
+        setPacks(items);
+        try { window.localStorage.setItem('holon.mobile.teamPacks.v1', JSON.stringify(items)); } catch { /* quota */ }
+      })
+      .catch((err) => { setError(err instanceof Error ? err.message : String(err)); })
+      .finally(() => { setLoading(false); });
+  }, []);
+
+  // Derive unique categories from loaded packs.
+  const categories = ['全部', ...Array.from(new Set(packs.map((p) => p.category).filter(Boolean)))];
+
+  // Search filter: match name, description, tags, and staff role_labels (AND with category).
+  const searchTerm = searchQ.trim().toLowerCase();
+  const categoryFiltered = activeCategory === '全部'
+    ? packs
+    : packs.filter((p) => p.category === activeCategory);
+  const visiblePacks = searchTerm
+    ? categoryFiltered.filter((p) => {
+        if (p.name.toLowerCase().includes(searchTerm)) return true;
+        if (p.description.toLowerCase().includes(searchTerm)) return true;
+        if (p.tags.some((t) => t.toLowerCase().includes(searchTerm))) return true;
+        if (p.staff.some((s) => s.role_label?.toLowerCase().includes(searchTerm))) return true;
+        return false;
+      })
+    : categoryFiltered;
+
+  if (selectedPack) {
+    return (
+      <PackDetailView
+        pack={selectedPack}
+        onBack={() => setSelectedPack(null)}
+        onImportDone={onImportDone}
+        activeProjectId={activeProjectId}
+      />
+    );
+  }
+
+  return (
+    <div className="mobile-subview-page">
+      <div className="mobile-subview-header">
+        <button type="button" className="mobile-subview-back" onClick={onBack} aria-label="返回">‹</button>
+        <span className="mobile-subview-title">商店</span>
+      </div>
+      {/* Marketplace search bar */}
+      {!loading && packs.length > 0 && (
+        <input
+          className="mobile-marketplace-search"
+          type="search"
+          value={searchQ}
+          onChange={(e) => setSearchQ(e.target.value)}
+          placeholder="搜索角色包..."
+        />
+      )}
+      {/* Category filter chip row — horizontally scrollable */}
+      {!loading && packs.length > 0 && (
+        <div className="mobile-pack-category-row">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              className={`mobile-pack-category-chip${activeCategory === cat ? ' is-active' : ''}`}
+              onClick={() => setActiveCategory(cat)}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mobile-marketplace-list">
+        {loading && <div className="mobile-me-note" style={{ padding: '16px 0' }}>加载中…</div>}
+        {error && <div className="mobile-me-note" style={{ color: '#c0392b' }}>{error}</div>}
+        {!loading && visiblePacks.length === 0 && !error && (
+          <div className="mobile-me-note" style={{ padding: '16px 0' }}>
+            {searchTerm ? `没有匹配「${searchQ}」的角色包` : '暂无团队包'}
+          </div>
+        )}
+        {visiblePacks.map((pack) => (
+          <button
+            key={pack.id}
+            type="button"
+            className="mobile-pack-card"
+            onClick={() => setSelectedPack(pack)}
+          >
+            <div className="mobile-pack-card-title">{pack.name}</div>
+            <div className="mobile-pack-card-meta">{pack.description}</div>
+            <div className="mobile-pack-card-footer">
+              {pack.tags.map((t) => (
+                <span key={t} className="mobile-pack-tag-chip">{t}</span>
+              ))}
+              <span className="mobile-pack-card-meta" style={{ marginLeft: 'auto' }}>
+                {pack.staff.length} 人 · {pack.est_setup_time}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── End Marketplace views ───────────────────────────────────────────────────
+
 function MeTab({
   connection,
   onDisconnect,
   onUseSkill,
   onSubviewChange,
+  activeProjectId,
 }: {
   connection: MobileDesktopConnection;
   onDisconnect: () => void;
   onUseSkill: (text: string) => void;
   onSubviewChange: (inSubview: boolean) => void;
+  activeProjectId?: string | null | undefined;
 }) {
   const [owner, setOwner] = useState<OwnerProfile | null>(null);
   const [meData, setMeData] = useState<MeOwnerData | null>(null);
-  const [snapshot, setSnapshot] = useState<OwnerSnapshot | null>(null);
-  const [personas, setPersonas] = useState<PersonaPreset[]>([]);
+  const [snapshot, setSnapshot] = useState<OwnerSnapshot | null>(() => getCachedOwnerSnapshot());
+  const [personas, setPersonas] = useState<PersonaPreset[]>(() => getCachedPersonas());
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [personaSheetOpen, setPersonaSheetOpen] = useState(false);
+  const [dedupeMsg, setDedupeMsg] = useState<string | null>(null);
+  const [dedupeBusy, setDedupeBusy] = useState(false);
   const [ownerDraft, setOwnerDraft] = useState('');
   const [ownerIndustry, setOwnerIndustry] = useState(''); // 行业/职业 — onboarding-style, drives the interview
   const [ownerBusy, setOwnerBusy] = useState<'idle' | 'polishing' | 'saving'>('idle');
@@ -5376,10 +7571,14 @@ function MeTab({
   const [qrSheetOpen, setQrSheetOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false); // 语言区折叠(为以后多语言)
   const [assetsOpen, setAssetsOpen] = useState(false); // 资产区(技能 + 交付统计 + …)
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false); // 商店 subview
   const [skillSheetOpen, setSkillSheetOpen] = useState(false);
   const [skillUsageOpen, setSkillUsageOpen] = useState(false);
-  const [delivCount, setDelivCount] = useState<number | null>(null);
-  const [refCount, setRefCount] = useState<number | null>(null);
+  const [delivCount, setDelivCount] = useState<number | null>(() => {
+    const cached = getCachedDeliverables();
+    return cached.length > 0 ? cached.length : null;
+  });
+  const [refCount, setRefCount] = useState<number | null>(() => getCachedReferenceCount());
 
   async function load() {
     setLoading(true);
@@ -5400,7 +7599,10 @@ function MeTab({
       setOwner(meJson);
       setMeData(meJson);
       setSnapshot(snapJson);
-      setPersonas(Array.isArray(pJson.items) ? pJson.items : []);
+      setCachedOwnerSnapshot(snapJson);
+      const personaItems = Array.isArray(pJson.items) ? pJson.items : [];
+      setPersonas(personaItems);
+      setCachedPersonas(personaItems);
       // Seed language preference from owner config (default zh-CN).
       setLangPref(meJson.language_preference === 'en' ? 'en' : 'zh-CN');
     } catch (err) {
@@ -5412,8 +7614,8 @@ function MeTab({
 
   useEffect(() => { void load(); }, []);
 
-  // Tell the shell when a 二级页 (资产/用量) is open so it drops the app header.
-  useEffect(() => { onSubviewChange(assetsOpen || usageOpen); }, [assetsOpen, usageOpen, onSubviewChange]);
+  // Tell the shell when a 二级页 (资产/用量/商店) is open so it drops the app header.
+  useEffect(() => { onSubviewChange(assetsOpen || usageOpen || marketplaceOpen); }, [assetsOpen, usageOpen, marketplaceOpen, onSubviewChange]);
 
   useEffect(() => {
     holonApiFetch('/api/v1/usage', { cache: 'no-store' })
@@ -5426,11 +7628,23 @@ function MeTab({
   useEffect(() => {
     holonApiFetch('/api/v1/deliverables', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() as Promise<ListDeliverablesResponse> : Promise.resolve(null))
-      .then((data) => { if (data) setDelivCount(Array.isArray(data.items) ? data.items.length : 0); })
+      .then((data) => {
+        if (data) {
+          const count = Array.isArray(data.items) ? data.items.length : 0;
+          setDelivCount(count);
+          if (Array.isArray(data.items)) setCachedDeliverables(data.items);
+        }
+      })
       .catch(() => undefined);
     holonApiFetch('/api/v1/references', { cache: 'no-store' })
       .then((r) => r.ok ? r.json() as Promise<{ items?: unknown[] }> : Promise.resolve(null))
-      .then((data) => { if (data) setRefCount(Array.isArray(data.items) ? data.items.length : 0); })
+      .then((data) => {
+        if (data) {
+          const count = Array.isArray(data.items) ? data.items.length : 0;
+          setRefCount(count);
+          setCachedReferenceCount(count);
+        }
+      })
       .catch(() => undefined);
   }, []);
 
@@ -5570,6 +7784,20 @@ function MeTab({
     return <UsageDetail onBack={() => setUsageOpen(false)} />;
   }
 
+  if (marketplaceOpen) {
+    return (
+      <MarketplaceView
+        onBack={() => setMarketplaceOpen(false)}
+        onImportDone={() => {
+          setMarketplaceOpen(false);
+          // Signal WeizoApp to force-refetch the staff roster.
+          window.dispatchEvent(new Event('holon:team-pack-imported'));
+        }}
+        activeProjectId={activeProjectId}
+      />
+    );
+  }
+
   if (assetsOpen) {
     return (
       <>
@@ -5645,7 +7873,7 @@ function MeTab({
       <div className="mobile-me-section">
         <button type="button" className="mobile-collapse-head" onClick={() => setAssetsOpen(true)}>
           <span className="mobile-me-row-title">资产</span>
-          <span className="mobile-collapse-summary">技能 · 引用 · 交付{delivCount !== null ? ` ${delivCount}` : ''}</span>
+          <span className="mobile-collapse-summary">技能 · 引用 · 交付{delivCount ? ` ${delivCount}` : ''}</span>
           <span className="mobile-collapse-chevron">›</span>
         </button>
       </div>
@@ -5687,11 +7915,96 @@ function MeTab({
       </button>
       {/* WeChat-style quiet footer: plain centered gray line, no card, no sha/date. */}
       <div className="mobile-me-version">微作 Weizo 0.1.0</div>
+      <button type="button" className="mobile-feedback-button" onClick={() => setMarketplaceOpen(true)}>
+        <span className="mobile-me-row-title">商店</span>
+        <span className="mobile-collapse-chevron">›</span>
+      </button>
       <button type="button" className="mobile-feedback-button" onClick={() => setFeedbackOpen(true)}>
         <span>反馈 / 报错</span>
         <span>›</span>
       </button>
-      <button type="button" className="mobile-disconnect-button" onClick={onDisconnect}>
+      {/* Dedupe-staff cleanup button */}
+      {dedupeMsg && (
+        <div
+          style={{
+            margin: '6px 16px',
+            padding: '8px 12px',
+            background: '#f0f9eb',
+            color: '#52c41a',
+            borderRadius: 8,
+            fontSize: 13,
+            textAlign: 'center',
+          }}
+          onClick={() => setDedupeMsg(null)}
+        >
+          {dedupeMsg}
+        </div>
+      )}
+      <button
+        type="button"
+        className="mobile-feedback-button"
+        disabled={dedupeBusy}
+        onClick={async () => {
+          // Step 1: dry-run to count duplicates
+          const base = connection.baseUrl;
+          if (!base) { window.alert('未连接桌面端'); return; }
+          setDedupeBusy(true);
+          setDedupeMsg(null);
+          try {
+            const dry = await fetch(`${base}/api/v1/admin/dedupe-staff`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: '{}',
+            });
+            if (!dry.ok) throw new Error(`HTTP ${dry.status}`);
+            const dryData = await dry.json() as { removed?: unknown[] };
+            const count = Array.isArray(dryData.removed) ? dryData.removed.length : 0;
+            if (count === 0) {
+              setDedupeMsg('没有重复员工，无需清理。');
+              setDedupeBusy(false);
+              return;
+            }
+            if (!window.confirm(`发现 ${count} 个重复员工。确认清理?`)) {
+              setDedupeBusy(false);
+              return;
+            }
+            // Step 2: confirm=true
+            const res = await fetch(`${base}/api/v1/admin/dedupe-staff`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ confirm: true }),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json() as { removed?: unknown[]; failed?: number };
+            const removed = Array.isArray(data.removed) ? data.removed.length : 0;
+            const failed = typeof data.failed === 'number' ? data.failed : 0;
+            setDedupeMsg(
+              failed > 0
+                ? `已清理 ${removed - failed} 个，${failed} 个失败。`
+                : `已清理 ${removed} 个重复员工 ✓`,
+            );
+          } catch (err) {
+            setDedupeMsg(`清理失败: ${err instanceof Error ? err.message : String(err)}`);
+          } finally {
+            setDedupeBusy(false);
+          }
+        }}
+      >
+        <span className="mobile-me-row-title">{dedupeBusy ? '清理中…' : '清理重复员工'}</span>
+        <span className="mobile-collapse-chevron">›</span>
+      </button>
+      <button
+        type="button"
+        className="mobile-disconnect-button"
+        onClick={() => {
+          // Hard-disconnect wipes the device token → forces a full re-pair on
+          // next launch. Owner has confused this with the offline banner's
+          // "刷新连接" before — confirm to prevent an accidental re-pair cycle.
+          if (window.confirm('彻底断开并清除配对?\n下次连接需要重新扫码或输入验证码。\n\n(如果只是想恢复连接,请用顶部「刷新连接」)')) {
+            onDisconnect();
+          }
+        }}
+      >
         断开 / 重新配对
       </button>
 
@@ -5800,7 +8113,7 @@ function MeTab({
                 value={ownerDraft}
                 onChange={(e) => setOwnerDraft(e.target.value)}
                 rows={4}
-                placeholder="或自己写：我是做柴油机出口的小公司老板，平时忙采购和客户跟进，痛点是邮件和报价太占时间…"
+                placeholder="或自己写：你的角色/行业 + 平时最忙的事 + 想让 AI 帮你接手的痛点。"
                 disabled={ownerBusy !== 'idle'}
               />
               <div className="mobile-persona-editor-actions">
@@ -5890,11 +8203,12 @@ function ConnectionBanner({
         onClick={onRetry}
         disabled={checking}
       >
-        桌面未连接 · {checking ? '自动重连中…' : '自动重连中（点此立即重试）'}
+        桌面暂未响应 · {checking ? '正在重连…' : '自动重连中(点此立即重试)'}
       </button>
-      {/* Escape hatch: changed desk / new network / discovery failed → re-pair. */}
+      {/* Same action as onRetry — labelled separately as an obvious second tap
+          option. NOT a re-pair: token persists, baseUrl tries failover. */}
       <button type="button" className="mobile-connection-banner-repair" onClick={onRepair}>
-        重新配对
+        刷新连接
       </button>
     </div>
   );
@@ -5930,10 +8244,13 @@ function BottomNav({
   active,
   badges,
   onTab,
+  chatActive,
 }: {
   active: TabKey;
   badges: Record<BadgedTabKey, number>;
   onTab: (tab: TabKey) => void;
+  /** When true and on the chats tab, slide the nav bar off screen (WeChat-like). */
+  chatActive?: boolean;
 }) {
   const TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
     { key: 'chats', label: '聊天', icon: <IconNavChat /> },
@@ -5942,8 +8259,10 @@ function BottomNav({
     { key: 'me', label: '我', icon: <IconNavMe /> },
   ];
 
+  const hidden = !!chatActive;
+
   return (
-    <nav className="mobile-bottom-nav" aria-label="微作导航">
+    <nav className={`mobile-bottom-nav${hidden ? ' mobile-bottom-nav--hidden' : ''}`} aria-label="微作导航">
       {TABS.map((tab) => (
         <button
           key={tab.key}
@@ -5966,7 +8285,8 @@ function BottomNav({
   );
 }
 
-function tabTitle(tab: TabKey, selectedStaff: Staff | null): string {
+function tabTitle(tab: TabKey, selectedStaff: Staff | null, selectedRoom?: Room | null): string {
+  if (tab === 'contacts' && selectedRoom) return selectedRoom.name;
   if (tab === 'contacts' && selectedStaff) return selectedStaff.name;
   switch (tab) {
     case 'contacts': return '通讯录';
@@ -6073,14 +8393,21 @@ function QrScanner({
       zIndex: 100,
     }}>
       <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
-        {state === 'scanning' && (
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            style={{ width: '100%', display: 'block', borderRadius: 8 }}
-          />
-        )}
+        {/* Video must be in the DOM BEFORE we attach the MediaStream — keeping it
+            conditionally rendered meant videoRef.current was still null when
+            start() tried to assign srcObject → stream never attached → black
+            scanner. Render always; hide via display when not yet scanning. */}
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+          style={{
+            width: '100%',
+            display: state === 'scanning' ? 'block' : 'none',
+            borderRadius: 8,
+          }}
+        />
         {/* hidden canvas for frame capture */}
         <canvas ref={canvasRef} style={{ display: 'none' }} />
         {state === 'requesting' && (
@@ -6177,6 +8504,7 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
       });
       const body = await r.json().catch(() => ({})) as {
         ok?: boolean; device_token?: string; device_id?: string;
+        lan_candidates?: unknown;
         error?: string; code?: string;
       };
       if (!r.ok || !body.ok || !body.device_token) {
@@ -6191,7 +8519,17 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
         }
         throw new Error(body.error ?? body.code ?? `HTTP ${r.status}`);
       }
-      writeDesktopConnection({ baseUrl: normalizedUrl, deviceToken: body.device_token });
+      const parsedCandidates = Array.isArray(body.lan_candidates)
+        ? (body.lan_candidates as unknown[])
+            .filter((u): u is string => typeof u === 'string')
+            .map(normalizeBaseUrl)
+            .filter((u, i, a) => a.indexOf(u) === i)
+        : undefined;
+      writeDesktopConnection({
+        baseUrl: normalizedUrl,
+        deviceToken: body.device_token,
+        ...(parsedCandidates !== undefined ? { candidates: parsedCandidates } : {}),
+      });
       installMobileApiFetchProxy();
       onPaired();
     } catch (e) {
@@ -6301,22 +8639,90 @@ function PairingPrompt({ onPaired }: { onPaired: () => void }) {
 const CONNECTION_POLL_MS = 12000;
 
 export function WeizoApp() {
+  // iOS WKWebView audio-autoplay gate: prime on the FIRST user touch anywhere
+  // in the app (not just the voice button) so Kimi-mode auto-TTS works out of
+  // the box. After unlock the listener removes itself. Owner: 第一次按语音按钮
+  // 才解锁很反直觉, 任何 tap 都该当 gesture.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const prime = () => { ttsPrimeAudio(); };
+    document.addEventListener('pointerdown', prime, { once: true, passive: true });
+    return () => document.removeEventListener('pointerdown', prime);
+  }, []);
+
   const [connection, setConnection] = useState<MobileDesktopConnection | null>(null);
   const discoveringRef = useRef(false); // guards LAN re-discovery (one sweep at a time)
   const [booted, setBooted] = useState(false);
   const [tab, setTab] = useState<TabKey>('chats');
-  const [staff, setStaff] = useState<Staff[]>([]);
+  const [staff, setStaff] = useState<Staff[]>(() => getCachedStaff());
   const [agentUsage, setAgentUsage] = useState<Record<string, AgentUsage>>({});
   const [chatSeed, setChatSeed] = useState<string | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [staffInitialMode, setStaffInitialMode] = useState<'primary' | 'config'>('primary');
   const [staffError, setStaffError] = useState('');
+  const [rooms, setRooms] = useState<Room[]>(() => getCachedRooms());
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [secretaryProjects, setSecretaryProjects] = useState<SecretaryProjectWithStaff[]>(() => getCachedSecretaryProjects());
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  // inProjectChat: true when the chat panel is showing (tab === 'chats' full-screen).
+  // Kept separate from activeProjectId so back-arrow collapses to list WITHOUT
+  // clearing activeProjectId (通讯录 keeps filtering by it).
+  const [inProjectChat, setInProjectChat] = useState(false);
+  // Owner: 聊天 tab 始终显示一个项目的 chat;切项目用 swipe;无 list page.
+  // Always land in chat when on 聊天 tab and there's at least one project.
+  useEffect(() => {
+    if (tab !== 'chats') return;
+    if (inProjectChat) return;
+    if (secretaryProjects.length >= 1) {
+      const target = activeProjectId
+        ? secretaryProjects.find((p) => p.id === activeProjectId) ?? secretaryProjects[0]
+        : secretaryProjects[0];
+      if (target) {
+        setActiveProjectId(target.id);
+        setInProjectChat(true);
+      }
+    }
+  }, [tab, secretaryProjects, inProjectChat, activeProjectId]);
+
+  // Swipe hint label: null = hidden, string = project name being navigated to.
+  const [swipeHint, setSwipeHint] = useState<string | null>(null);
+  // Pointer tracking for horizontal swipe-between-projects gesture.
+  const swipeOrigin = useRef<{ x: number; y: number } | null>(null);
   const [desktopOffline, setDesktopOffline] = useState(false);
   const [checkingConnection, setCheckingConnection] = useState(false);
   const [badges] = useState<Record<BadgedTabKey, number>>({ chats: 0, work: 0 });
   const [staffRefreshing, setStaffRefreshing] = useState(false);
   const [meSubview, setMeSubview] = useState(false); // me-tab 二级页(资产/用量)→ 隐藏顶栏
   const [pendingDelivId, setPendingDelivId] = useState<string | null>(null); // strip→看板 deliverable deep-link
+  // Feature 1: hide bottom tab bar while actively chatting with 小秘
+  const [chatComposerActive, setChatComposerActive] = useState(false);
+  // Feature 3: show/hide 请示 strip preference
+  const [showOwnerTodo, setShowOwnerTodoState] = useState<boolean>(() => getShowOwnerTodo());
+
+  useEffect(() => {
+    function onPrefChange() { setShowOwnerTodoState(getShowOwnerTodo()); }
+    window.addEventListener('holon:ownerTodoPrefChange', onPrefChange);
+    return () => window.removeEventListener('holon:ownerTodoPrefChange', onPrefChange);
+  }, []);
+
+  // Hide the bottom 4-tab bar whenever ANY text field is focused (keyboard up) —
+  // anywhere in the app (小秘 chat, employee chat, terminal command box, search).
+  // Reclaims space so the soft keyboard never squeezes/covers the input row.
+  useEffect(() => {
+    const isField = (el: Element | null): boolean =>
+      !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable);
+    function onFocusIn(e: FocusEvent) { if (isField(e.target as Element)) setChatComposerActive(true); }
+    function onFocusOut() {
+      // Defer: when moving between fields, blur fires before the next focus.
+      window.setTimeout(() => setChatComposerActive(isField(document.activeElement)), 60);
+    }
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
 
   useEffect(() => {
     const conn = readDesktopConnection();
@@ -6333,7 +8739,9 @@ export function WeizoApp() {
       const r = await holonApiFetch('/api/v1/staff', { cache: 'no-store' });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json() as ListStaffResponse;
-      setStaff(Array.isArray(j.items) ? j.items : []);
+      const staffItems = Array.isArray(j.items) ? j.items : [];
+      setStaff(staffItems);
+      setCachedStaff(staffItems);
       setStaffError('');
       // Per-agent token usage (best-effort; never blocks the roster). Only
       // claude-based agents have counts (from local Claude logs); codex/others
@@ -6355,20 +8763,56 @@ export function WeizoApp() {
     }
   }, []);
 
+  // Rooms fetch (SWR pattern — cache-first then desk sync).
+  const fetchRooms = useCallback(async () => {
+    try {
+      const r = await holonApiFetch('/api/v1/rooms', { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json() as { items?: Room[] };
+      const items = Array.isArray(j.items) ? j.items : [];
+      setRooms(items);
+      setCachedRooms(items);
+    } catch { /* desk unreachable — keep stale cache */ }
+  }, []);
+
+  // Secretary projects fetch (SWR — cache-first then desk sync).
+  const fetchSecretaryProjects = useCallback(async () => {
+    try {
+      const r = await holonApiFetch('/api/v1/secretary-projects', { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json() as { items?: SecretaryProjectWithStaff[] };
+      const items = Array.isArray(j.items) ? j.items : [];
+      setSecretaryProjects(items);
+      setCachedSecretaryProjects(items);
+      // Auto-select the first project if none selected yet.
+      setActiveProjectId((prev) => prev ?? (items[0]?.id ?? null));
+    } catch { /* desk unreachable — keep stale cache */ }
+  }, []);
+
   // Initial staff load when connection is established.
   useEffect(() => {
     if (!connection) return;
     void fetchStaff();
-  }, [connection, fetchStaff]);
+    void fetchRooms();
+    void fetchSecretaryProjects();
+  }, [connection, fetchStaff, fetchRooms, fetchSecretaryProjects]);
 
-  // Re-fetch staff when the contacts tab becomes active (visibility-gated).
+  // Refetch staff roster when a team-pack import completes (triggered from MeTab).
+  useEffect(() => {
+    function onPackImported() { void fetchStaff(); }
+    window.addEventListener('holon:team-pack-imported', onPackImported);
+    return () => window.removeEventListener('holon:team-pack-imported', onPackImported);
+  }, [fetchStaff]);
+
+  // Re-fetch staff + rooms when the contacts tab becomes active (visibility-gated).
   const prevTabRef = useRef<TabKey>('chats');
   useEffect(() => {
     if (tab === 'contacts' && prevTabRef.current !== 'contacts' && connection) {
       void fetchStaff();
+      void fetchRooms();
     }
     prevTabRef.current = tab;
-  }, [tab, connection, fetchStaff]);
+  }, [tab, connection, fetchStaff, fetchRooms]);
 
   useEffect(() => {
     if (!connection) return;
@@ -6396,16 +8840,81 @@ export function WeizoApp() {
     };
   }, [connection]);
 
+  // Owner: 不应该一抖就标"离线"。Require 5 consecutive ping failures (~60s @ 12s
+  // poll) before flipping to offline. iOS+Tailscale wake-from-suspend, dev-mode
+  // route recompile, or a brief cellular/WiFi handoff each can burn 1-3 strikes
+  // without indicating real loss. 8s abort on each ping prevents a single hung
+  // fetch from stalling the next interval.
+  const pingFailRef = useRef(0);
   async function checkDesktop() {
     setCheckingConnection(true);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const r = await holonApiFetch('/api/v1/ping', { cache: 'no-store' });
+      const r = await holonApiFetch('/api/v1/ping', { cache: 'no-store', signal: ctrl.signal });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      pingFailRef.current = 0;
       setDesktopOffline(false);
+      // Refresh stored candidates from the desk's current network state. This
+      // lets clients that paired BEFORE the candidates-in-pair-response change
+      // pick up the failover list lazily, without re-pairing.
+      try {
+        const body = await r.json() as { lan_candidates?: unknown };
+        if (Array.isArray(body.lan_candidates) && body.lan_candidates.length > 0) {
+          const remote = body.lan_candidates
+            .filter((u): u is string => typeof u === 'string' && u.length > 0)
+            .map((u) => { try { return normalizeBaseUrl(u); } catch { return ''; } })
+            .filter((u) => u.length > 0);
+          if (remote.length > 0) {
+            const conn = readDesktopConnection();
+            if (conn) {
+              const have = new Set(conn.candidates ?? []);
+              const missing = remote.filter((u) => !have.has(u));
+              if (missing.length > 0) {
+                const merged = [conn.baseUrl, ...(conn.candidates ?? []), ...remote]
+                  .filter((u, i, a) => a.indexOf(u) === i);
+                const next: MobileDesktopConnection = { ...conn, candidates: merged };
+                writeDesktopConnection(next);
+                setConnection(next);
+              }
+            }
+          }
+        }
+      } catch { /* ping ok was enough; body parse is best-effort */ }
     } catch {
-      setDesktopOffline(true);
-      void tryRediscoverDesk(); // stored address failed → auto re-find on the LAN
+      // Before counting a strike, try the stored candidate URLs. If a different
+      // one answers, silently re-point the connection — the owner never re-pairs.
+      const conn = readDesktopConnection();
+      if (conn && (conn.candidates?.length ?? 0) > 0) {
+        const newUrl = await pickLiveBaseUrl(conn);
+        if (newUrl !== null && newUrl !== conn.baseUrl) {
+          // Found a working alternate endpoint — swap it in as primary.
+          const others = [conn.baseUrl, ...(conn.candidates ?? [])]
+            .filter((u) => u !== newUrl);
+          const newConn: MobileDesktopConnection = {
+            ...conn,
+            baseUrl: newUrl,
+            candidates: [newUrl, ...others].filter((u, i, a) => a.indexOf(u) === i),
+          };
+          writeDesktopConnection(newConn);
+          setConnection(newConn);
+          pingFailRef.current = 0;
+          setDesktopOffline(false);
+          return; // don't strike — we're back online via alternate URL
+        }
+      }
+      pingFailRef.current += 1;
+      if (pingFailRef.current >= 5) {
+        setDesktopOffline(true);
+        // LAN sweep only makes sense on the same /24. Tailscale IPs (100.64/10
+        // CGNAT range) don't shift and aren't reachable by subnet probe from
+        // cellular — skip the sweep to avoid wasted probes + battery drain.
+        const host = (() => { try { return new URL(conn?.baseUrl ?? '').hostname; } catch { return ''; } })();
+        const isTailscale = /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./.test(host);
+        if (!isTailscale) void tryRediscoverDesk();
+      }
     } finally {
+      clearTimeout(timer);
       setCheckingConnection(false);
     }
   }
@@ -6448,15 +8957,53 @@ export function WeizoApp() {
     clearDesktopConnection();
     setConnection(null);
     setSelectedStaff(null);
+    setSelectedRoom(null);
     setDesktopOffline(false);
   }
 
   function openTab(next: TabKey) {
     setTab(next);
     setSelectedStaff(null);
+    setSelectedRoom(null);
     setStaffInitialMode('primary');
     setMeSubview(false); // returning to 我 root must show its header (no flash)
   }
+
+  // v1: "开会议室" from any staff detail always navigates to the default team room.
+  // The staff is already a member there (server syncs on boot and on /team fetch).
+  function openDefaultTeamRoom() {
+    const DEFAULT_ID = 'room_default_team';
+    const teamRoom = rooms.find((r) => r.id === DEFAULT_ID);
+    if (teamRoom) {
+      setSelectedStaff(null);
+      setSelectedRoom(teamRoom);
+    } else {
+      // Room not yet in local cache — fetch /api/v1/rooms/team to bootstrap.
+      holonApiFetch('/api/v1/rooms/team', { cache: 'no-store' })
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j = await r.json() as { room?: Room };
+          if (!j.room) throw new Error('no room in response');
+          const teamR = j.room;
+          setRooms((prev) => {
+            const next = [teamR, ...prev.filter((x) => x.id !== teamR.id)];
+            setCachedRooms(next);
+            return next;
+          });
+          setSelectedStaff(null);
+          setSelectedRoom(teamR);
+        })
+        .catch((err) => {
+          console.error('[WeizoApp] openDefaultTeamRoom fetch failed:', err instanceof Error ? err.message : String(err));
+        });
+    }
+  }
+
+  // v2 stubs — kept for data-model completeness but not exposed in v1 UI.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function _createRoomForStaff_v2_stub(_s: Staff) { /* deferred to v2 */ }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function _handleNewRoom_v2_stub() { /* deferred to v2 */ }
 
   // Don't flash anything on SSR — wait until client boot
   if (!booted) return null;
@@ -6469,60 +9016,157 @@ export function WeizoApp() {
     return <PairingPrompt onPaired={handlePaired} />;
   }
 
+  const inRoomDrillIn = tab === 'contacts' && !!selectedRoom;
+
   return (
-    <main className="mobile-app-shell mobile-static-shell mobile-wechat-shell">
+    <main className={`mobile-app-shell mobile-static-shell mobile-wechat-shell${(chatComposerActive || (tab === 'contacts' && !!selectedStaff) || inRoomDrillIn || (tab === 'me' && !!meSubview)) ? ' mobile-chat-immersive' : ''}`}>
       <ConnectionBanner
         offline={desktopOffline}
         checking={checkingConnection}
         onRetry={() => void checkDesktop()}
-        onRepair={disconnect}
+        // Owner: 修复按钮 ≠ 断开。 Repair should only retry the connection,
+        // NOT clear the device-token / force re-pair. Explicit "断开桌面" lives
+        // in 我 tab as the only path to wipe pairing.
+        onRepair={() => void checkDesktop()}
       />
       {/* Header shows ONLY on a non-chat tab ROOT. WeChat-style: in the chat
           tab the recipient bar sits at the very top (no title above it); any
-          drill-in (staff profile / 资产 / 用量) carries its own back-row, so the
-          app header would just double-stack and waste vertical space. */}
-      {tab !== 'chats' && !(tab === 'contacts' && selectedStaff) && !(tab === 'me' && meSubview) && (
-        <AppHeader title={tabTitle(tab, selectedStaff)} />
+          drill-in (staff profile / 资产 / 用量 / room) carries its own back-row. */}
+      {tab !== 'chats' && !(tab === 'contacts' && selectedStaff) && !inRoomDrillIn && !(tab === 'me' && meSubview) && (
+        <AppHeader title={tabTitle(tab, selectedStaff, selectedRoom ?? undefined)} />
       )}
       <section
-        className={`mobile-tab-content${(tab === 'chats' || (tab === 'contacts' && selectedStaff)) ? ' mobile-tab-content-chat' : ''}`}
+        className={`mobile-tab-content${((tab === 'chats' && inProjectChat) || (tab === 'contacts' && selectedStaff) || inRoomDrillIn) ? ' mobile-tab-content-chat' : ''}`}
       >
-        {/* Option 3 — 小秘专属: 聊天 tab is ONLY the Secretary, full window, no
-            switcher. Employee chats live under 通讯录 (contact → 发消息). */}
-        {tab === 'chats' && (
+        {/* 聊天 tab: project list → tap to enter secretary chat thread.
+            When activeProjectId is set, show the secretary chat full-screen.
+            When null, show the project list (WeChat conversation list style). */}
+        {tab === 'chats' && !inProjectChat && (
+          <ProjectListTab
+            projects={secretaryProjects}
+            onEnter={(pid) => { setActiveProjectId(pid); setInProjectChat(true); }}
+            onProjectCreated={(proj) => {
+              setSecretaryProjects((prev) => {
+                const next = [...prev, proj];
+                setCachedSecretaryProjects(next);
+                return next;
+              });
+              setActiveProjectId(proj.id);
+              setInProjectChat(true);
+            }}
+          />
+        )}
+        {tab === 'chats' && inProjectChat && !!activeProjectId && (
           <div className="mobile-chat-panel">
-            <div className="mobile-chat-header">
-              <span className="mobile-chat-header-title">
-                {/* Single source of truth: the secretary's own staff name (renamable),
-                    so the chat header always matches 通讯录. Fallback 小秘 pre-load. */}
-                <span className="mobile-chat-header-name">{staff.find((s) => s.role_name === 'secretary')?.name || '小秘'}</span>
-                <span className="mobile-chat-header-sub">微作 AI 助理</span>
-              </span>
-            </div>
-            <OwnerTodoStrip
-              onOpenStaff={(staffId) => {
-                const found = staff.find((s) => s.id === staffId);
-                if (found) {
-                  setStaffInitialMode('primary');
-                  setSelectedStaff(found);
-                }
-                setTab('contacts');
+            <ProjectChatHeader
+              projectId={activeProjectId}
+              projects={secretaryProjects}
+              onBack={() => setInProjectChat(false)}
+              onRename={(id, newName) => {
+                setSecretaryProjects((prev) => {
+                  const next = prev.map((p) => p.id === id ? { ...p, name: newName } : p);
+                  setCachedSecretaryProjects(next);
+                  return next;
+                });
+              }}
+              onDeleted={() => {
+                setActiveProjectId(null);
+                setInProjectChat(false);
+                void fetchSecretaryProjects();
+              }}
+              onCreateProject={() => {
+                const name = window.prompt('新项目名称');
+                if (!name?.trim()) return;
+                void (async () => {
+                  try {
+                    const r = await holonApiFetch('/api/v1/secretary-projects', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ name: name.trim() }),
+                    });
+                    if (!r.ok) { window.alert('创建失败'); return; }
+                    const body = await r.json() as { project: SecretaryProjectWithStaff };
+                    setSecretaryProjects((prev) => {
+                      const next = [...prev, body.project];
+                      setCachedSecretaryProjects(next);
+                      return next;
+                    });
+                    setActiveProjectId(body.project.id);
+                    setInProjectChat(true);
+                  } catch { window.alert('网络错误'); }
+                })();
               }}
             />
-            <MobileOwnerChat staff={staff} seed={chatSeed} onSeedConsumed={() => setChatSeed(null)} />
+            {showOwnerTodo && (
+              <OwnerTodoStrip
+                onOpenStaff={(staffId) => {
+                  const found = staff.find((s) => s.id === staffId);
+                  if (found) {
+                    setStaffInitialMode('primary');
+                    setSelectedStaff(found);
+                  }
+                  setTab('contacts');
+                }}
+              />
+            )}
+            {/* Swipe-between-projects wrapper. Detects horizontal pan on the
+                message area only (not header / composer). Threshold: |dx| > 80
+                AND |dx|/|dy| > 1.5. RTL = next project, LTR = prev (wraps). */}
+            <ProjectSwipeArea
+              projects={secretaryProjects}
+              activeProjectId={activeProjectId}
+              onSwitch={(nextId) => setActiveProjectId(nextId)}
+              renderChat={(pid) => {
+                const props: ComponentProps<typeof MobileOwnerChat> = {
+                  staff,
+                  seed: pid === activeProjectId ? chatSeed : null,
+                  onSeedConsumed: () => setChatSeed(null),
+                  projectId: pid,
+                };
+                if (pid === activeProjectId) props.onComposerActiveChange = setChatComposerActive;
+                return <MobileOwnerChat {...props} />;
+              }}
+            />
           </div>
         )}
         {tab === 'contacts' && (
-          selectedStaff ? (
-            <StaffDetail staff={selectedStaff} onBack={() => { setSelectedStaff(null); setStaffInitialMode('primary'); }} initialMode={staffInitialMode} />
+          selectedRoom ? (
+            <RoomView
+              room={selectedRoom}
+              allStaff={staff}
+              onBack={() => setSelectedRoom(null)}
+              onRename={(name) => {
+                const updated: Room = { ...selectedRoom, name };
+                setSelectedRoom(updated);
+                setRooms((prev) => {
+                  const next = prev.map((r) => r.id === updated.id ? updated : r);
+                  setCachedRooms(next);
+                  return next;
+                });
+              }}
+            />
+          ) : selectedStaff ? (
+            <StaffDetail
+              staff={selectedStaff}
+              onBack={() => { setSelectedStaff(null); setStaffInitialMode('primary'); }}
+              initialMode={staffInitialMode}
+              onOpenTeamRoom={openDefaultTeamRoom}
+            />
           ) : (
             <Contacts
-              staff={staff}
+              staff={activeProjectId
+                ? staff.filter((s) => {
+                    const tags: string[] = Array.isArray(s.tags) ? s.tags : [];
+                    // Owner: 严格只显示当前项目的员工,无 shared fallback.
+                    return tags.includes(`project:${activeProjectId}`);
+                  })
+                : staff}
               agentUsage={agentUsage}
               onOpen={(s) => { setStaffInitialMode('primary'); setSelectedStaff(s); }}
               onOpenConfig={(s) => { setStaffInitialMode('config'); setSelectedStaff(s); }}
               onRefresh={() => void fetchStaff()}
               refreshing={staffRefreshing}
+              rooms={rooms}
+              onOpenRoom={(r) => { setSelectedRoom(r); setSelectedStaff(null); }}
             />
           )
         )}
@@ -6530,6 +9174,11 @@ export function WeizoApp() {
           <WorkTracker
             onTalkToSecretary={(text) => {
               setChatSeed(text);
+              // Ensure we navigate into a project chat (use first available if none selected)
+              if (!activeProjectId && secretaryProjects.length > 0) {
+                setActiveProjectId(secretaryProjects[0]!.id);
+              }
+              setInProjectChat(true);
               setTab('chats');
             }}
             initialDelivId={pendingDelivId}
@@ -6541,14 +9190,28 @@ export function WeizoApp() {
             connection={connection!}
             onDisconnect={disconnect}
             onSubviewChange={setMeSubview}
+            activeProjectId={activeProjectId}
             onUseSkill={(text) => {
               setChatSeed(text);
+              if (!activeProjectId && secretaryProjects.length > 0) {
+                setActiveProjectId(secretaryProjects[0]!.id);
+              }
+              setInProjectChat(true);
               setTab('chats');
             }}
           />
         )}
       </section>
-      <BottomNav active={tab} badges={badges} onTab={openTab} />
+      <BottomNav
+        active={tab}
+        badges={badges}
+        onTab={openTab}
+        // Hide the bottom 4-tab bar when (a) the keyboard is up OR (b) we've
+        // drilled into a 2nd-level view (employee detail / room / 我 subview / terminal).
+        // The owner wants drill-ins to use the full screen — especially the
+        // adopted-CLI 后台 terminal where every line counts.
+        chatActive={chatComposerActive || (tab === 'contacts' && !!selectedStaff) || inRoomDrillIn || (tab === 'me' && !!meSubview)}
+      />
     </main>
   );
 }

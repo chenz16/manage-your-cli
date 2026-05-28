@@ -14,10 +14,11 @@
   "dependencies": {
     "@assistant-ui/react": "^0.14.5",
     "@capacitor-community/speech-recognition": "^6.0.1",
-    "@capacitor-community/text-to-speech": "^8.0.0",
+    "@capacitor-community/text-to-speech": "^5.1.0",
     "@capacitor/android": "^6.2.0",
     "@capacitor/core": "^6.2.0",
     "@capacitor/ios": "^6.2.0",
+    "@capacitor/keyboard": "^6",
     "@holon/api-contract": "workspace:*",
     "@holon/core": "workspace:*",
     "html2canvas": "^1.4.1",

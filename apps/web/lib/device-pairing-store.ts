@@ -282,6 +282,16 @@ export function selectLanIPv4(
   interfaces: ReturnType<typeof networkInterfaces> = networkInterfaces(),
 ): { selected: string | null; candidates: string[] } {
   const candidates = enumerateLanIPv4Candidates(interfaces);
+  // Tailscale IPs (100.64.0.0/10 CGNAT, interface usually tailscale0) work from
+  // BOTH home WiFi and cellular — so prefer them over LAN. Otherwise a phone
+  // paired on WiFi can't reach the desk after switching to cellular.
+  const tailscale = candidates.find((c) => isTailscaleCandidate(c));
+  if (tailscale) {
+    return {
+      selected: tailscale.address,
+      candidates: unique(candidates.map((c) => c.address)),
+    };
+  }
   const preferred = candidates
     .filter((candidate) => !candidate.virtual && candidate.rangePriority < 3)
     .sort((a, b) => a.rangePriority - b.rangePriority)[0];
@@ -290,6 +300,13 @@ export function selectLanIPv4(
     selected: preferred?.address ?? getFirstNonInternalIPv4(interfaces),
     candidates: unique(candidates.map((candidate) => candidate.address)),
   };
+}
+
+function isTailscaleCandidate(c: LanIPv4Candidate): boolean {
+  if (c.name.toLowerCase().startsWith('tailscale')) return true;
+  const parts = c.address.split('.').map((n) => Number.parseInt(n, 10));
+  // 100.64.0.0 — 100.127.255.255 (CGNAT range used by Tailscale)
+  return parts[0] === 100 && parts[1] !== undefined && parts[1] >= 64 && parts[1] <= 127;
 }
 
 function enumerateLanIPv4Candidates(

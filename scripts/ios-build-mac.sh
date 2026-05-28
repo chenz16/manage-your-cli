@@ -11,10 +11,9 @@
 #     corepack → pnpm tries to self-switch and HANGS. → install with
 #     --config.manage-package-manager-versions=false
 #  2. @holon/core depends on @holon/auth → must sync packages/auth too.
-#  3. @capacitor-community/text-to-speech@8 (really for Capacitor 8; app is Cap 6)
-#     pod needs iOS deployment target >13 → raise Podfile `platform :ios` to 15.0
-#     (Capacitor's own post_install propagates it to every pod). TECH DEBT: pin
-#     TTS to a Capacitor-6 version (^6) to drop this patch.
+#  3. @capacitor-community/text-to-speech was @8 (Cap 8 only, needed iOS >=15)
+#     → downgraded to ^5.1.0 (Cap 6 compat, iOS deployment target 13.0).
+#     Platform stays at 13.0 (Capacitor default).
 set -u
 SRC=/home/chenz/project/myc-mobile
 MAC="zuolinliu@10.0.0.123"
@@ -47,7 +46,7 @@ rm -rf ios
 npx --yes @capacitor/cli@6 add ios  2>&1 | tail -2 || true   # internal pod install fails @13.0 — ignore; Podfile generated
 npx --yes @capacitor/cli@6 sync ios 2>&1 | tail -2 || true
 echo "[4/5] raise deployment target + pod install + ATS exception"
-( cd ios/App && sed -i '' "s/platform :ios, .*/platform :ios, '15.0'/" Podfile && pod install 2>&1 | tail -6 ) || { echo FAIL-pod; exit 1; }
+( cd ios/App && sed -i '' "s/platform :ios, .*/platform :ios, '13.0'/" Podfile && pod install 2>&1 | tail -6 ) || { echo FAIL-pod; exit 1; }
 # iOS blocks cleartext HTTP by default → app can't reach the http:// LAN desk.
 # Add an ATS exception (dev). TECH DEBT: tighten to NSAllowsLocalNetworking +
 # exception domains for production / App Store.
@@ -56,6 +55,18 @@ PL=ios/App/App/Info.plist
 /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PL"
 /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$PL"
 echo "ATS: $(/usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$PL")"
+# Voice input (@capacitor-community/speech-recognition) hard-CRASHES on tap if
+# these usage strings are missing — iOS kills the app instead of prompting.
+for KEY in NSSpeechRecognitionUsageDescription NSMicrophoneUsageDescription NSCameraUsageDescription; do
+  /usr/libexec/PlistBuddy -c "Delete :$KEY" "$PL" 2>/dev/null
+done
+/usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string '微作用语音识别把你说的话转成文字发给小秘。'" "$PL"
+/usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string '微作需要麦克风来录制你的语音输入。'" "$PL"
+# 扫一扫 (getUserMedia video) hard-CRASHES without this camera usage string.
+/usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string '微作用相机扫码连接其他 AI Agent / 桌面端。'" "$PL"
+echo "Speech: $(/usr/libexec/PlistBuddy -c 'Print :NSSpeechRecognitionUsageDescription' "$PL")"
+echo "Mic: $(/usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$PL")"
+echo "Camera: $(/usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$PL")"
 echo "[5/5] xcodebuild simulator (no signing)"
 SIM=$(xcrun simctl list devices available | grep -E 'iPhone 16 \(' | head -1 | grep -oE '[A-F0-9-]{36}')
 [ -z "$SIM" ] && SIM=$(xcrun simctl list devices available | grep iPhone | head -1 | grep -oE '[A-F0-9-]{36}')

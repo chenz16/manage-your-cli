@@ -89,7 +89,7 @@ export function buildServer(): McpServer {
       description: 'Read boss memory INDEX.md or one scoped detail file.',
       inputSchema: readMemorySchema,
     },
-    async ({ scope }) => toolResult(await readMemory(scope)),
+    async ({ scope, project_id }) => toolResult(await readMemory(scope, project_id)),
   );
 
   server.registerTool(
@@ -99,7 +99,7 @@ export function buildServer(): McpServer {
       description: 'Append to one boss-memory detail file and update INDEX.md.',
       inputSchema: writeMemorySchema,
     },
-    async ({ scope, text }) => toolResult(await writeMemory(scope, text)),
+    async ({ scope, text, project_id }) => toolResult(await writeMemory(scope, text, project_id)),
   );
 
   server.registerTool(

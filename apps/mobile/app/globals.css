@@ -84,6 +84,7 @@ button, input, textarea, select { font: inherit; }
 .mobile-staff-field,
 .mobile-persona-editor-textarea,
 .mobile-skill-input,
+.mobile-marketplace-search,
 .mobile-pairing-field input { font-size: 16px; }
 
 /* M-L-060 — global visible focus indicator (WCAG 2.4.7). External-keyboard,
@@ -1055,9 +1056,14 @@ button, input, textarea, select { font: inherit; }
   background: transparent;
   color: #1f7a44;
   font: inherit;
-  font-size: 15px;
-  padding: 6px 4px;
+  font-size: 17px;
+  padding: 12px 16px;
+  min-height: 44px;
+  min-width: 88px;
+  text-align: left;
+  position: relative;
 }
+.mobile-back-row::before { content: ''; position: absolute; inset: -4px; }
 
 /* Tab content area */
 .mobile-tab-content {
@@ -1093,14 +1099,27 @@ button, input, textarea, select { font: inherit; }
   min-height: 44px; padding: 0 8px;
   /* iOS notch/Dynamic-Island: this header replaces AppHeader on the chat tab,
      so it must carry the top safe-area inset itself or the 小秘 title hides
-     under the status bar. */
-  padding-top: env(safe-area-inset-top, 0px);
+     under the status bar.
+     Item 9: clamp to min(env(safe-area-inset-top), 24px) so Android (no notch,
+     SAI=0) renders normally, and iPhones get the right inset without over-padding. */
+  padding-top: min(env(safe-area-inset-top, 0px), 24px);
   border-bottom: 1px solid #e3e3e3; background: #ededed;
 }
 .mobile-chat-header-back {
-  flex: 0 0 auto; width: 36px; height: 36px; border: 0; background: transparent;
-  color: #222; font-size: 26px; line-height: 1; padding: 0; cursor: pointer;
+  flex: 0 0 auto; width: 44px; height: 44px; border: 0; background: transparent;
+  color: #222; font-size: 30px; line-height: 1; padding: 0; cursor: pointer;
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  /* iOS finger tolerance: invisible 8px outward hit pad — extends tappable area
+     beyond the 44px visible button so the user doesn't have to land exactly on
+     the "‹" glyph. Owner: iPhone 上要按好几下才中,扩大热区。 */
 }
+.mobile-chat-header-back::before {
+  content: ''; position: absolute; inset: -12px -12px -12px -4px;
+}
+/* Nudge the back glyph slightly right so it doesn't hide in iPhone's top-left
+   rounded corner / notch swipe-down zone. */
+.mobile-chat-header-back { margin-left: 4px; }
 .mobile-chat-header-name {
   flex: 1 1 auto; text-align: center; color: #111; font-size: 16px; font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1108,14 +1127,99 @@ button, input, textarea, select { font: inherit; }
 .mobile-chat-header-spacer { flex: 0 0 auto; width: 36px; }
 /* gear → config (right side of the staff chat header) */
 .mobile-chat-header-gear {
-  flex: 0 0 auto; width: 36px; height: 36px; border: 0; background: transparent;
+  flex: 0 0 auto; width: 44px; height: 44px; border: 0; background: transparent;
+  position: relative; margin-right: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
   color: #555; font-size: 20px; line-height: 1; padding: 0; cursor: pointer;
 }
 .mobile-chat-header-gear:active { opacity: 0.5; }
+.mobile-chat-header-gear::before {
+  content: ''; position: absolute; inset: -12px -4px -12px -24px;
+}
 /* 小秘 root: 名字 + 微作 副标 (二行居中) */
 .mobile-chat-header-title { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
 .mobile-chat-header-title .mobile-chat-header-name { flex: 0 0 auto; }
 .mobile-chat-header-sub { font-size: 11px; color: #999; }
+
+/* ─── ProjectChatHeader extras ───────────────────────────────────────────── */
+/* Overflow (⋯) button in the project chat header */
+.mobile-chat-header-overflow {
+  flex: 0 0 auto; width: 44px; height: 44px; border: 0; background: transparent;
+  color: #555; font-size: 20px; line-height: 1; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-right: 4px;
+  position: relative;
+}
+.mobile-chat-header-overflow::before {
+  content: ''; position: absolute; inset: -12px -4px -12px -12px;
+}
+.mobile-chat-header-overflow:active { opacity: 0.5; }
+
+/* Inline rename input inside the header title */
+.mobile-chat-header-rename-wrap {
+  display: flex; flex-direction: column; align-items: center; width: 100%;
+}
+.mobile-chat-header-rename-input {
+  width: 100%; max-width: 200px;
+  border: 0; border-bottom: 2px solid #007aff; background: transparent;
+  text-align: center; font-size: 16px; font-weight: 600; color: #111;
+  outline: none; padding: 2px 4px;
+}
+.mobile-chat-header-rename-err {
+  font-size: 11px; color: #e00; margin-top: 2px;
+}
+
+/* Project action sheet overlay */
+.mobile-proj-menu-backdrop {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.35);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.mobile-proj-menu-sheet {
+  width: 100%; max-width: 480px;
+  background: #f2f2f7; border-radius: 14px 14px 0 0;
+  padding: 8px 0 env(safe-area-inset-bottom, 16px);
+  display: flex; flex-direction: column;
+}
+.mobile-proj-menu-item {
+  border: 0; background: #fff; margin: 6px 14px 0;
+  border-radius: 12px; padding: 14px 0; font-size: 17px; color: #111;
+  cursor: pointer; text-align: center;
+}
+.mobile-proj-menu-item:active { opacity: 0.6; }
+.mobile-proj-menu-danger { color: #e00; }
+.mobile-proj-menu-cancel {
+  border: 0; background: #fff; margin: 8px 14px 0;
+  border-radius: 12px; padding: 14px 0; font-size: 17px; color: #007aff;
+  font-weight: 600; cursor: pointer; text-align: center;
+}
+.mobile-proj-menu-cancel:active { opacity: 0.6; }
+
+/* Delete confirm dialog */
+.mobile-proj-confirm-sheet {
+  width: calc(100% - 48px); max-width: 320px;
+  background: #fff; border-radius: 14px; padding: 20px 20px 16px;
+  margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+}
+.mobile-proj-confirm-msg {
+  font-size: 15px; color: #111; text-align: center; margin: 0 0 12px;
+  line-height: 1.5;
+}
+.mobile-proj-confirm-err {
+  font-size: 13px; color: #e00; text-align: center; margin: 0 0 8px;
+}
+.mobile-proj-confirm-actions {
+  display: flex; gap: 10px; justify-content: center;
+}
+.mobile-proj-confirm-cancel,
+.mobile-proj-confirm-delete {
+  flex: 1; border: 0; border-radius: 10px;
+  padding: 12px 0; font-size: 16px; cursor: pointer;
+}
+.mobile-proj-confirm-cancel { background: #e5e5ea; color: #111; }
+.mobile-proj-confirm-delete { background: #e00; color: #fff; font-weight: 600; }
+.mobile-proj-confirm-cancel:disabled,
+.mobile-proj-confirm-delete:disabled { opacity: 0.5; }
 
 /* ─── OwnerChatSearch — 搜索小秘聊天记录 ────────────────────────────────────── */
 .owner-chat-search {
@@ -1333,7 +1437,13 @@ button, input, textarea, select { font: inherit; }
   font-size: 12.5px; line-height: 1.35; color: #777;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.mobile-row-action { flex: 0 0 auto; color: #8a8a8a; font-size: 12px; }
+.mobile-row-action {
+  flex: 0 0 auto; color: #8a8a8a; font-size: 12px;
+  /* Item 1: proper tap target — no inline style needed in TSX */
+  border: none; background: none; cursor: pointer;
+  padding: 8px 4px; display: flex; align-items: center;
+  min-width: 44px; min-height: 44px;
+}
 /* WeChat-style search bar */
 .mobile-search-bar {
   display: flex; align-items: center; gap: 6px; margin: 8px 12px 6px;
@@ -1370,14 +1480,24 @@ button, input, textarea, select { font: inherit; }
   border-top: 1px solid #d8d8d8;
   background: #f7f7f7;
   z-index: 40;
+  /* Feature 1: smooth slide-away during active chat */
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+.mobile-bottom-nav--hidden {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
 }
 .mobile-tab-button {
-  border: 0; background: transparent; color: #777;
-  font: inherit; font-size: 11px;
+  border: 0; background: transparent; color: #999;
+  font: inherit; font-size: 11px; font-weight: 400;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 2px;
+  /* Item 4: tap target ≥44px */
+  min-width: 44px; min-height: 44px;
 }
-.mobile-tab-button.is-active { color: #1f7a44; }
+/* Item 4: active tab — brand green + heavier label weight */
+.mobile-tab-button.is-active { color: #1f7a44; font-weight: 600; }
 .mobile-tab-icon { font-size: 21px; line-height: 1; }
 .mobile-tab-icon-wrap {
   position: relative;
@@ -1423,9 +1543,29 @@ button, input, textarea, select { font: inherit; }
    fixed bottom nav regardless of keyboard state. */
 .mobile-chat-composer {
   flex: 0 0 auto;
-  padding: 8px 10px max(8px, calc(env(safe-area-inset-bottom, 0px) + var(--mobile-keyboard-inset)));
+  /* Bottom padding is just 8px — NOT safe-area-inset-bottom. The composer sits
+     ABOVE the tab bar (idle) or above the keyboard (immersive); the home-
+     indicator safe area is already handled by the tab bar (idle) or covered by
+     the keyboard (immersive). Adding it here double-counted 34px on iPhone and
+     showed as a white band under the input (Android SAI=0 so it never showed). */
+  padding: 8px 10px 8px;
   background: #f7f7f7;
   margin-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+}
+/* Feature 1 (fix): when the bottom nav slides away during active chat, the
+   composer + message list reserved `--mobile-nav-height` of bottom space that
+   would otherwise show as a blank white strip. In immersive mode reclaim it so
+   the composer drops to the very bottom and the list fills the gap. */
+.mobile-chat-immersive .mobile-chat-composer {
+  /* Owner: iPhone 全屏底部圆角弧切了语音键,要离边远点。
+     - keyboard UP   → env(safe-area-inset-bottom)≈0; floor is keyboard top; reserve 12px.
+     - keyboard DOWN → env=34px; need to clear the home indicator + curved corner. */
+  margin-bottom: max(12px, env(safe-area-inset-bottom));
+  padding-bottom: 8px;
+}
+.mobile-chat-immersive .mobile-chat-viewport,
+.mobile-chat-immersive .mobile-staff-chat-scroll {
+  padding-bottom: 12px;
 }
 .mobile-chat-composer .chat-input {
   border-radius: 6px; border-color: transparent;
@@ -1440,16 +1580,22 @@ button, input, textarea, select { font: inherit; }
   flex: 0 0 auto;
 }
 .mobile-voice-button {
-  width: 38px; height: 38px;
+  width: 44px; height: 44px;
   border-radius: 50%;
   border: 1px solid #d9d9d9;
   background: #fff;
   color: #202124;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0;
-  font-size: 16px;
+  font-size: 18px;
   touch-action: none;
+  position: relative;
+  /* iOS: long-press (按住说话) must NOT trigger the selection loupe/magnifier. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
+.mobile-voice-button::before { content: ''; position: absolute; inset: -8px; pointer-events: none; }
 .mobile-voice-button.is-recording {
   background: #e33a32;
   border-color: #e33a32;
@@ -1520,17 +1666,24 @@ button, input, textarea, select { font: inherit; }
   max-width: calc(78% - 42px); /* 78% minus avatar+gap */
   min-width: 0;
 }
+/* User bubble lives in a right-anchored row → its body should right-align its
+   children so the bubble hugs the right edge (otherwise it sat at the left of
+   the body, leaving a wide right gap inside the row width). */
+.chatmsg-user .chatmsg-body { align-items: flex-end; }
 
 /* Actual bubble shapes */
 .chatmsg-bubble {
-  padding: 9px 13px;
+  padding: 9px 14px;
   border-radius: 14px;
-  font-size: 14.5px;
-  line-height: 1.45;
+  font-size: 18px;
+  line-height: 1.55;
   white-space: pre-wrap;
   word-wrap: break-word;
   min-width: 0;
   max-width: 100%;
+  /* Hug content like WeChat — short messages render as small bubbles instead
+     of stretching to the body's full width. Caps at max-width above. */
+  width: fit-content;
 }
 
 .chatmsg-bubble-user {
@@ -1546,6 +1699,26 @@ button, input, textarea, select { font: inherit; }
   border: 1px solid #e0e0e0;
   border-bottom-left-radius: 4px;
 }
+/* Tighten secretary message spacing (owner: "有些感觉夸张了 占空间"). Keep
+   single-blank-line paragraph breaks (semantic), just reduce their margin so
+   they don't visually balloon on a phone screen. */
+/* Owner: "段落分割还是太宽了" — kill EVERY descendant top/bottom margin in the
+   assistant bubble (covers assistant-ui's own wrapper divs that we don't have
+   class names for). Line-height provides the only between-line air. */
+.chatmsg-bubble-assistant * { margin-top: 0 !important; margin-bottom: 0 !important; }
+.chatmsg-bubble-assistant ul,
+.chatmsg-bubble-assistant ol { padding-left: 18px; }
+.chatmsg-bubble-assistant h1,
+.chatmsg-bubble-assistant h2,
+.chatmsg-bubble-assistant h3,
+.chatmsg-bubble-assistant h4 { line-height: 1.2; }
+/* Tighter overall line spacing — gap between two paragraphs (both margin:0)
+   is governed by line-height; pulling it down brings them closer. */
+.chatmsg-bubble-assistant { line-height: 1.3; }
+/* Drop ALL <br> in assistant — markdown paragraph breaks already separate
+   blocks; soft <br> from the LLM is just visual padding on a wide screen and
+   wastes vertical space on a phone. */
+.chatmsg-bubble-assistant br { display: none; }
 
 /* ── Item 2: Message action strip (tap-bubble → 朗读 + 复制) ───────────────
    Appears below the assistant bubble, left-aligned, pill-shaped.
@@ -1784,8 +1957,24 @@ button, input, textarea, select { font: inherit; }
   font: inherit; font-size: 14px; font-weight: 600; color: #6b675f;
 }
 .mobile-staff-tab.is-active { background: #fff; color: #1f7a44; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-/* Employee fixed attributes — editable + save (名称/角色标签/角色名/并发上限). */
+/* Employee fixed attributes — editable + save (名称/角色标签/角色名/并发上限).
+   When used as an expanded editor panel (below a collapse-head row), inset bg +
+   top border signals "edit mode" to the user. */
 .mobile-staff-edit { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+/* When mobile-me-section contains collapse rows, zero its own padding so the
+   full-width rows sit flush edge-to-edge (each row carries its own padding). */
+.mobile-me-section:has(.mobile-collapse-head) {
+  padding: 0;
+  overflow: hidden;
+}
+/* Inset edit mode panel: rendered inside a collapse-head → expanded accordion */
+.mobile-me-section .mobile-staff-edit,
+.mobile-me-section .mobile-persona-editor {
+  background: #f7f7f5;
+  border-top: 1px solid #e8e8e4;
+  padding: 10px 16px 12px;
+  margin: 0;
+}
 .mobile-staff-edit .mobile-config-dt { margin-top: 8px; }
 .mobile-staff-field {
   width: 100%; box-sizing: border-box; min-height: 40px; padding: 0 10px;
@@ -1800,7 +1989,15 @@ button, input, textarea, select { font: inherit; }
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px;
 }
 .mobile-config-dt { color: #777; font-size: 13px; }
-.mobile-persona-editor-msg { color: #1f7a44; font-size: 12px; overflow-wrap: anywhere; text-align: right; }
+/* Toast-like inline confirmation — small pill, doesn't read as a paragraph */
+.mobile-persona-editor-msg {
+  display: inline-flex; align-items: center;
+  background: #edf6f0; color: #1f7a44;
+  border: 1px solid #c0ddc8; border-radius: 999px;
+  padding: 2px 10px; font-size: 12px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; margin-bottom: 6px;
+}
 .mobile-persona-editor-textarea {
   width: 100%; box-sizing: border-box; min-height: 132px; resize: vertical;
   padding: 10px; border: 1px solid #d8d4cc; border-radius: 8px;
@@ -1865,29 +2062,69 @@ button, input, textarea, select { font: inherit; }
 }
 
 /* Read-only employee terminal (mirrors the desk's live tmux view). */
-.mobile-term-wrap { margin-top: 10px; }
+.mobile-term-wrap {
+  /* Full-height terminal: fill the staff-detail column so the CLI screen is as
+     big as the device allows (not a 320px box). Header + input pinned, screen
+     flexes to fill between them. */
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  padding: 8px 10px 0;
+}
 .mobile-term-refresh {
   border: 0; background: #ece6da; color: #6b4f1d; border-radius: 6px;
   font: inherit; font-size: 12px; padding: 3px 10px;
 }
 .mobile-term-refresh:disabled { opacity: 0.5; }
 .mobile-term-screen {
-  margin: 6px 0 0; padding: 10px; border-radius: 8px;
-  background: #1c1c1e; color: #d8d8d8;
+  margin: 6px 0 0; padding: 12px; border-radius: 10px;
+  /* Light theme to match the app (owner: terminal needn't be black). Soft paper
+     bg, near-black ink, subtle border — reads clean, not a raw black console. */
+  background: #fbfbf9; color: #1f2328; border: 1px solid #e6e3db;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11.5px; line-height: 1.45;
+  font-size: 17px; line-height: 1.6;
+  /* Normal lines wrap; only ⎿ status/update lines are server-side truncated. */
   white-space: pre-wrap; word-break: break-word;
-  max-height: 320px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .mobile-term-empty {
   margin-top: 6px; padding: 16px; border-radius: 8px;
   background: #f5f3ee; color: #8a8a8a; font-size: 13px; text-align: center;
 }
-.mobile-term-input-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+/* Inline status strip (e.g. "no_session") above the terminal screen — minimal,
+   shows only when there's an error/notice; replaces the old 实时后台/刷新 header. */
+.mobile-term-status {
+  margin: 0 0 4px; padding: 4px 8px; border-radius: 6px;
+  background: #fff4d6; color: #7a5a00; font-size: 11.5px; line-height: 1.3;
+}
+/* Visible entry for the summary side panel — anchored top-right of the
+   terminal area; complements the right-edge swipe gesture. */
+.mobile-term-summary-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 4;
+  border: 1px solid #e0e0e0; border-radius: 999px;
+  background: #fff; color: #1f7a44;
+  font: inherit; font-size: 12px; padding: 4px 10px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+}
+.mobile-term-summary-btn:active { background: #f0f0f0; }
+.mobile-term-input-row {
+  display: flex; align-items: center; gap: 6px;
+  /* Bottom of the full-height terminal column. Reserve the fixed tab bar's
+     height (+safe area) so the input sits above it when the keyboard is down;
+     in immersive (keyboard up, tab bar hidden) that collapses to 0 (below). */
+  flex: 0 0 auto;
+  padding: 8px 0;
+  margin-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  background: #ededed;
+}
+.mobile-chat-immersive .mobile-term-input-row { margin-bottom: 0; }
 .mobile-term-input {
-  flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 10px;
+  flex: 1 1 auto; min-width: 0;
+  /* textarea (was input): 3 lines default; height adjustable via the chat-input-grab
+     bar above. Owner: 默认能容下整段语音转写。 */
+  min-height: 96px; padding: 8px 10px;
   border: 1px solid #d8d4cc; border-radius: 8px;
-  font: inherit; font-size: 14px; color: #111; background: #fff;
+  font: inherit; font-size: 15px; line-height: 1.5; color: #111; background: #fff;
+  resize: none;
 }
 .mobile-term-input:disabled { opacity: 0.6; }
 .mobile-term-send {
@@ -1895,6 +2132,273 @@ button, input, textarea, select { font: inherit; }
   background: #1f7a44; color: #fff; font: inherit; font-size: 14px; font-weight: 600;
 }
 .mobile-term-send:disabled { opacity: 0.5; }
+
+/* ─── Summary side-panel (swipe right-to-left from terminal to open) ────── */
+/* The panel slides in from the right edge, covering ~85% of the terminal.
+   Backdrop dims the remaining left strip (tap to close). */
+.mobile-term-wrap { position: relative; overflow: hidden; }
+
+.mobile-summary-backdrop {
+  position: absolute; inset: 0; z-index: 10;
+  background: rgba(0,0,0,0.18);
+}
+.mobile-summary-panel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 85%; z-index: 20;
+  background: #faf9f6;
+  border-radius: 12px 0 0 12px;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.22s cubic-bezier(0.25,0.46,0.45,0.94);
+  overflow: hidden;
+}
+.mobile-summary-panel.is-open { transform: translateX(0); }
+
+.mobile-summary-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid #e6e3db;
+  flex: 0 0 auto;
+}
+.mobile-summary-panel-title {
+  font-size: 15px; font-weight: 600; color: #1f2328;
+}
+.mobile-summary-panel-close {
+  border: 0; background: transparent; color: #8a8a8a;
+  font-size: 22px; line-height: 1; padding: 0; border-radius: 6px;
+  cursor: pointer; position: relative;
+  min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mobile-summary-panel-close::before { content: ''; position: absolute; inset: -8px; }
+.mobile-summary-panel-speak {
+  width: 36px; height: 36px; border: 1px solid #d8d4cc; border-radius: 999px;
+  background: #fff; color: #1f7a44; font-size: 18px; cursor: pointer;
+  position: relative; margin-right: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mobile-summary-panel-speak:active { background: #f0f0f0; }
+.mobile-summary-panel-speak::before { content: ''; position: absolute; inset: -6px; }
+.mobile-summary-panel-close:hover { background: #ede9e0; color: #333; }
+
+/* ─── Sub-view chrome (Marketplace/PackDetail/etc) — was missing, iPhone 没返回 ─ */
+.mobile-subview-page {
+  display: flex; flex-direction: column; height: 100%; background: #f7f7f7;
+}
+.mobile-subview-header {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px;
+  background: #f7f7f7; border-bottom: 1px solid #ececec;
+  position: sticky; top: 0; z-index: 4;
+}
+.mobile-subview-back {
+  width: 44px; height: 44px; border: 0; background: transparent;
+  font-size: 28px; color: #1f7a44; font-weight: 600; line-height: 1;
+  position: relative; cursor: pointer; margin-left: -8px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mobile-subview-back::before { content: ''; position: absolute; inset: -8px -4px -8px -16px; }
+.mobile-subview-back:active { color: #145a32; }
+.mobile-subview-title {
+  flex: 1 1 auto; text-align: center;
+  font-size: 18px; font-weight: 600; color: #111;
+  margin-right: 44px; /* balance back button width */
+}
+
+/* ─── Marketplace pack list / detail font sizing ─── */
+.mobile-marketplace-list {
+  padding: 12px 12px 24px; overflow-y: auto; flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-pack-card {
+  background: #fff; border: 1px solid #e6e3db; border-radius: 12px;
+  padding: 14px; margin-bottom: 12px;
+}
+.mobile-pack-card:active { background: #f4f4f4; }
+.mobile-pack-card-title { font-size: 17px; font-weight: 600; color: #111; margin-bottom: 4px; }
+.mobile-pack-card-meta { font-size: 14px; color: #6a6a6a; line-height: 1.5; }
+.mobile-pack-card-footer { font-size: 13px; color: #8a8a8a; margin-top: 8px; }
+.mobile-pack-tag-chip {
+  display: inline-block; font-size: 12px; color: #1f7a44;
+  background: #e8f3ec; border-radius: 999px;
+  padding: 2px 8px; margin: 0 4px 4px 0;
+}
+.mobile-pack-detail-group-header {
+  font-size: 15px; font-weight: 600; color: #555;
+  padding: 14px 14px 6px;
+}
+.mobile-pack-import-checkbox-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid #f0f0f0;
+  font-size: 16px;
+}
+.mobile-pack-import-bar {
+  flex: 0 0 auto;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: #fff; border-top: 1px solid #e0e0e0;
+}
+.mobile-green-cta {
+  width: 100%; padding: 14px; border: 0; border-radius: 12px;
+  background: #1f7a44; color: #fff; font-size: 17px; font-weight: 600;
+}
+.mobile-green-cta:active { background: #145a32; }
+.mobile-green-cta:disabled { background: #b0b0b0; }
+.mobile-pack-category-row {
+  display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.mobile-pack-category-row::-webkit-scrollbar { display: none; }
+.mobile-pack-category-chip {
+  flex: 0 0 auto;
+  padding: 6px 14px; border-radius: 999px;
+  border: 1px solid #e0e0e0; background: #fff;
+  font-size: 14px; color: #555; white-space: nowrap;
+}
+.mobile-pack-category-chip.is-active {
+  background: #1f7a44; color: #fff; border-color: #1f7a44;
+}
+.mobile-pack-conflict-row { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+.mobile-pack-conflict-label { font-size: 14px; color: #6a6a6a; margin-bottom: 8px; }
+.mobile-pack-conflict-option {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 14px; margin-right: 12px; color: #333;
+}
+.mobile-pack-collision-warn {
+  display: inline-block; color: #b58200; font-size: 13px;
+  margin-left: 6px;
+}
+.mobile-pack-workspace-input {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 13px; color: #666; padding: 4px 8px;
+  border: 1px solid #e6e3db; border-radius: 6px; background: #fafafa;
+}
+
+/* ─── Multi-project secretary list (聊天 tab) ─── */
+.project-list-tab { display: flex; flex-direction: column; height: 100%; background: #f7f7f7; }
+.project-list-header {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
+  background: #f7f7f7; border-bottom: 1px solid #ececec;
+  position: sticky; top: 0; z-index: 4;
+}
+.project-list-title { flex: 1 1 auto; font-size: 18px; font-weight: 600; color: #111; }
+.project-list-add {
+  width: 36px; height: 36px; border: 0; background: transparent;
+  font-size: 28px; color: #1f7a44; line-height: 1; cursor: pointer;
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.project-list-add::before { content: ''; position: absolute; inset: -8px; }
+.project-list-add:active { color: #145a32; }
+.project-list-empty {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 40px 16px; color: #888; font-size: 15px;
+}
+.project-list-empty-btn {
+  padding: 10px 20px; border-radius: 999px;
+  background: #1f7a44; color: #fff; border: 0;
+  font-size: 15px; font-weight: 500;
+}
+.project-list-items {
+  list-style: none; margin: 0; padding: 0;
+  flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  background: #fff;
+}
+.project-list-row {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 14px 16px;
+  border: 0; background: transparent; text-align: left; cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+.project-list-row:active { background: #f4f4f4; }
+.project-list-avatar {
+  flex: 0 0 auto;
+  width: 44px; height: 44px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 18px; font-weight: 600;
+}
+.project-list-info {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.project-list-name {
+  font-size: 16px; font-weight: 500; color: #111;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.project-list-sub {
+  font-size: 13px; color: #888;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.project-create-overlay {
+  position: fixed; inset: 0; background: rgb(0 0 0 / 0.4);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 20px;
+}
+.project-create-dialog {
+  background: #fff; border-radius: 14px; padding: 20px;
+  width: 100%; max-width: 360px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.project-create-title { margin: 0; font-size: 17px; font-weight: 600; color: #111; }
+.project-create-input {
+  font-size: 16px; padding: 10px 12px;
+  border: 1px solid #e0e0e0; border-radius: 8px;
+}
+.project-create-input:focus { border-color: #1f7a44; outline: 0; }
+.project-create-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.project-create-cancel,
+.project-create-confirm {
+  padding: 10px 18px; border-radius: 8px; border: 0;
+  font-size: 15px; font-weight: 500; cursor: pointer;
+}
+.project-create-cancel { background: #f0f0f0; color: #555; }
+.project-create-confirm { background: #1f7a44; color: #fff; }
+.project-create-confirm:disabled { background: #b0b0b0; }
+
+.mobile-summary-panel-body {
+  flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.mobile-summary-item {
+  background: #fff; border: 1px solid #e6e3db; border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 16px; line-height: 1.55; color: #2c2c2c;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+}
+.mobile-summary-item + .mobile-summary-item {
+  /* gentle paragraph break between entries */
+  margin-top: 2px;
+}
+.mobile-summary-item--pending {
+  color: #7a6a30; background: #fffdf5; border-color: #e8d8a0;
+  gap: 6px;
+}
+.mobile-summary-empty {
+  color: #9a9a9a; font-size: 13px; text-align: center; margin-top: 20px;
+}
+
+/* ─── Summary story-log state pills ─────────────────────────────────────── */
+/* Inline rounded pill that floats to the right of the entry text.           */
+.mobile-summary-state-pill {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  border-radius: 20px; padding: 2px 8px;
+  font-size: 10px; font-weight: 600; line-height: 1.4;
+  margin-left: 4px; white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.mobile-summary-state-pill.is-done {
+  background: #e8f3ec; color: #1f7a44;
+}
+.mobile-summary-state-pill.is-pending {
+  background: #fff4d6; color: #b58200;
+  /* pill appears before the text in the pending row */
+  margin-left: 0; margin-right: 6px;
+}
 
 /* Live-terminal overlay (看板 进行中 → 查看实时) */
 .mobile-live-overlay {
@@ -2371,9 +2875,12 @@ button, input, textarea, select { font: inherit; }
 }
 .bug-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .bug-modal-close {
-  border: 0; background: #efefef; color: #555; width: 28px; height: 28px;
+  border: 0; background: #efefef; color: #555; width: 36px; height: 36px;
   border-radius: 50%; font-size: 18px; line-height: 1; padding: 0;
+  position: relative; min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
 }
+.bug-modal-close::before { content: ''; position: absolute; inset: -8px; }
 .bug-modal-textarea {
   width: 100%; box-sizing: border-box; border: 1px solid #d8d4cc; border-radius: 8px;
   padding: 8px; font: inherit; font-size: 14px;
@@ -2423,7 +2930,13 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 8px; }
 .mobile-sheet-title { margin: 0; font-size: 16px; color: #111; }
-.mobile-sheet-close { border: 0; background: #e2e2e2; color: #555; border-radius: 50%; width: 28px; height: 28px; font-size: 18px; line-height: 1; padding: 0; }
+.mobile-sheet-close {
+  border: 0; background: #e2e2e2; color: #555; border-radius: 50%;
+  width: 36px; height: 36px; font-size: 18px; line-height: 1; padding: 0;
+  position: relative; min-width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mobile-sheet-close::before { content: ''; position: absolute; inset: -8px; }
 
 /* Profile status: ● 在线 / 连接异常 (no IP) + QR access button */
 .mobile-me-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #1f7a44; }
@@ -2457,19 +2970,31 @@ button, input, textarea, select { font: inherit; }
 /* Collapsible section header (WeChat-style) */
 .mobile-collapse-head {
   display: flex; align-items: center; justify-content: space-between;
-  width: 100%; border: 0; background: transparent; padding: 2px 0;
-  min-height: 52px; font: inherit; cursor: pointer;
+  width: 100%; border: 0; border-bottom: 1px solid #f0f0f0;
+  background: transparent; padding: 12px 16px;
+  min-height: 46px; font: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+.mobile-collapse-head:last-of-type { border-bottom: 0; }
 .mobile-collapse-chevron {
   color: #c4c4c4; font-size: 18px; line-height: 1;
+  flex-shrink: 0;
   transition: transform 160ms ease;
 }
 .mobile-collapse-chevron.open { transform: rotate(90deg); }
-.mobile-collapse-summary { margin-left: auto; margin-right: 8px; color: #9a9a9a; font-size: 14px; }
+.mobile-collapse-summary {
+  margin-left: auto; margin-right: 8px;
+  color: #9a9a9a; font-size: 14px; text-align: right;
+  max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* 我 — me tab */
 .mobile-me {
-  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  /* Top inset for iPhone notch/status bar — drill-in subviews (资产/用量) have
+     no AppHeader, so the page's first row (back button) would otherwise sit
+     UNDER the notch and look "missing". */
+  padding: max(12px, env(safe-area-inset-top)) 12px 12px;
 }
 .mobile-me-profile {
   min-height: 72px; display: flex; align-items: center; gap: 12px;
@@ -2513,10 +3038,13 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-persona-backdrop { align-items: flex-end; padding: 12px; }
 .mobile-persona-sheet {
-  width: 100%; max-width: 520px;
-  max-height: min(78vh, 620px);
-  border-radius: 14px 14px 10px 10px;
-  padding: 14px; overflow: hidden;
+  /* Full-screen "meeting room" feel — owner: 采访给的页面太小了, 需要个会议室.
+     Take the whole phone screen so the conversation has real room. */
+  width: 100vw; max-width: 100vw;
+  height: 100vh; max-height: 100vh;
+  border-radius: 0;
+  padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+  overflow: hidden;
   display: flex; flex-direction: column;
 }
 .mobile-persona-sheet-header { flex: 0 0 auto; margin-bottom: 8px; }
@@ -2657,6 +3185,8 @@ button, input, textarea, select { font: inherit; }
 .mobile-feedback-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .mobile-feedback-label { display: block; margin-top: 12px; color: #666; font-size: 12px; }
 .mobile-feedback-textarea { min-height: 96px; font-size: 15px; }
+.mobile-feedback-voice-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.mobile-feedback-voice-hint { color: #8a8a8a; font-size: 12px; }
 .mobile-feedback-file { width: 100%; margin-top: 8px; color: #555; font-size: 12px; }
 .mobile-feedback-actions {
   flex-shrink: 0;
@@ -2811,18 +3341,22 @@ button, input, textarea, select { font: inherit; }
 /* ── 资产页 (WeChat 钱包式 grid) ── */
 .mobile-me-asset-icon { font-size: 18px; margin-right: 8px; }
 .mobile-asset-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-  background: #fff; border-radius: 12px; padding: 14px 8px; margin-top: 8px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-top: 8px;
 }
 .mobile-asset-cell {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  border: 0; background: none; padding: 8px 4px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px; min-height: 100px;
+  border: 1px solid #ebebeb; border-radius: 12px;
+  background: #fff; padding: 14px 8px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s;
 }
 .mobile-asset-cell.is-static { cursor: default; }
-.mobile-asset-cell:active:not(.is-static) { opacity: 0.6; }
-.mobile-asset-icon { font-size: 28px; line-height: 1; }
-.mobile-asset-name { font-size: 13px; color: #222; }
-.mobile-asset-sub { font-size: 11px; color: #999; }
+.mobile-asset-cell:active:not(.is-static) { background: #f2f2f2; }
+.mobile-asset-icon { font-size: 30px; line-height: 1; }
+.mobile-asset-name { font-size: 14px; font-weight: 500; color: #222; }
+.mobile-asset-sub { font-size: 12px; color: #999; }
 
 /* ── 技能使用统计 (约) rows ── */
 .mobile-usage-row { display: flex; align-items: center; gap: 8px; padding: 7px 2px; }
@@ -2879,6 +3413,35 @@ button, input, textarea, select { font: inherit; }
 }
 .composer-input-row .chat-input {
   flex: 1 1 auto;
+}
+/* Manual drag-to-expand handle (touch-friendly, sits above textarea). Owner
+   needed press+drag-up to enlarge the input on iPhone (where CSS resize-corner
+   isn't usable on touch). */
+.chat-input-grab {
+  align-self: stretch;
+  display: flex; align-items: center; justify-content: center;
+  /* Owner: 拖拽 bar 占空间太大. 缩成细线;hit pad 通过 ::before 扩 12px 仍易点. */
+  height: 12px; cursor: ns-resize; touch-action: none;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+  margin: 0; position: relative;
+}
+.chat-input-grab::before { content: ''; position: absolute; inset: -8px 0; }
+.chat-input-grab-bar {
+  display: block; width: 36px; height: 3px; border-radius: 2px;
+  background: #c8c8c8;
+}
+.chat-input-grab:active .chat-input-grab-bar { background: #666; }
+/* ChatGPT-style: the send (↑) button only appears when there's something to
+   send — hidden while the textarea is empty (placeholder showing) and no
+   attachment is staged, so it doesn't permanently occupy a slot. */
+.mobile-chat-composer:has(.chat-input:placeholder-shown):not(:has(.attachment-preview-bar)) .chat-send {
+  display: none;
+}
+/* Mirror of the above (ChatGPT behavior): once there's text to send, the voice
+   (mic) button disappears so the row is just [+] … [↑]. Empty → voice shows,
+   send hidden; typing → voice hidden, send shows. */
+.mobile-chat-composer:not(:has(.chat-input:placeholder-shown)) .mobile-voice-control {
+  display: none;
 }
 
 /* ── attachment preview bar (above the input row) ── */
@@ -3145,24 +3708,22 @@ button, input, textarea, select { font: inherit; }
 }
 .kb-refresh-btn:disabled { opacity: 0.4; cursor: default; }
 
-/* Section headers — WeChat-style small gray label */
+/* Section headers — thin separator + 13px medium-grey label (shared style) */
 .kb-section-header {
   display: flex; align-items: center; gap: 6px;
-  padding: 12px 16px 6px;
+  padding: 10px 16px 7px;
   background: #f7f7f7;
-  border-top: 1px solid #f0f0f0;
-  border-bottom: 1px solid #f0f0f0;
+  border-top: 1px solid #ebebeb;
 }
 .kb-section-label {
-  font-size: 11px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; color: #888;
+  font-size: 13px; font-weight: 500; color: #9a9a9a;
 }
 .kb-section-count {
   background: #e8e8e8; color: #555;
   font-size: 11px; font-weight: 600; border-radius: 999px;
   padding: 1px 7px; line-height: 16px;
 }
-.kb-section-extra { font-size: 11px; color: #999; margin-left: 2px; }
+.kb-section-extra { font-size: 11px; color: #aaa; margin-left: 2px; }
 
 /* Empty row inside a section */
 .kb-empty-row {
@@ -3282,4 +3843,521 @@ button, input, textarea, select { font: inherit; }
   border: 0; background: transparent; color: #1f7a44;
   font-size: 14px; font-weight: 500; cursor: pointer; padding: 4px 0;
 }
+
+/* ─── 会议室 RoomView — clean WeChat-palette redesign ─────────────────────────
+   All inline styles in the old RoomView have been moved here.
+   Token palette: --ink, --line, --paper, --brand (#1f7a44), --brand-light,
+   --surface-nav, chatmsg/chatmsg-bubble-* (reused, not duplicated).
+─────────────────────────────────────────────────────────────────────────── */
+
+/* Shell: full-height flex column, same as mobile-staff-detail */
+.mobile-room-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper, #F8F6EF);
+}
+
+/* Header: thin top bar using existing .mobile-chat-header styles */
+.mobile-room-header {
+  /* .mobile-chat-header already provides: flex, align-items:center, min-height:44px,
+     border-bottom, background:#ededed. This class adds nothing extra — it's a
+     semantic hook for specificity if needed. */
+}
+
+/* Rename input inside the header */
+.mobile-room-rename-input {
+  flex: 1 1 auto;
+  margin: 0 8px;
+  font-size: 16px;
+}
+
+/* Members strip: one or more rows of circular chips */
+.mobile-room-members {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line, #E2DCC8);
+  background: var(--card, #fff);
+}
+
+/* Each member chip: avatar circle + name label */
+.mobile-room-member-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+  max-width: 56px;
+}
+.mobile-room-member-chip:active { background: var(--brand-light, #edf6f0); }
+
+/* Name label under the avatar */
+.mobile-room-member-name {
+  font-size: 10px;
+  color: var(--ink-3, #6E6A60);
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+/* × badge shown in remove-mode */
+.mobile-room-member-remove {
+  font-size: 10px;
+  color: #e0533a;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ＋ button at the end of the members strip */
+.mobile-room-member-add {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--line, #E2DCC8);
+  background: none;
+  color: var(--ink-3, #6E6A60);
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  align-self: center;
+  flex-shrink: 0;
+}
+.mobile-room-member-add:active { background: var(--brand-light, #edf6f0); border-color: var(--brand, #1f7a44); color: var(--brand, #1f7a44); }
+
+/* Add-member panel (slide-in below members strip) */
+.mobile-room-add-panel {
+  flex: 0 0 auto;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--line, #E2DCC8);
+  background: var(--paper-2, #EFEBDD);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mobile-room-add-label {
+  font-size: 12px;
+  color: var(--ink-3, #6E6A60);
+  font-weight: 500;
+}
+.mobile-room-add-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Chat area: reuses .mobile-chat-viewport + .mobile-staff-chat-scroll */
+.mobile-room-chat {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Agent name caption above assistant bubbles */
+.mobile-room-agent-name {
+  font-size: 11px;
+  color: var(--ink-3, #6E6A60);
+  margin-bottom: 2px;
+  line-height: 1;
+  display: block;
+}
+
+/* Empty-state placeholder */
+.mobile-room-empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+  font-size: 14px;
+  color: var(--ink-3, #6E6A60);
+  line-height: 1.5;
+}
+
+/* @ mention pill above the composer input */
+.mobile-room-mention-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--brand-light, #edf6f0);
+  border-bottom: 1px solid var(--brand-dim, #c0ddc8);
+  font-size: 13px;
+  color: var(--brand-ink, #1a5e34);
+  font-weight: 500;
+}
+.mobile-room-mention-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-3, #6E6A60);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.mobile-room-mention-clear:active { color: #e0533a; }
+
+/* Item 3: member-chip avatar — same gradient pipeline as .mobile-staff-avatar2-initial.
+   Gradient bg is set via inline style (staffPaletteColor), layout is here. */
+.mobile-room-member-chip-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Item 2/3: @-picker avatar inside the popover — slightly smaller than chip avatar */
+.mobile-room-at-picker-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Static section divider for 通讯录 task_group buckets — WeChat/Discord style.
+   Uncllickable gray label; no toggle, no localStorage. */
+.mobile-contacts-group-divider {
+  display: block;
+  padding: 14px 16px 6px;
+  font-size: 13px;
+  color: #888;
+  letter-spacing: 0.04em;
+}
+
+/* Item 1: team-room row avatar (contacts list) */
+.mobile-contacts-team-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #5B8FF9 0%, #3a6fd8 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+/* @ picker popover above the composer */
+.mobile-room-at-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #E2DCC8);
+  border-radius: 10px 10px 0 0;
+  padding: 6px 0;
+  z-index: 100;
+  box-shadow: 0 -4px 16px rgb(0 0 0 / 0.08);
+  max-height: 220px;
+  overflow-y: auto;
+}
 .kb-see-all-btn:active { opacity: 0.7; }
+
+/* ── Marketplace (商店) ────────────────────────────────────────────────────── */
+
+.mobile-marketplace-list {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-pack-card {
+  width: 100%;
+  background: #fff;
+  border: 0;
+  border-radius: 12px;
+  padding: 14px 14px 10px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mobile-pack-card:active { opacity: 0.85; }
+
+.mobile-pack-card-title {
+  color: #111;
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.mobile-pack-card-meta {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mobile-pack-card-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.mobile-pack-tag-chip {
+  background: #eaf3ec;
+  color: #1f7a44;
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Pack detail view */
+.mobile-pack-detail-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 16px 100px;
+}
+
+.mobile-pack-detail-group-header {
+  color: #888;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 16px 0 6px;
+  padding-left: 2px;
+}
+
+.mobile-pack-detail-staff {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-pack-import-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.mobile-pack-import-bar {
+  position: sticky;
+  bottom: 0;
+  background: #f6f6f6;
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #e5e5e5;
+}
+
+.mobile-green-cta {
+  width: 100%;
+  padding: 14px;
+  background: #1f7a44;
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-green-cta:disabled { opacity: 0.6; cursor: default; }
+
+/* ── Category filter chip row (horizontally scrollable) ───────────────────── */
+.mobile-pack-category-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar while keeping scroll behaviour */
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  flex-shrink: 0;
+}
+.mobile-pack-category-row::-webkit-scrollbar { display: none; }
+
+.mobile-pack-category-chip {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.mobile-pack-category-chip:active { background: var(--paper-2); }
+.mobile-pack-category-chip.is-active {
+  background: var(--brand, #1f7a44);
+  border-color: var(--brand, #1f7a44);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ── Conflict resolution row ─────────────────────────────────────────────── */
+.mobile-pack-conflict-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 8px;
+  font-size: 14px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-pack-conflict-row::-webkit-scrollbar { display: none; }
+
+.mobile-pack-conflict-label {
+  flex-shrink: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mobile-pack-conflict-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Collision warning badge ──────────────────────────────────────────────── */
+.mobile-pack-collision-warn {
+  font-size: 13px;
+  color: #b86800;
+  flex-shrink: 0;
+}
+
+/* ── workspace_hint inline edit ───────────────────────────────────────────── */
+.mobile-pack-workspace-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: none;
+}
+.mobile-pack-workspace-input:focus {
+  border-color: var(--brand, #1f7a44);
+  box-shadow: 0 0 0 2px rgb(31 122 68 / 0.15);
+}
+
+/* ── Marketplace search bar (Task A) ─────────────────────────────────────── */
+.mobile-marketplace-search {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 10px 14px 0;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 16px; /* iOS WKWebView: ≥16px prevents viewport zoom on focus */
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.mobile-marketplace-search::placeholder { color: var(--ink-4); }
+.mobile-marketplace-search:focus {
+  border-color: var(--brand, #1f7a44);
+  box-shadow: 0 0 0 2px rgb(31 122 68 / 0.15);
+}
+
+/* ── Contacts task_group collapsible sections (Task B) ───────────────────── */
+.mobile-contacts-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px; /* 44pt touch target (HIG / WCAG 2.5.8) */
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-contacts-group-header:active { background: var(--paper-2); }
+
+.mobile-contacts-folder-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  color: #888;
+  line-height: 1;
+}
+
+.mobile-contacts-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-contacts-group-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-4);
+}
+
+.mobile-contacts-group-body {
+  /* visible when parent adds this — no explicit display:none toggle needed;
+     React conditionally renders the element entirely. */
+}

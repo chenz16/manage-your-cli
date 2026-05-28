@@ -22,9 +22,11 @@ export interface ClaudeUsage {
 }
 
 // ── in-memory cache ─────────────────────────────────────────────────────────
+// Owner: 596MB .jsonl 全量扫描太重, TTL 60s→300s 减少冷扫频率
+// (perf audit 2026-05-27). HMR 仍会丢内存缓存,但勉强能接受.
 let _cache: ClaudeUsage | null = null;
 let _cacheAt = 0;
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 300_000;
 
 // Scan only files modified in the last N days (for performance)
 const SCAN_WINDOW_DAYS = 14;

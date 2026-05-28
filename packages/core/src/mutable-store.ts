@@ -54,7 +54,8 @@ export type StaffPatch = Partial<Pick<Staff,
   | 'system_prompt' | 'autonomy_level' | 'governance_mode'
   | 'max_concurrent_jobs' | 'avatar_data'
   | 'denied_skills' | 'monthly_budget_millicents' | 'proxy_staff_id'
-  | 'tts_voice' | 'tts_style' | 'reply_language' | 'tts_rate'>>;
+  | 'tts_voice' | 'tts_style' | 'reply_language' | 'tts_rate'
+  | 'tags'>>;
 
 interface StoreState {
   jobs: Map<string, Job>;

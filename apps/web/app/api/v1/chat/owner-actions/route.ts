@@ -20,6 +20,17 @@ import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/devi
 
 const TIMEOUT_MS = 45_000;
 const MAX_MSGS = 30;
+// Owner-actions spawns a fresh `claude --print` (8-17s each). Mobile poll
+// fired this on every page mount → 8s burned per visit even when transcript
+// unchanged. Cache results for 5 min keyed on transcript hash. Survives HMR
+// via globalThis (perf audit 2026-05-27).
+const ACTIONS_CACHE_TTL = 5 * 60_000;
+const _gActions = globalThis as unknown as { __holonOwnerActionsCache?: { hash: string; items: string[]; at: number } };
+function _hash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
 
 const PROMPT_HEAD = [
   '你是老板的秘书。下面是「老板(user)」和「你(assistant)」的对话记录。',
@@ -60,6 +71,13 @@ export async function GET(req: Request): Promise<Response> {
     .map((t) => `${t.role === 'user' ? '老板' : '你'}: ${t.content}`)
     .join('\n');
 
+  // Cache hit: same transcript within 5 min → skip the 8-17s spawn entirely.
+  const transcriptHash = _hash(convo);
+  const cached = _gActions.__holonOwnerActionsCache;
+  if (cached && cached.hash === transcriptHash && Date.now() - cached.at < ACTIONS_CACHE_TTL) {
+    return NextResponse.json({ items: cached.items });
+  }
+
   let out: string;
   try {
     out = await runClaudePrint(`${PROMPT_HEAD}\n${convo}`, req.signal);
@@ -70,6 +88,7 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const items = parseItems(out);
+  _gActions.__holonOwnerActionsCache = { hash: transcriptHash, items, at: Date.now() };
   console.log(JSON.stringify({ audit: 'owner.actions', msgs: transcript.length, items: items.length, ts: new Date().toISOString() }));
   return NextResponse.json({ items });
 }
