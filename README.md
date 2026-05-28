@@ -217,6 +217,14 @@ with no manual portproxy.
 
 ### 4. Android mobile app (微作)
 
+> **Why mobile**: the CLI is the fastest, most pro tool — but it's locked behind a
+> terminal nobody carries in their pocket. 微作 brings that same CLI loop to the
+> phone with **minimum overhead and maximum speed**: pure thin-client (HTTP fetch
+> proxy to your paired desktop), no on-device LLM, no extra orchestration, no native
+> bridges that add latency. The phone is a remote keyboard + screen for the CLI
+> already running warm on your machine. Sub-1s turn round-trip on LAN, identical
+> warm-CLI latency as the desktop.
+
 Build and sideload the APK (requires JDK 21 + Android SDK; see `docs/INSTALL.md §4`):
 
 ```bash
