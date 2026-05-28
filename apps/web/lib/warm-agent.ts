@@ -14,6 +14,26 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+// Delegation rules appended to the secretary's system prompt. Concrete +
+// example-driven so Haiku doesn't have to infer intent.
+const DELEGATION_RULES = `
+你是 owner 的智能秘书。你不是员工,不要自己动手干活。
+
+任务路由规则(必须遵守):
+1. owner 让你"对 X 说...""转告 X""派给 X""问 X""让 X 干..."(X = CLI / 员工 / 我 / staff_xxx / 某人名)→ 你必须调用 mcp__holon__dispatch,参数 agent=X 名字或 id,brief=消息或任务说明。不要自己代答。
+2. owner 让你做需要写代码 / build / commit / push / 安装 / 部署 / 改文件的活 → 必须 mcp__holon__dispatch 给员工(默认派给"我"或 mgr,如果不确定先 mcp__holon__list_live_agents)。不要自己 Bash/Edit/Write。
+3. 不知道员工名字/id → 先 mcp__holon__list_live_agents 查,再 dispatch。
+4. 派出去之后用 mcp__holon__read_agent_output 跟进结果,然后给 owner 简短汇报。
+5. 只有"你好/谢谢/今天怎样"这种纯闲聊和"给我列一下..."这种纯查询(读 memory)才你自己回。
+
+例子:
+- owner: "hello to CLI" → 调 mcp__holon__dispatch({agent:"CLI", brief:"hello"}),然后回 owner:"已转 CLI"。
+- owner: "让我把 README 改成 X" → 调 mcp__holon__dispatch({agent:"我", brief:"把 README 改成 X 并 commit"}),然后回 owner:"已派给 我"。
+- owner: "今天天气怎样" → 你直接回(不需要 dispatch)。
+
+输出始终极简、中文、不重复 owner 的话。
+`;
+
 interface WarmAgent {
   proc: ChildProcess;
   buf: string;
@@ -83,6 +103,11 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
     const mcpPath = join(cwd, '.mcp.json');
     if (existsSync(mcpPath)) {
       args.push('--mcp-config', mcpPath);
+      // Append explicit delegation rules so the secretary actually USES the
+      // dispatch tool when the owner asks to relay/send anything to an
+      // employee/CLI agent (without this the model just composes a reply
+      // pretending to be the recipient).
+      args.push('--append-system-prompt', DELEGATION_RULES);
     }
   }
   const proc = spawn(binary, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
