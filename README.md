@@ -105,6 +105,16 @@ flowchart LR
 **internet of agents**. The Secretary is the hub: it coordinates your local team and
 is the single gateway out to other people's agents (over the **A2A** standard).
 
+> **Personal edition (this repo): single-machine, no database.** Everything lives in
+> local files — boss memory is markdown, owner state is a single SQLite file used as
+> a key-value store for personal preferences, and the CLI agents themselves keep state
+> in their own tmux sessions / `CLAUDE.md` files. No server, no cloud, no shared DB.
+>
+> **Commercial edition (planned): may add a database** for multi-tenant / team
+> scenarios — shared roster, cross-machine handoff, audit, billing. The personal
+> edition stays file-only on purpose: zero ops, zero lock-in, owner can grep / version
+> / back up everything as plain files.
+
 ### Two orthogonal axes: shell vs gateway
 
 Every connection above is "agent ↔ agent," but they differ on **two independent
