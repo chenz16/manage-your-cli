@@ -2382,8 +2382,12 @@ function MobileOwnerChat({
                 rows={1}
                 className="chat-input"
                 placeholder="发消息给小秘…"
-                onFocus={() => onComposerActiveChange?.(true)}
+                onFocus={() => {
+                  onComposerActiveChange?.(true);
+                  void deviceTtsStop().catch(() => { /* noop */ });
+                }}
                 onBlur={() => onComposerActiveChange?.(false)}
+                onChange={() => { void deviceTtsStop().catch(() => { /* noop */ }); }}
               />
               <OwnerAttachAwareSend
                 attachment={attachment}
