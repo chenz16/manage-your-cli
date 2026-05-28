@@ -160,48 +160,107 @@ async function runSettleWatch(
   }));
 }
 
+// Warm summarizer pool — keyed by staff cwd (so summaries for different repos
+// don't share context). System prompt is baked at spawn via --system-prompt so
+// it persists for the process lifetime (NOT injected as user-turn text).
+// Per-turn cost: ~1-2s instead of 3-5s cold spawn.
+interface WarmSummarizer {
+  proc: import('node:child_process').ChildProcessWithoutNullStreams;
+  busy: boolean;
+  buf: string;
+  onResolve: ((v: string | null) => void) | null;
+}
+const _g2 = globalThis as unknown as { __holonSummarizerPool?: Map<string, WarmSummarizer> };
+if (!_g2.__holonSummarizerPool) _g2.__holonSummarizerPool = new Map();
+const POOL = _g2.__holonSummarizerPool;
+
+function spawnWarmSummarizer(cwd: string | undefined): WarmSummarizer {
+  const proc = spawn('claude', [
+    '--print',
+    '--input-format', 'stream-json',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--system-prompt', SYSTEM_PROMPT,
+    '--model', 'claude-sonnet-4-5',
+    '--effort', 'low',
+    '--dangerously-skip-permissions',
+  ], { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+
+  const w: WarmSummarizer = { proc, busy: false, buf: '', onResolve: null };
+
+  proc.stdout.on('data', (d) => {
+    w.buf += d.toString('utf8');
+    let nl: number;
+    while ((nl = w.buf.indexOf('\n')) >= 0) {
+      const line = w.buf.slice(0, nl);
+      w.buf = w.buf.slice(nl + 1);
+      if (!line.trim()) continue;
+      try {
+        const ev = JSON.parse(line) as { type?: string; message?: { content?: Array<{ type: string; text?: string }> } };
+        if (ev.type === 'result' || ev.type === 'message') {
+          const text = (ev.message?.content ?? [])
+            .filter((p) => p.type === 'text' && typeof p.text === 'string')
+            .map((p) => p.text as string)
+            .join('').trim();
+          if (text && w.onResolve) {
+            const cb = w.onResolve;
+            w.onResolve = null;
+            w.busy = false;
+            cb(text);
+          }
+        }
+      } catch { /* partial line */ }
+    }
+  });
+  proc.on('error', () => {
+    if (w.onResolve) { const cb = w.onResolve; w.onResolve = null; w.busy = false; cb(null); }
+  });
+  proc.on('close', () => {
+    if (w.onResolve) { const cb = w.onResolve; w.onResolve = null; w.busy = false; cb(null); }
+    POOL.delete(cwd ?? '_default_');
+  });
+
+  return w;
+}
+
 function runHaikuSummarize(
   cwd: string | undefined,
   userMessage: string,
 ): Promise<string | null> {
   return new Promise<string | null>((resolve) => {
-    // Stateless per-call spawn so SYSTEM_PROMPT is REAL system rules every
-    // turn — not user-message text in an accumulating warm conversation.
-    // Cost: ~3-5s cold spawn. Acceptable because summarizer is fire-and-forget
-    // (non-blocking; user already sees the CLI's own answer in the mirror).
-    const proc = spawn('claude', [
-      '--print',
-      '--system-prompt', SYSTEM_PROMPT,
-      // Owner: Haiku 4.5 一直把 legitimate 工作判成"无产品变化",指令跟不上。
-      // Sonnet 4.6 同样的 prompt 输出明显更准。订阅内,无额外成本。
-      '--model', 'claude-sonnet-4-5',
-      '--effort', 'low',
-      '--dangerously-skip-permissions',
-    ], { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
-
-    let out = '';
-    let err = '';
-    proc.stdout.on('data', (d) => { out += d.toString('utf8'); });
-    proc.stderr.on('data', (d) => { err += d.toString('utf8'); });
-    proc.on('close', (code) => {
-      if (code !== 0) {
-        console.warn(JSON.stringify({
-          warn: 'adopted_summarizer.spawn_nonzero',
-          code, stderr: err.slice(0, 400), ts: new Date().toISOString(),
-        }));
-        resolve(null);
-        return;
-      }
-      resolve(out.trim() || null);
-    });
-    proc.on('error', (e) => {
+    const key = cwd ?? '_default_';
+    let w = POOL.get(key);
+    if (!w || w.proc.killed || w.proc.exitCode !== null) {
+      w = spawnWarmSummarizer(cwd);
+      POOL.set(key, w);
+    }
+    if (w.busy) {
+      // Drop concurrent — summarizer is fire-and-forget, OK to lose one.
+      resolve(null);
+      return;
+    }
+    w.busy = true;
+    w.onResolve = resolve;
+    const msg = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: userMessage }] } });
+    try {
+      w.proc.stdin.write(msg + '\n');
+    } catch (err) {
+      w.busy = false;
+      w.onResolve = null;
       console.warn(JSON.stringify({
-        warn: 'adopted_summarizer.spawn_error',
-        msg: e.message, ts: new Date().toISOString(),
+        warn: 'adopted_summarizer.write_failed',
+        msg: err instanceof Error ? err.message : String(err),
+        ts: new Date().toISOString(),
       }));
       resolve(null);
-    });
-    proc.stdin.write(userMessage);
-    proc.stdin.end();
+    }
+    // Safety timeout — if no response in 30s, give up.
+    setTimeout(() => {
+      if (w.onResolve === resolve) {
+        w.onResolve = null;
+        w.busy = false;
+        resolve(null);
+      }
+    }, 30_000);
   });
 }

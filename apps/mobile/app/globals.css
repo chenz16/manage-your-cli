@@ -1709,6 +1709,8 @@ button, input, textarea, select { font: inherit; }
   color: #111;
   border: 1px solid #e0e0e0;
   border-bottom-left-radius: 4px;
+  /* Owner: 右边不能空, 气泡顶到屏幕右沿 (留小 padding). */
+  max-width: calc(100vw - 60px);
 }
 /* Tighten secretary message spacing (owner: "有些感觉夸张了 占空间"). Keep
    single-blank-line paragraph breaks (semantic), just reduce their margin so
