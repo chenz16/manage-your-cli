@@ -1,6 +1,6 @@
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 import { spawn } from 'node:child_process';
-import { getOrCreateSecretaryStaff, readBossMemory, getProject, appendChatMessage, getOwner, getSecretaryProject, secretaryProjectThreadId, listSecretaryProjects, getStaffMerged } from '@holon/core';
+import { getOrCreateSecretaryStaff, readBossMemory, getProject, appendChatMessage, getOwner, getSecretaryProject, secretaryProjectThreadId, listSecretaryProjects, getStaffMerged, ensureSecretaryWorkspace } from '@holon/core';
 import { getEffectiveLanguage } from '@/lib/i18n/get-effective-language';
 import { sendWarmTurn } from '@/lib/warm-agent';
 import { parseJsonRequestBody, extractChatMessages, extractLatestUserText, buildOwnerPrompt } from '@/lib/owner-chat-helpers';
@@ -142,7 +142,11 @@ export async function POST(req: Request): Promise<Response> {
     ? (getStaffMerged(resolvedSecretaryStaffId) ?? defaultSecretary)
     : defaultSecretary;
   const substrate = secretary.substrate;
-  const cwd = substrate.kind === 'cli_agent' ? substrate.cwd : undefined;
+  // For cli_agent secretaries, use the substrate cwd. For local_ai secretaries,
+  // spawn inside the scaffolded secretary workspace so the warm claude process
+  // auto-loads .mcp.json (holon-mcp) and has dispatch / create_agent / etc.
+  // Without this the secretary just bashes work itself instead of delegating.
+  const cwd = substrate.kind === 'cli_agent' ? substrate.cwd : ensureSecretaryWorkspace();
   const binary = substrate.kind === 'cli_agent' && substrate.binary ? substrate.binary : 'claude';
   const ownerPrompt = buildOwnerPrompt(userText, messages, activeProjectContext, client, language);
 
