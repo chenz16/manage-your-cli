@@ -2251,7 +2251,23 @@ function ProjectChatHeader({
               >
                 {proj?.name ?? '小秘'}
               </span>
-              <span className="mobile-chat-header-sub">{proj?.secretary_staff?.name ?? '小秘'}</span>
+              <span className="mobile-chat-header-sub">
+                {proj?.secretary_staff?.name ?? '小秘'}
+                {projects.length > 1 && (() => {
+                  const i = projects.findIndex((p) => p.id === projectId);
+                  return (
+                    <span className="mobile-chat-header-paging">
+                      {projects.map((_, k) => (
+                        <span
+                          key={k}
+                          className={`mobile-chat-header-dot${k === i ? ' is-active' : ''}`}
+                          aria-hidden="true"
+                        />
+                      ))}
+                    </span>
+                  );
+                })()}
+              </span>
             </>
           )}
         </span>
@@ -8668,6 +8684,38 @@ export function WeizoApp() {
   // Kept separate from activeProjectId so back-arrow collapses to list WITHOUT
   // clearing activeProjectId (通讯录 keeps filtering by it).
   const [inProjectChat, setInProjectChat] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [createProjectErr, setCreateProjectErr] = useState('');
+  async function submitCreateProject() {
+    const name = newProjectName.trim();
+    if (!name) { setCreateProjectErr('请输入名称'); return; }
+    if (name.length > 50) { setCreateProjectErr('最多 50 字'); return; }
+    setCreatingProject(true);
+    setCreateProjectErr('');
+    try {
+      const r = await holonApiFetch('/api/v1/secretary-projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) { setCreateProjectErr('创建失败'); setCreatingProject(false); return; }
+      const body = await r.json() as { project: SecretaryProjectWithStaff };
+      setSecretaryProjects((prev) => {
+        const next = [...prev, body.project];
+        setCachedSecretaryProjects(next);
+        return next;
+      });
+      setActiveProjectId(body.project.id);
+      setInProjectChat(true);
+      setShowCreateProject(false);
+      setNewProjectName('');
+      setCreatingProject(false);
+    } catch {
+      setCreateProjectErr('网络错误');
+      setCreatingProject(false);
+    }
+  }
   // Owner: 聊天 tab 始终显示一个项目的 chat;切项目用 swipe;无 list page.
   // Always land in chat when on 聊天 tab and there's at least one project.
   useEffect(() => {
@@ -9074,27 +9122,7 @@ export function WeizoApp() {
                 setInProjectChat(false);
                 void fetchSecretaryProjects();
               }}
-              onCreateProject={() => {
-                const name = window.prompt('新项目名称');
-                if (!name?.trim()) return;
-                void (async () => {
-                  try {
-                    const r = await holonApiFetch('/api/v1/secretary-projects', {
-                      method: 'POST', headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ name: name.trim() }),
-                    });
-                    if (!r.ok) { window.alert('创建失败'); return; }
-                    const body = await r.json() as { project: SecretaryProjectWithStaff };
-                    setSecretaryProjects((prev) => {
-                      const next = [...prev, body.project];
-                      setCachedSecretaryProjects(next);
-                      return next;
-                    });
-                    setActiveProjectId(body.project.id);
-                    setInProjectChat(true);
-                  } catch { window.alert('网络错误'); }
-                })();
-              }}
+              onCreateProject={() => setShowCreateProject(true)}
             />
             {showOwnerTodo && (
               <OwnerTodoStrip
@@ -9212,6 +9240,33 @@ export function WeizoApp() {
         // adopted-CLI 后台 terminal where every line counts.
         chatActive={chatComposerActive || (tab === 'contacts' && !!selectedStaff) || inRoomDrillIn || (tab === 'me' && !!meSubview)}
       />
+      {showCreateProject && (
+        <div
+          className="project-create-overlay"
+          onClick={() => { if (!creatingProject) { setShowCreateProject(false); setNewProjectName(''); setCreateProjectErr(''); } }}
+        >
+          <div className="project-create-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3 className="project-create-title">新建项目</h3>
+            <input
+              type="text"
+              className="project-create-input"
+              placeholder="项目名称"
+              value={newProjectName}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => { setNewProjectName(e.target.value); setCreateProjectErr(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') void submitCreateProject(); if (e.key === 'Escape') setShowCreateProject(false); }}
+              autoFocus
+              maxLength={50}
+            />
+            {createProjectErr && <span style={{ color: '#c0392b', fontSize: 13 }}>{createProjectErr}</span>}
+            <div className="project-create-actions">
+              <button type="button" className="project-create-cancel" disabled={creatingProject} onClick={() => { setShowCreateProject(false); setNewProjectName(''); setCreateProjectErr(''); }}>取消</button>
+              <button type="button" className="project-create-confirm" disabled={creatingProject || !newProjectName.trim()} onClick={() => void submitCreateProject()}>
+                {creatingProject ? '创建中…' : '创建'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

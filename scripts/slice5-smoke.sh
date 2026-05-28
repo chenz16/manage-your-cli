@@ -162,7 +162,12 @@ import sys, json
 try:
     d = json.loads(sys.argv[1])
     v = d.get(sys.argv[2],'')
-    print(v if v is not None else '')
+    if isinstance(v, bool):
+        print('true' if v else 'false')
+    elif v is None:
+        print('')
+    else:
+        print(v)
 except Exception:
     print('')
 " "$json" "$field" 2>/dev/null || echo ""
