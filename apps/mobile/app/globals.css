@@ -1681,6 +1681,10 @@ button, input, textarea, select { font: inherit; }
    children so the bubble hugs the right edge (otherwise it sat at the left of
    the body, leaving a wide right gap inside the row width). */
 .chatmsg-user .chatmsg-body { align-items: flex-end; }
+/* Assistant body must NOT inherit the 78% cap — it shrinks the bubble. Let it
+   span the full row minus avatar+gutter so the bubble can reach the right edge
+   (owner: "字体又窄了"). */
+.chatmsg-assistant .chatmsg-body { max-width: calc(100% - 50px); }
 
 /* Actual bubble shapes */
 .chatmsg-bubble {
