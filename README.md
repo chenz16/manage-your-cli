@@ -51,6 +51,23 @@ Secretary, a dynamic team, shared memory, and a clean UI. Professionals get
 pro-grade tool**. We don't build AI — we orchestrate the AI you already pay for, and we
 get faster and smarter every time the CLI does.
 
+What that looks like in practice:
+
+- **Two side-by-side surfaces per agent**: the **raw CLI window** (live tmux mirror —
+  every keystroke, every tool call, every line of output) PLUS a **clean summary feed**
+  (post-turn condensation in plain language). Professionals can drop into the CLI
+  window to inspect / drive directly; the summary surface is what the user reads and
+  what gets relayed to mobile / WeChat. Same agent, two views.
+- **The user talks to the Secretary, not to the CLI**. The Secretary is the only
+  voice the owner deals with day-to-day. It reads the team's CLIs through MCP, dispatches
+  work, and reports back in plain language. The CLIs stay watchable underneath, but they
+  are workers — not the user-facing surface.
+- **Every CLI is a manager-by-default**. Modern CLIs (claude-code, codex, gemini) can
+  fan out their own sub-agents internally — *that's the CLI's own capability, not ours*.
+  We only **define the role** (persona + tools + memory + cwd) and let the CLI's own
+  loop handle decomposition. No external orchestration engine. The CLI is the planner;
+  we are the org chart.
+
 ## Overhead
 
 A core goal: **add as little overhead as possible over driving the CLI directly.**
