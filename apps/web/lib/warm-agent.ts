@@ -11,8 +11,32 @@
  * using live tmux (watchable); this is the latency-critical owner path.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
+
+// Persist warm session ids per key so when the warm process dies (idle reap /
+// HMR / OS restart), the next spawn can `claude --resume <id>` and pick up
+// the same conversation history — same trick the owner uses to adopt the mgr
+// tmux. Without resume, secretary loses everything on every cold spawn.
+const SESSION_STORE = join(homedir(), '.holon', 'warm-sessions.json');
+function loadSessions(): Record<string, string> {
+  try {
+    if (existsSync(SESSION_STORE)) {
+      return JSON.parse(readFileSync(SESSION_STORE, 'utf8')) as Record<string, string>;
+    }
+  } catch { /* corrupt — start fresh */ }
+  return {};
+}
+function saveSession(key: string, sessionId: string): void {
+  try {
+    const all = loadSessions();
+    if (all[key] === sessionId) return;
+    all[key] = sessionId;
+    mkdirSync(dirname(SESSION_STORE), { recursive: true });
+    writeFileSync(SESSION_STORE, JSON.stringify(all, null, 2));
+  } catch { /* best-effort */ }
+}
 
 interface WarmAgent {
   proc: ChildProcess;
@@ -23,6 +47,7 @@ interface WarmAgent {
   onText: ((full: string) => void) | null;
   onDone: (() => void) | null;
   onError: ((msg: string) => void) | null;
+  sessionId: string | null;
 }
 
 const G = globalThis as unknown as {
@@ -85,10 +110,17 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
       args.push('--mcp-config', mcpPath);
     }
   }
+  // Resume the prior session if we have one. Lets the secretary keep memory
+  // across HMR / idle reap / restarts (per owner: "记忆重启 要 resume").
+  const prevSessionId = loadSessions()[key];
+  if (prevSessionId) {
+    args.push('--resume', prevSessionId);
+  }
   const proc = spawn(binary, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
   const a: WarmAgent = {
     proc, buf: '', busy: false, assembled: '', idleTimer: null,
     onText: null, onDone: null, onError: null,
+    sessionId: prevSessionId ?? null,
   };
 
   const settleTurn = () => {
@@ -108,11 +140,19 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
       if (!line.trim()) continue;
       let ev: {
         type?: string;
+        subtype?: string;
+        session_id?: string;
         message?: { content?: Array<{ type: string; text?: string }> };
         event?: { type?: string; delta?: { type?: string; text?: string } };
         result?: unknown;
       };
       try { ev = JSON.parse(line); } catch { continue; }
+      // Init event carries the session_id; persist so a later cold spawn can
+      // --resume this same session and keep the conversation memory.
+      if (ev.type === 'system' && ev.subtype === 'init' && typeof ev.session_id === 'string') {
+        a.sessionId = ev.session_id;
+        saveSession(key, ev.session_id);
+      }
       if (ev.type === 'stream_event') {
         // Token-by-token deltas (--include-partial-messages) → typewriter feel.
         const d = ev.event?.delta;
