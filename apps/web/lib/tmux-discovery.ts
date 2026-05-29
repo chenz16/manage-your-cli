@@ -95,12 +95,27 @@ export function discoverTmuxEmployees(): ProcessEntry[] {
     if (!claudePid) continue;
     const sub = staff.substrate;
     const cwd = sub.kind === 'cli_agent' ? sub.cwd : undefined;
+    // Extract --resume <session-id> from the running claude args so the
+    // respawn handler can revive the same session (memory preserved).
+    let sessionId: string | undefined;
+    try {
+      const args = execFileSync('ps', ['-p', String(claudePid), '-o', 'args='], {
+        encoding: 'utf8', timeout: 1500,
+      });
+      const m = args.match(/--resume\s+([0-9a-f-]{36})/i);
+      if (m) sessionId = m[1];
+    } catch { /* ps may fail — best-effort */ }
     const entry = regProcess({
       key: `tmux:${staff.id}`,
       pid: claudePid,
       kind: 'tmux-employee',
       ...(cwd ? { cwd } : {}),
-      meta: { session, staffName: staff.name, role: staff.role_label ?? staff.role_name },
+      ...(sessionId ? { sessionId } : {}),
+      meta: {
+        session, staffName: staff.name, role: staff.role_label ?? staff.role_name,
+        // Staff id needed by the respawn handler since registry key has prefix.
+        staffId: staff.id,
+      },
     });
     found.push(entry);
   }

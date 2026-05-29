@@ -256,6 +256,17 @@ export async function register(): Promise<void> {
     process.stderr.write(JSON.stringify({ audit: 'heartbeat.start_failed', error: msg }) + '\n');
   }
 
+  // Respawn dead tmux employees automatically (warm secretaries are handled
+  // by the existing KEEP heartbeat in warm-agent itself).
+  try {
+    const { startRespawnHandler } = await dynamicImportRobust<typeof import('./lib/respawn-handler')>('./lib/respawn-handler');
+    startRespawnHandler();
+    process.stderr.write(JSON.stringify({ audit: 'respawn_handler.started' }) + '\n');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(JSON.stringify({ audit: 'respawn_handler.start_failed', error: msg }) + '\n');
+  }
+
   // Boot sweep — register tmux cli_agent employees in the process registry
   // so /api/v1/health reflects them right after boot.
   try {
