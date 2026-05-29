@@ -1152,6 +1152,44 @@ button, input, textarea, select { font: inherit; }
 }
 .mobile-chat-header-dot.is-active { background: #1f7a44; }
 
+/* ─── Health indicator ──────────────────────────────────────────────────── */
+.mobile-health-dot {
+  flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%;
+  border: 0; padding: 0; margin: 0 8px 0 0; cursor: pointer; box-sizing: content-box;
+  display: inline-block; vertical-align: middle; transition: transform 0.15s ease;
+}
+.mobile-health-dot:active { transform: scale(0.85); }
+.mobile-health-dot.is-green  { background: #34c759; box-shadow: 0 0 0 2px rgba(52,199,89,0.18); }
+.mobile-health-dot.is-yellow { background: #ffcc00; box-shadow: 0 0 0 2px rgba(255,204,0,0.20); }
+.mobile-health-dot.is-red    { background: #ff3b30; box-shadow: 0 0 0 2px rgba(255,59,48,0.22); animation: mobile-health-pulse 1.5s ease-in-out infinite; }
+.mobile-health-dot.is-gray   { background: #c7c7cc; box-shadow: 0 0 0 2px rgba(199,199,204,0.20); }
+@keyframes mobile-health-pulse {
+  0%,100% { box-shadow: 0 0 0 2px rgba(255,59,48,0.22); }
+  50%     { box-shadow: 0 0 0 5px rgba(255,59,48,0.10); }
+}
+.mobile-health-sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 1300;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.mobile-health-sheet {
+  width: 100%; max-width: 600px; background: #fff;
+  border-radius: 14px 14px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  max-height: 60vh; overflow-y: auto; box-shadow: 0 -8px 24px rgba(0,0,0,0.15);
+}
+.mobile-health-sheet-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; color: #111; }
+.mobile-health-sheet-empty { font-size: 14px; color: #6b7280; padding: 12px 0; text-align: center; }
+.mobile-health-sheet-list { list-style: none; margin: 0; padding: 0; }
+.mobile-health-sheet-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 4px; border-bottom: 1px solid #f0f0f0; font-size: 14px;
+}
+.mobile-health-sheet-item:last-child { border-bottom: 0; }
+.mobile-health-sheet-item.is-dead .mobile-health-sheet-name  { color: #ff3b30; }
+.mobile-health-sheet-item.is-stuck .mobile-health-sheet-name { color: #ff9500; }
+.mobile-health-sheet-name { font-weight: 500; }
+.mobile-health-sheet-kind { color: #8e8e93; font-size: 12px; }
+.mobile-health-sheet-foot { color: #8e8e93; font-size: 11px; margin-top: 12px; text-align: right; }
+
 /* ─── ProjectChatHeader extras ───────────────────────────────────────────── */
 /* Overflow (⋯) button in the project chat header */
 .mobile-chat-header-overflow {

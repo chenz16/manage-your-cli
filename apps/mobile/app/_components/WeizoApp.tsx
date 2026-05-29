@@ -64,6 +64,7 @@ import { discoverDeskOnLan } from '../_lib/desk-discovery';
 import { speak as deviceTtsSpeak, stop as deviceTtsStop, primeAudio as ttsPrimeAudio, type TtsOpts } from '../_lib/tts';
 import * as nativeStt from '../_lib/native-stt';
 import { deskOrigin } from '../_lib/desk-origin';
+import { useHealth, type HealthSnapshot } from '../_lib/health';
 
 // ─── TTS staff context ────────────────────────────────────────────────────────
 //
@@ -2118,6 +2119,56 @@ function ProjectSwipeArea({
   );
 }
 
+// ─── HealthDot ───────────────────────────────────────────────────────────────
+// Status indicator wired to GET /api/v1/health. Shows a colored dot (green /
+// yellow / red / gray); tap pops a small sheet listing the unhealthy agents
+// so the owner can triage from mobile without ssh.
+function HealthDot(): React.JSX.Element {
+  const snap: HealthSnapshot = useHealth(30_000);
+  const [open, setOpen] = useState(false);
+  const cls = `mobile-health-dot is-${snap.level}`;
+  const unhealthy = snap.entries.filter((e) => e.status === 'dead' || e.status === 'stuck' || !e.pidAlive);
+  const showSheet = open && snap.entries.length > 0;
+  return (
+    <>
+      <button
+        type="button"
+        className={cls}
+        aria-label={`系统状态: ${snap.reason}`}
+        title={snap.reason}
+        onClick={() => setOpen((v) => !v)}
+      />
+      {showSheet && (
+        <div className="mobile-health-sheet-backdrop" onClick={() => setOpen(false)}>
+          <div className="mobile-health-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="mobile-health-sheet-title">
+              系统状态 · {snap.reason}
+            </div>
+            {unhealthy.length === 0 ? (
+              <div className="mobile-health-sheet-empty">所有 agent 健康。</div>
+            ) : (
+              <ul className="mobile-health-sheet-list">
+                {unhealthy.map((e) => {
+                  const meta = (e.meta ?? {}) as Record<string, string>;
+                  const label = meta.staffName || meta.session || e.key;
+                  const status = !e.pidAlive ? 'dead' : e.status;
+                  return (
+                    <li key={e.key} className={`mobile-health-sheet-item is-${status}`}>
+                      <span className="mobile-health-sheet-name">{label}</span>
+                      <span className="mobile-health-sheet-kind">{e.kind} · {status}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div className="mobile-health-sheet-foot">{snap.ts ?? ''}</div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── ProjectChatHeader ────────────────────────────────────────────────────────
 // Chat header for the active secretary project. Supports:
 //   • Long-press on project name → inline rename (blur/Enter saves, Esc cancels)
@@ -2271,6 +2322,7 @@ function ProjectChatHeader({
             </>
           )}
         </span>
+        <HealthDot />
         <button
           type="button"
           className="mobile-chat-header-overflow"
