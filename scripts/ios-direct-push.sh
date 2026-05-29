@@ -56,6 +56,18 @@ $SSH "$MAC" "cd $MD && pnpm install --config.manage-package-manager-versions=fal
   cd apps/mobile && NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN=$DESK_ORIGIN pnpm exec next build 2>&1 | tail -3 && \
   pnpm exec cap sync ios 2>&1 | tail -5" || { log FAIL build; exit 1; }
 
+log "[2.5/5] patch Info.plist — allow cleartext HTTP (desk over Tailscale)"
+# iOS App Transport Security blocks http:// by default. The desk runs plain
+# HTTP over Tailscale's encrypted tunnel, so cleartext at the iOS layer is
+# safe. Without this, Holon shows "load failed" even though the bundle and
+# DESK_ORIGIN are correct. `cap add ios` regenerates Info.plist from a
+# template that has no ATS dict → re-apply on every build.
+$SSH "$MAC" "PLIST=$MD/apps/mobile/ios/App/App/Info.plist && \
+  /usr/libexec/PlistBuddy -c 'Delete :NSAppTransportSecurity' \"\$PLIST\" 2>/dev/null; \
+  /usr/libexec/PlistBuddy -c 'Add :NSAppTransportSecurity dict' \"\$PLIST\" && \
+  /usr/libexec/PlistBuddy -c 'Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true' \"\$PLIST\"" \
+  || { log FAIL ats-patch; exit 1; }
+
 log "[3/5] archive (auto-sign, team $TEAM)"
 $SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keychain-db && \
   cd $MD/apps/mobile/ios/App && rm -rf build/App.xcarchive && \
