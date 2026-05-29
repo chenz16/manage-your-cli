@@ -1,35 +1,48 @@
 /**
- * tmux-discovery — find live claude processes inside tmux sessions owned by
- * Holon cli_agent staff and register them in the ProcessRegistry.
+ * tmux-discovery — find live CLI processes inside tmux sessions for Holon
+ * cli_agent staff and register them in the ProcessRegistry.
  *
- * Tmux sessions are created in packages/core (cli-session-service.ts) at
- * staff-create time. Rather than wire a cross-package register call there,
- * the desk runs this discovery sweep on boot + every heartbeat tick:
- *
- *   1. List all staff with substrate.kind = cli_agent.
- *   2. For each, check `tmux has-session -t <session>`.
- *   3. If present, find the claude child pid via `tmux list-panes -F #{pane_pid}`
- *      then `pgrep --parent <pane_pid> claude` (claude usually launches under
- *      a login bash, so it's a grandchild — pgrep -P is enough).
- *   4. Register/refresh in the ProcessRegistry with kind=tmux-employee.
- *
- * Dead / missing sessions just don't get registered; the heartbeat ticker will
- * later mark previously-known tmux-employees as dead when their pid is gone.
+ * To avoid the webpack node:-scheme breakage when @holon/core is in the
+ * import graph, this module reads the staff list via the desk's own HTTP
+ * API (/api/v1/staff) instead of importing listStaffMerged directly.
+ * Self-loop is fine — we're running in-process and only call it at boot
+ * (and later, via heartbeat ticks).
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nodeRequire = eval('require') as (id: string) => any;
-const { execFileSync } = nodeRequire('node:child_process') as typeof import('node:child_process');
+const { execFileSync } = nodeRequire('child_process') as typeof import('child_process');
 import { register as regProcess, type ProcessEntry } from './process-registry';
-import { listStaffMerged } from '@holon/core';
-import type { Staff } from '@holon/api-contract';
 
-function tmuxSessionForStaff(staff: Staff): string | null {
+interface StaffRow {
+  id: string;
+  name: string;
+  role_label?: string;
+  role_name?: string;
+  status?: string;
+  substrate?: {
+    kind?: string;
+    cwd?: string;
+    binary?: string;
+    external_session?: string;
+  };
+}
+
+async function fetchStaff(port = 3110): Promise<StaffRow[]> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/staff`);
+    if (!res.ok) return [];
+    const json = await res.json() as { items?: StaffRow[] };
+    return json.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function tmuxSessionForStaff(staff: StaffRow): string | null {
   const sub = staff.substrate;
-  if (sub.kind !== 'cli_agent') return null;
-  // The session name convention: either substrate.external_session (when the
-  // staff was adopted, like 'mgr') or the staff.id (default for fresh CLIs).
-  const external = (sub as { external_session?: string }).external_session;
+  if (!sub || sub.kind !== 'cli_agent') return null;
+  const external = sub.external_session;
   return external && external.trim() ? external.trim() : staff.id;
 }
 
@@ -55,35 +68,32 @@ function tmuxPanePid(name: string): number | null {
   }
 }
 
-function findClaudeChildPid(parentPid: number): number | null {
-  // The pane runs `bash -l` which then exec's `claude`. With `exec` claude
-  // replaces bash → pane_pid IS claude. Without exec it's a child. Probe both.
+function findCliChild(parentPid: number): { pid: number; binary: string } | null {
+  const BINARIES = ['claude', 'codex', 'gemini', 'qwen'];
   try {
     const cmd = execFileSync('ps', ['-p', String(parentPid), '-o', 'cmd='], {
       encoding: 'utf8', timeout: 1500,
     }).trim();
-    if (cmd.includes('claude')) return parentPid;
-  } catch { /* parent might have just died */ }
-  try {
-    const out = execFileSync('pgrep', ['-P', String(parentPid), 'claude'], {
-      encoding: 'utf8', timeout: 1500,
-    });
-    const first = out.split('\n').map((s) => s.trim()).find(Boolean);
-    const n = Number(first);
-    return Number.isFinite(n) ? n : null;
-  } catch {
-    return null;
+    for (const b of BINARIES) {
+      if (new RegExp(`(^|/)${b}(\\s|$)`).test(cmd)) return { pid: parentPid, binary: b };
+    }
+  } catch { /* parent gone */ }
+  for (const b of BINARIES) {
+    try {
+      const out = execFileSync('pgrep', ['-P', String(parentPid), b], {
+        encoding: 'utf8', timeout: 1500,
+      });
+      const first = out.split('\n').map((s) => s.trim()).find(Boolean);
+      const n = Number(first);
+      if (Number.isFinite(n)) return { pid: n, binary: b };
+    } catch { /* try next */ }
   }
+  return null;
 }
 
-export function discoverTmuxEmployees(): ProcessEntry[] {
+export async function discoverTmuxEmployees(): Promise<ProcessEntry[]> {
   const found: ProcessEntry[] = [];
-  let staffs: Staff[];
-  try {
-    staffs = listStaffMerged();
-  } catch {
-    return found;
-  }
+  const staffs = await fetchStaff();
   for (const staff of staffs) {
     if (staff.status !== 'active') continue;
     const session = tmuxSessionForStaff(staff);
@@ -91,29 +101,28 @@ export function discoverTmuxEmployees(): ProcessEntry[] {
     if (!tmuxHasSession(session)) continue;
     const panePid = tmuxPanePid(session);
     if (!panePid) continue;
-    const claudePid = findClaudeChildPid(panePid);
-    if (!claudePid) continue;
-    const sub = staff.substrate;
-    const cwd = sub.kind === 'cli_agent' ? sub.cwd : undefined;
-    // Extract --resume <session-id> from the running claude args so the
-    // respawn handler can revive the same session (memory preserved).
+    const child = findCliChild(panePid);
+    if (!child) continue;
+    const cwd = staff.substrate?.cwd;
     let sessionId: string | undefined;
     try {
-      const args = execFileSync('ps', ['-p', String(claudePid), '-o', 'args='], {
+      const args = execFileSync('ps', ['-p', String(child.pid), '-o', 'args='], {
         encoding: 'utf8', timeout: 1500,
       });
       const m = args.match(/--resume\s+([0-9a-f-]{36})/i);
       if (m) sessionId = m[1];
-    } catch { /* ps may fail — best-effort */ }
+    } catch { /* best-effort */ }
     const entry = regProcess({
       key: `tmux:${staff.id}`,
-      pid: claudePid,
+      pid: child.pid,
       kind: 'tmux-employee',
       ...(cwd ? { cwd } : {}),
       ...(sessionId ? { sessionId } : {}),
       meta: {
-        session, staffName: staff.name, role: staff.role_label ?? staff.role_name,
-        // Staff id needed by the respawn handler since registry key has prefix.
+        session,
+        staffName: staff.name,
+        role: staff.role_label ?? staff.role_name ?? '',
+        binary: child.binary,
         staffId: staff.id,
       },
     });

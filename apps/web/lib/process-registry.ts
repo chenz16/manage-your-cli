@@ -17,15 +17,15 @@
  * job is "track + persist + emit events".
  */
 
-// eval('require') to dodge webpack's `node:` scheme handler — this file is
-// imported by /api/v1/health/route.ts which goes through webpack even in
-// nodejs runtime.
+// eval('require') keeps Node's CommonJS require in scope (new Function loses
+// it). Use bare module names (no `node:` prefix) so webpack's loader can
+// short-circuit the path as a node builtin instead of choking on the scheme.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nodeRequire = eval('require') as (id: string) => any;
 const { existsSync, readFileSync, writeFileSync, mkdirSync } =
-  nodeRequire('node:fs') as typeof import('node:fs');
-const { join, dirname } = nodeRequire('node:path') as typeof import('node:path');
-const { homedir } = nodeRequire('node:os') as typeof import('node:os');
+  nodeRequire('fs') as typeof import('fs');
+const { join, dirname } = nodeRequire('path') as typeof import('path');
+const { homedir } = nodeRequire('os') as typeof import('os');
 
 export type ProcessKind =
   | 'warm-secretary'   // in-process child via spawn (`claude --print stream-json`)

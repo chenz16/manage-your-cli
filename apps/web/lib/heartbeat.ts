@@ -13,13 +13,59 @@
  * boots an event-bus that warm-agent / tmux-watcher subscribe to.
  */
 
-// Use eval('require') so webpack doesn't try to bundle node:child_process
-// (this file gets pulled in by /api/v1/health/route.ts; webpack edge-pass
-// chokes on `node:` schemes even though we run in nodejs runtime).
+// eval('require') keeps Node's CommonJS require in scope. Bare module names
+// (no node: prefix) so webpack's loader treats it as a node builtin (no
+// scheme handling needed).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nodeRequire = eval('require') as (id: string) => any;
-const { execFileSync } = nodeRequire('node:child_process') as typeof import('node:child_process');
-import { flush, get, list, markStatus, pidAlive, register, type ProcessEntry } from './process-registry';
+const { execFileSync, spawn } = nodeRequire('child_process') as typeof import('child_process');
+import { flush, get, list, markStatus, pidAlive, register, unregister, type ProcessEntry } from './process-registry';
+
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+function binaryInteractiveArgs(binary: string): string {
+  switch (binary) {
+    case 'claude': return '--dangerously-skip-permissions';
+    case 'codex':  return '--dangerously-bypass-approvals-and-sandbox';
+    case 'gemini': return '--yolo';
+    case 'qwen':   return '--yolo';
+    default:       return '';
+  }
+}
+
+// Respawn a dead tmux-employee. Idempotent per-entry: the entry is
+// unregistered after spawn, the next discovery tick re-registers with the
+// new pid. Owner request: "CLI 死了自动重启".
+function respawnTmuxEmployee(entry: ProcessEntry): void {
+  const session = (entry.meta?.session ?? '') as string;
+  const cwd = entry.cwd ?? process.env.HOME;
+  const sessionId = entry.sessionId;
+  const binary = (entry.meta?.binary as string | undefined) ?? 'claude';
+  if (!session) return;
+  try { execFileSync('tmux', ['kill-session', '-t', session], { timeout: 1500 }); } catch { /* fine */ }
+  const interactiveArgs = binaryInteractiveArgs(binary);
+  // Only claude has --resume today; codex/gemini/qwen launch fresh.
+  const resumePart = sessionId && binary === 'claude' ? ` --resume ${sessionId}` : '';
+  const cdPart = cwd ? `cd ${shQuote(cwd)}; ` : '';
+  const launchCmd = `${cdPart}exec ${binary} ${interactiveArgs}${resumePart}`;
+  try {
+    spawn('tmux', ['new-session', '-d', '-s', session, '-x', '120', '-y', '32',
+      'bash', '-l', '-c', launchCmd], { stdio: 'ignore', detached: true }).unref();
+    console.log(JSON.stringify({
+      audit: 'respawn.tmux.launched', key: entry.key, session, cwd, binary,
+      sessionId: sessionId ?? null, ts: new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.warn(JSON.stringify({
+      audit: 'respawn.tmux.failed', key: entry.key,
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
+  }
+  unregister(entry.key);
+}
 
 const TICK_MS = 30_000;
 const STUCK_MS = 10 * 60 * 1000; // 10 min of no event = mark stuck (warm); tmux-employee has its own timeout
@@ -90,6 +136,14 @@ function tick(): void {
       if (entry.status !== 'dead') {
         markStatus(entry.key, 'dead');
         emit({ ...entry, status: 'dead' }, wasStatus);
+        // Inline respawn (was a separate respawn-handler.ts but the
+        // late-require created webpack module-resolution headaches).
+        if (entry.kind === 'tmux-employee') {
+          respawnTmuxEmployee(entry);
+        } else if (entry.kind === 'tree-child') {
+          unregister(entry.key);
+        }
+        // warm-secretary: warm-agent's own KEEP heartbeat handles respawn.
       }
       continue;
     }

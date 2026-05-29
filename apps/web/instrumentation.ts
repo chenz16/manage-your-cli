@@ -242,45 +242,23 @@ export async function register(): Promise<void> {
   // warm secretary / tmux employee / spawned codex gets a 30s liveness check
   // + process-tree scan that discovers hidden sub-agents and registers them
   // for /api/v1/health.
-  // Use the same dynamicImport pattern as the rest of this file (hidden
-  // from webpack via `new Function`) so `node:` imports inside heartbeat /
-  // tmux-discovery / @holon/core don't poison the webpack bundle pass.
-  const dynamicImportRobust = new Function('s', 'return import(s)') as <T>(s: string) => Promise<T>;
-
+  // Heartbeat + respawn-handler + boot tmux sweep. Static imports below so
+  // Next compiles these into .next/server/lib/. All node: requires inside
+  // them go through eval('require') to dodge webpack's node:-scheme handler.
   try {
-    const { startHeartbeat } = await dynamicImportRobust<typeof import('./lib/heartbeat')>('./lib/heartbeat');
-    startHeartbeat();
+    const heartbeat = await import('./lib/heartbeat');
+    heartbeat.startHeartbeat();
     process.stderr.write(JSON.stringify({ audit: 'heartbeat.started' }) + '\n');
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(JSON.stringify({ audit: 'heartbeat.start_failed', error: msg }) + '\n');
-  }
-
-  // Respawn dead tmux employees automatically (warm secretaries are handled
-  // by the existing KEEP heartbeat in warm-agent itself).
-  try {
-    const { startRespawnHandler } = await dynamicImportRobust<typeof import('./lib/respawn-handler')>('./lib/respawn-handler');
-    startRespawnHandler();
-    process.stderr.write(JSON.stringify({ audit: 'respawn_handler.started' }) + '\n');
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(JSON.stringify({ audit: 'respawn_handler.start_failed', error: msg }) + '\n');
-  }
-
-  // Boot sweep — register tmux cli_agent employees in the process registry
-  // so /api/v1/health reflects them right after boot.
-  try {
-    const { discoverTmuxEmployees } = await dynamicImportRobust<typeof import('./lib/tmux-discovery')>('./lib/tmux-discovery');
+    const tmuxDiscovery = await import('./lib/tmux-discovery');
     setTimeout(() => {
-      try {
-        const found = discoverTmuxEmployees();
+      void tmuxDiscovery.discoverTmuxEmployees().then((found) => {
         process.stderr.write(JSON.stringify({ audit: 'tmux.discovered', count: found.length, keys: found.map((e) => e.key) }) + '\n');
-      } catch (err) {
+      }).catch((err) => {
         process.stderr.write(JSON.stringify({ audit: 'tmux.discover_failed', error: err instanceof Error ? err.message : String(err) }) + '\n');
-      }
+      });
     }, 4000);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stderr.write(JSON.stringify({ audit: 'tmux.discover_import_failed', error: msg }) + '\n');
+    process.stderr.write(JSON.stringify({ audit: 'robustness.boot_failed', error: msg }) + '\n');
   }
 }
