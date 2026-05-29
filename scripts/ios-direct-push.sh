@@ -85,9 +85,14 @@ $SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keyc
     -allowProvisioningUpdates 2>&1 | tail -5" || { log FAIL export; exit 1; }
 
 log "[5/5] devicectl install to iPhone over Tailscale LAN"
-$SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keychain-db && \
+# `tail` would swallow xcrun's non-zero exit. Use grep -q on success marker.
+INSTALL_OUT=$($SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keychain-db && \
   xcrun devicectl device install app --device $IPHONE \
-    $MD/apps/mobile/ios/App/build/export-dev/App.ipa 2>&1 | tail -5" \
-  || { log FAIL devicectl; exit 1; }
-
-log "DONE — Holon updated on iPhone."
+    $MD/apps/mobile/ios/App/build/export-dev/App.ipa 2>&1")
+echo "$INSTALL_OUT" | tail -5
+if echo "$INSTALL_OUT" | grep -q "App installed:"; then
+  log "DONE — Holon updated on iPhone."
+else
+  log "FAIL devicectl — iPhone unreachable or install rejected. ipa is at $MD/apps/mobile/ios/App/build/export-dev/App.ipa on Mac; retry once Tailscale path to iPhone is stable."
+  exit 1
+fi
