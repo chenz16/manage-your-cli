@@ -17,9 +17,15 @@
  * job is "track + persist + emit events".
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
+// eval('require') to dodge webpack's `node:` scheme handler — this file is
+// imported by /api/v1/health/route.ts which goes through webpack even in
+// nodejs runtime.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const nodeRequire = eval('require') as (id: string) => any;
+const { existsSync, readFileSync, writeFileSync, mkdirSync } =
+  nodeRequire('node:fs') as typeof import('node:fs');
+const { join, dirname } = nodeRequire('node:path') as typeof import('node:path');
+const { homedir } = nodeRequire('node:os') as typeof import('node:os');
 
 export type ProcessKind =
   | 'warm-secretary'   // in-process child via spawn (`claude --print stream-json`)

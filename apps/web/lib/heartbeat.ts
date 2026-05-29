@@ -13,7 +13,12 @@
  * boots an event-bus that warm-agent / tmux-watcher subscribe to.
  */
 
-import { execFileSync } from 'node:child_process';
+// Use eval('require') so webpack doesn't try to bundle node:child_process
+// (this file gets pulled in by /api/v1/health/route.ts; webpack edge-pass
+// chokes on `node:` schemes even though we run in nodejs runtime).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const nodeRequire = eval('require') as (id: string) => any;
+const { execFileSync } = nodeRequire('node:child_process') as typeof import('node:child_process');
 import { flush, get, list, markStatus, pidAlive, register, type ProcessEntry } from './process-registry';
 
 const TICK_MS = 30_000;
