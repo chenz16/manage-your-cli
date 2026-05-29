@@ -237,4 +237,17 @@ export async function register(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(JSON.stringify({ audit: 'tts.spawn_init_failed', error: msg }) + '\n');
   }
+
+  // Robustness layer — boot the ProcessRegistry heartbeat ticker so every
+  // warm secretary / tmux employee / spawned codex gets a 30s liveness check
+  // + process-tree scan that discovers hidden sub-agents and registers them
+  // for /api/v1/health.
+  try {
+    const { startHeartbeat } = await import('./lib/heartbeat');
+    startHeartbeat();
+    process.stderr.write(JSON.stringify({ audit: 'heartbeat.started' }) + '\n');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(JSON.stringify({ audit: 'heartbeat.start_failed', error: msg }) + '\n');
+  }
 }

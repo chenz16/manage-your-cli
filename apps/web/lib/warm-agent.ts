@@ -14,6 +14,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { register as regProcess, unregister as unregProcess, touch as touchProcess } from './process-registry';
 
 // Persist warm session ids per key so when the warm process dies (idle reap /
 // HMR / OS restart), the next spawn can `claude --resume <id>` and pick up
@@ -122,6 +123,16 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
     onText: null, onDone: null, onError: null,
     sessionId: prevSessionId ?? null,
   };
+  if (proc.pid) {
+    regProcess({
+      key: `warm:${key}`,
+      pid: proc.pid,
+      kind: 'warm-secretary',
+      ...(cwd !== undefined ? { cwd } : {}),
+      ...(prevSessionId ? { sessionId: prevSessionId } : {}),
+      meta: { binary, model },
+    });
+  }
 
   const settleTurn = () => {
     const done = a.onDone;
@@ -153,6 +164,9 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
         a.sessionId = ev.session_id;
         saveSession(key, ev.session_id);
       }
+      // Every stream event = heartbeat — touch the registry so the ticker
+      // doesn't mark this warm process stuck mid-turn.
+      touchProcess(`warm:${key}`);
       if (ev.type === 'stream_event') {
         // Token-by-token deltas (--include-partial-messages) → typewriter feel.
         const d = ev.event?.delta;
@@ -176,7 +190,10 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
   });
   proc.stderr?.on('data', () => { /* claude logs to stderr; ignore */ });
   proc.on('error', (err) => { a.onError?.(err.message); settleTurn(); });
-  proc.on('exit', () => { AGENTS.delete(key); });
+  proc.on('exit', () => {
+    AGENTS.delete(key);
+    unregProcess(`warm:${key}`);
+  });
   return a;
 }
 
