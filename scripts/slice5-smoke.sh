@@ -209,7 +209,10 @@ fi
 # ── Check 2: Boss memory APIs ────────────────────────────────────────────────
 echo ""
 echo "=== Check 2: Boss memory write + read ==="
-SMOKE_SCOPE="smoke/slice5_${TS}"
+# Fixed scope so each smoke run OVERWRITES instead of accumulating new
+# entries in boss INDEX.md (entries are auto-injected into every agent's
+# boot context — runaway smoke entries pollute all agents' tokens).
+SMOKE_SCOPE="smoke/slice5"
 SMOKE_VALUE="hello-${TS}"
 
 WRITE_RESP=$(curl_auth -X POST "$DESK_URL/api/v1/boss-memory" \
