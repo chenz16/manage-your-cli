@@ -14,7 +14,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { register as regProcess, unregister as unregProcess, touch as touchProcess } from './process-registry';
+import { register as regProcess, unregister as unregProcess, touch as touchProcess, markStatus } from './process-registry';
 
 // Persist warm session ids per key so when the warm process dies (idle reap /
 // HMR / OS restart), the next spawn can `claude --resume <id>` and pick up
@@ -153,7 +153,19 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
         type?: string;
         subtype?: string;
         session_id?: string;
-        message?: { content?: Array<{ type: string; text?: string }> };
+        message?: {
+          content?: Array<{
+            type: string;
+            text?: string;
+            // tool_use blocks (claude-code Task / Read / Bash / mcp__*)
+            id?: string;
+            name?: string;
+            input?: { description?: string; subagent_type?: string };
+            // tool_result blocks
+            tool_use_id?: string;
+            content?: unknown;
+          }>;
+        };
         event?: { type?: string; delta?: { type?: string; text?: string } };
         result?: unknown;
       };
@@ -180,6 +192,42 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
           .filter((b) => b.type === 'text' && typeof b.text === 'string')
           .map((b) => b.text as string).join('');
         if (text && text !== a.assembled) { a.assembled = text; a.onText?.(a.assembled); }
+        // Stream-json Task tool tap: register any in-process subagent that
+        // the secretary spawned via the Task tool. These don't appear in
+        // `ps` (they're internal to claude-code) but they're real work
+        // happening on the secretary's behalf and we want them visible in
+        // /api/v1/health for owner ops triage.
+        for (const block of ev.message.content) {
+          if (block.type === 'tool_use' && block.id && block.name) {
+            const isTask = block.name === 'Task';
+            // Track Task subagents + MCP holon dispatches (the high-signal
+            // ones). Skip noise like Read/Bash/Glob — those don't represent
+            // long-running work.
+            const isHolonDispatch = block.name.startsWith('mcp__holon__');
+            if (!isTask && !isHolonDispatch) continue;
+            const subKey = `warm:${key}/tool:${block.id}`;
+            regProcess({
+              key: subKey,
+              pid: proc.pid ?? 0,            // shares parent pid (in-process)
+              kind: 'task-subagent',
+              parentKey: `warm:${key}`,
+              meta: {
+                tool: block.name,
+                description: block.input?.description ?? '',
+                subagent_type: block.input?.subagent_type ?? '',
+              },
+            });
+          }
+        }
+      } else if (ev.type === 'user' && ev.message?.content) {
+        // Tool results land in synthetic 'user' messages — close out any
+        // task-subagent we previously opened on tool_use.
+        for (const block of ev.message.content) {
+          if (block.type === 'tool_result' && block.tool_use_id) {
+            const subKey = `warm:${key}/tool:${block.tool_use_id}`;
+            markStatus(subKey, 'reaped');
+          }
+        }
       } else if (ev.type === 'result') {
         if (typeof ev.result === 'string' && ev.result.trim() && ev.result !== a.assembled) {
           a.assembled = ev.result; a.onText?.(a.assembled);

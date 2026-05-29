@@ -33,6 +33,9 @@ export type ProcessKind =
   | 'codex-task'       // codex --print subprocess
   | 'tree-child'       // discovered via `ps --ppid`, parent registered
   | 'desk'             // the Next.js dev server itself (registered at boot)
+  | 'task-subagent'    // claude-code Task tool subagent — runs INSIDE the parent
+                       // CLI's process; no own pid. Tracked via stream-json
+                       // tool_use/tool_result events.
   ;
 
 export type ProcessStatus = 'alive' | 'stuck' | 'dead' | 'reaped';
