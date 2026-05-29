@@ -93,6 +93,11 @@ rm -rf out
 BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 BUILD_DATE="$(date +%Y-%m-%d)"
 log "stamping build: sha=$BUILD_SHA date=$BUILD_DATE"
+# Bake the SHA into sw.js CACHE_VERSION so the SW invalidates old caches on
+# each new install (WKWebView/SW storage persists across .apk reinstalls and
+# would otherwise serve yesterday's hashed bundle with the old DESK_ORIGIN).
+sed -i.bak "s|__BUILD_SHA__|$BUILD_SHA|g" public/sw.js
+trap 'mv public/sw.js.bak public/sw.js 2>/dev/null || true' EXIT
 NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN="$NEXT_PUBLIC_DESK_ORIGIN" \
   NEXT_PUBLIC_BUILD_SHA="$BUILD_SHA" NEXT_PUBLIC_BUILD_DATE="$BUILD_DATE" \
   pnpm exec next build 2>&1 | tail -8
