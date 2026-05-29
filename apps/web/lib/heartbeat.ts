@@ -76,6 +76,13 @@ function scanChildren(parent: ProcessEntry): void {
 
 function tick(): void {
   const now = Date.now();
+  // Refresh tmux employee registrations. Cheap (a few tmux + ps calls). Picks
+  // up sessions that were created since last tick and keeps PIDs current if
+  // the underlying claude was respawned (--resume).
+  // Tmux discovery is wired separately (instrumentation.ts boot sweep). The
+  // tick can't lazy-require it via webpack — @holon/core's transitive
+  // node:child_process import poisons the bundle pass. Future: SQLite-direct
+  // discovery so heartbeat owns the sweep without going through core.
   for (const entry of list()) {
     const wasStatus = entry.status;
     // 1. PID liveness

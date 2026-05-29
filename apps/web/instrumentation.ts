@@ -242,12 +242,34 @@ export async function register(): Promise<void> {
   // warm secretary / tmux employee / spawned codex gets a 30s liveness check
   // + process-tree scan that discovers hidden sub-agents and registers them
   // for /api/v1/health.
+  // Use the same dynamicImport pattern as the rest of this file (hidden
+  // from webpack via `new Function`) so `node:` imports inside heartbeat /
+  // tmux-discovery / @holon/core don't poison the webpack bundle pass.
+  const dynamicImportRobust = new Function('s', 'return import(s)') as <T>(s: string) => Promise<T>;
+
   try {
-    const { startHeartbeat } = await import('./lib/heartbeat');
+    const { startHeartbeat } = await dynamicImportRobust<typeof import('./lib/heartbeat')>('./lib/heartbeat');
     startHeartbeat();
     process.stderr.write(JSON.stringify({ audit: 'heartbeat.started' }) + '\n');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     process.stderr.write(JSON.stringify({ audit: 'heartbeat.start_failed', error: msg }) + '\n');
+  }
+
+  // Boot sweep — register tmux cli_agent employees in the process registry
+  // so /api/v1/health reflects them right after boot.
+  try {
+    const { discoverTmuxEmployees } = await dynamicImportRobust<typeof import('./lib/tmux-discovery')>('./lib/tmux-discovery');
+    setTimeout(() => {
+      try {
+        const found = discoverTmuxEmployees();
+        process.stderr.write(JSON.stringify({ audit: 'tmux.discovered', count: found.length, keys: found.map((e) => e.key) }) + '\n');
+      } catch (err) {
+        process.stderr.write(JSON.stringify({ audit: 'tmux.discover_failed', error: err instanceof Error ? err.message : String(err) }) + '\n');
+      }
+    }, 4000);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(JSON.stringify({ audit: 'tmux.discover_import_failed', error: msg }) + '\n');
   }
 }
