@@ -1,6 +1,6 @@
 # ADR: Memory recall as a Claude Code Skill (not a persona prompt)
 
-- Status: Proposed
+- Status: Accepted (2026-05-30; install hook landed in commit 50e3b8e via `installRecallSkill`)
 - Date: 2026-05-30
 - Context owner: Chen Zhang
 

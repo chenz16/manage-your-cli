@@ -1,6 +1,6 @@
 # ADR: HR evaluator + two-path behavior correction
 
-- Status: Proposed
+- Status: Accepted (2026-05-30; slice 1+2 landed in commits 9649f74 / 2714d7a / e8281a7)
 - Date: 2026-05-30
 - Context owner: Chen Zhang
 
