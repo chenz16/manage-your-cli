@@ -180,7 +180,7 @@ Maya          /skills (or /references or /templates)   Modal       LLM (describe
 
 | Layer | Today (V1) | V2 gap |
 |---|---|---|
-| **Chat (control plane)** | assistant-ui Composer; DeepSeek via Hermes ACP; @mention typeahead | Multi-modal (image/file attach); voice; persistent thread history |
+| **Chat (control plane)** | assistant-ui Composer; warm CLI Secretary (`apps/web/lib/warm-agent.ts`) on the user's CLI subscription; @mention typeahead | Multi-modal (image/file attach); voice; persistent thread history |
 | **Catalog (skills/templates/references)** | Browse + CRUD + LLM-describe; 30/8/14 examples; user-created supported | Skill plugin tools mostly stubbed (D1); reference RAG over local_path (D6) |
 | **Workforce (members)** | Roster with 6 substrate kinds; create/dismiss; CLI passthrough | AgentConfigDrawer (per-staff config UI for budget/deny/proxy — schema ready, UI missing); peer connections (Core 2) |
 | **Work tracking (today/deliverables)** | Today buckets; jobs queue; deliverable list with path tokenizer | Per-job cost tracking (D7); SLA timer; deliverable diff/version |

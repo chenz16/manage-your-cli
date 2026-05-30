@@ -3,6 +3,19 @@
 Date: 2026-05-23
 Status: Accepted for V1 slice 1
 
+> **Lineage.** This ADR is the formal decoupling point between
+> `manage-your-cli` and the Hermes runtime that lives in the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering).
+> The ADR text below references "Hermes" comparatively to explain the
+> chosen design — `manage-your-cli` does not bundle, link to, or
+> depend on Hermes. Live runtime in this repo is the direct CLI
+> adapter at
+> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
+> and [`packages/core/src/cli-session-service.ts`](../../packages/core/src/cli-session-service.ts).
+> The earlier `local_ai` → Hermes branch described in §1 is **not
+> shipped** in this repo; only the `cli_agent` → direct-CLI branch is
+> live here.
+
 ## Context
 
 Holon staff carry a `substrate.kind` (ADR-015, refined by ADR-029):

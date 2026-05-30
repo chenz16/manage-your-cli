@@ -182,11 +182,11 @@ Three Engineering-Rule implications:
 
 ## 7. Cross-References
 
-- `owner-assistant-tools.md` § 5.7 — `cli_exec` agent wrapper over
+- [`legacy/owner-assistant-tools.md`](legacy/owner-assistant-tools.md) § 5.7 — historical (sister-repo) `cli_exec` agent wrapper over
   `/cli/exec`; § 5.8 — @-mention recognition (how the secretary
   picks `cli_exec` vs sending the owner to this panel)
 - `local-agent-management.md` § 5.2 — `cli` substrate kind
-- `worker-dispatcher.md` § 5 — one-shot Hermes worker spawn
+- [`legacy/worker-dispatcher.md`](legacy/worker-dispatcher.md) § 5 — historical (sister-repo) one-shot Hermes worker spawn
   (contrast: those exit when the brief is done; not tmux-backed)
 - `admin-surfaces.md` § 3.1 — admin reset does NOT clear CLI sessions
   today (flag for the dismissal-widening pass)

@@ -201,10 +201,14 @@ contract defined in `runtime-adapter-interface.md`. Has tool scope, context
 permissions, budget caps, and autonomy level set by the owner. Produces
 deliverables that flow into the deliverable store.
 
-> Earlier drafts named the runtime "Hermes." The codebase no longer carries a
-> Hermes adapter — intelligence comes entirely from the user's CLI
-> subscription. See `implementation-architecture.md` § 7.5 for the current
-> shape.
+> **Lineage.** Earlier drafts of this design (and the sister repo
+> [`holon-engineering`](https://github.com/chenz16/holon-engineering))
+> named the runtime "Hermes". `manage-your-cli` does not ship a
+> Hermes adapter and does not bundle, link to, or depend on Hermes —
+> intelligence comes entirely from the user's CLI subscription. See
+> `implementation-architecture.md` § 7.5 for the current shape and
+> [`docs/decisions/040-cli-staff-dual-runtime.md`](../decisions/040-cli-staff-dual-runtime.md)
+> for the explicit decoupling decision.
 
 ### 5.2 CLI Executor
 
@@ -737,7 +741,7 @@ When work crosses the seam, Core 1 does not see the inside of Core 2's protocol;
 
 ## 14. Chat Surface — V1 Persistence Note (ADR-013)
 
-Per ADR-013, the chat surface is a UI exposure of Hermes's natural conversational form. No new database table is required.
+Per ADR-013 (sister-repo lineage), the chat surface is a UI exposure of the CLI's natural conversational stream — in `manage-your-cli` this is the warm-CLI Secretary at `apps/web/lib/warm-agent.ts` rather than the Hermes ACP loop that ADR-013 originally targeted. No new database table is required.
 
 **V1 persistence mechanism:** Each member record carries a `chat_log[]` array that holds the in-memory conversation history for the current session. This is a Dev-layer implementation detail; the schema extension is:
 
@@ -805,11 +809,11 @@ The owner makes this choice explicitly per assignment. There is no auto-routing 
 
 Status: proposed-auto-applied 2026-05-16, iter-007 step 7.
 
-ADR-013 already routes desk control through the owner_assistant chat surface (the Hermes loop exposed as UI). Iter-007 step 7 widens that surface so the owner_assistant can also **mint, edit, and dismiss `local_ai` staff** without leaving chat — turning the conversation into the canonical hiring desk, parallel to the form-based path in § 6.
+ADR-013 already routes desk control through the owner_assistant chat surface (in `manage-your-cli` this is the warm-CLI Secretary; in the sister repo's original ADR-013 framing it was the Hermes loop exposed as UI). Iter-007 step 7 widens that surface so the owner_assistant can also **mint, edit, and dismiss `local_ai` staff** without leaving chat — turning the conversation into the canonical hiring desk, parallel to the form-based path in § 6.
 
 ### What Is Exposed
 
-Three tools are added to the `hermes-acp` toolset surface (see `owner-assistant-tools.md` § 5 for the full catalogue and the 7 → 10 count update). They are owner-only — only the owner desk-AI session sees them; no external surface exposes them. This preserves Engineering Rule 6 (owner-mediated authority): all three only operate when the owner is the actor.
+Three tools are added to the Holon MCP tool surface (in `manage-your-cli` exposed via `packages/holon-mcp`; in the sister-repo lineage this was the `hermes-acp` toolset — see [`legacy/owner-assistant-tools.md`](legacy/owner-assistant-tools.md) § 5). They are owner-only — only the owner desk-AI session sees them; no external surface exposes them. This preserves Engineering Rule 6 (owner-mediated authority): all three only operate when the owner is the actor.
 
 | Tool | Required input | Whitelisted fields | Post-emit audit event |
 |---|---|---|---|
@@ -827,7 +831,7 @@ Per Engineering Rule 11 (PII-free, machine-portable defaults — see ADR-018), `
 - `autonomy_level = "Supervised"` (matches § 8.2 default — system never silently raises)
 - `governance_mode = "graduated"`
 - `status = "active"`
-- `agent_profile_id = "hermes_profile_generic_v1"`
+- `agent_profile_id` defaults to the binary-keyed profile (`claude` / `codex` / `gemini` / `qwen`) per the live per-binary memory file matrix in § 14.7. (Earlier drafts and the sister-repo lineage used the generic `hermes_profile_generic_v1` placeholder.)
 - `tool_scope = ["web_search", "read_file"]`
 - `desk_id = fx.primary_desk_id` — flat-roster invariant (Engineering Rule 5): every minted staff is a sibling, never a child of another staff record.
 
@@ -858,10 +862,10 @@ The Members service (`packages/core/src/members-service.ts`) now sources from th
 
 | Rule | How this surface complies |
 |---|---|
-| **#1 — state above runtime** | Holon BFF owns the roster. Hermes tool handlers HTTP into the BFF; they do not mutate runtime state directly. |
+| **#1 — state above runtime** | Holon BFF owns the roster. MCP tool handlers (via `packages/holon-mcp`) HTTP into the BFF; they do not mutate runtime state directly. (Sister-repo lineage: same posture, with Hermes tool handlers playing the same role.) |
 | **#4 — no silent failure** | Every CRUD path returns `{ error: msg }` JSON on failure; every success logs a structured `audit` line on stdout. No bare try/catch. |
 | **#5 — flat-roster invariant** | `create_staff` always sets `desk_id = fx.primary_desk_id`; no parent_staff_id surface exists. Span-of-control cap from § 3.2 still applies once enforced at the BFF level (currently fixture-baseline does not enforce; open follow-up). |
-| **#6 — owner-mediated authority** | Tools are registered only on the owner desk-AI's `hermes-acp` session. No external/peer/cli path exposes them. Owner-mediated by construction. |
+| **#6 — owner-mediated authority** | Tools are registered only on the owner desk-AI's session (Holon MCP server attached to the warm Secretary). No external/peer/cli path exposes them. Owner-mediated by construction. |
 | **#8 — audit emit after state change** | All three handlers emit `staff.created` / `staff.updated` / `staff.dismissed` after the mutable-store write returns (post-emit per ADR-007 V1 posture). |
 | **#11 — PII-free defaults** | Default `agent_profile_id` and `tool_scope` above are generic and machine-portable; no developer-name, no absolute paths. |
 
@@ -875,12 +879,12 @@ The Members service (`packages/core/src/members-service.ts`) now sources from th
 
 ### Cross-References
 
-- ADR-013 — chat surface as Hermes loop (anchors the owner_assistant chat-CRUD surface).
+- ADR-013 — chat surface as the AI conversational loop (anchors the owner_assistant chat-CRUD surface; sister-repo lineage framed this as the Hermes loop, this repo realizes it as the warm-CLI Secretary).
 - ADR-015 — myself out of Members (clarifies that "owner manual work" is never minted via these tools).
 - ADR-016 — mentor peer (orthogonal: mentors live in `local_ai.mentors[]` per § 14.5, not in the dismissable roster).
 - ADR-018 / Engineering Rule 11 — PII-free defaults applied by `create_staff`.
 - ADR-019 — the canonical ADR for this surface; see `docs/decisions/019-runtime-staff-crud.md`.
-- `owner-assistant-tools.md` § 5 — the tool catalogue including the three new entries.
+- [`legacy/owner-assistant-tools.md`](legacy/owner-assistant-tools.md) § 5 — the historical (sister-repo) Hermes tool catalogue; in `manage-your-cli` the live catalogue is the Holon MCP tool set under `packages/holon-mcp`.
 - `data-model.md` § 4.4 — the `staff` schema and the optional `system_prompt` / `created_at` extension.
 
 ## 14.7 Per-Binary Memory File Matrix

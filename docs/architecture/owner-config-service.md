@@ -315,7 +315,17 @@ idempotent (a no-op merge is harmless), but the audit-completeness
 posture (Rule 8) cares about one mutation = one audit line. Two
 audit lines for one user action is a diagnostic-record bug.
 
-### 8.5.2 Hermes Bridge EPIPE Auto-Respawn
+### 8.5.2 Hermes Bridge EPIPE Auto-Respawn (sister-repo lineage)
+
+> **Lineage.** This subsection describes a defect-and-fix from the
+> sister repo [`holon-engineering`](https://github.com/chenz16/holon-engineering),
+> where the owner-assistant ran on the Hermes ACP subprocess.
+> `manage-your-cli` has no Hermes bridge — the live owner-facing
+> Secretary is a warm CLI process (see `apps/web/lib/warm-agent.ts`)
+> with its own restart semantics. The lessons (classify-not-swallow,
+> bounded retry, no bare `try/catch`) carry forward as Engineering
+> Rule 4 patterns; the specific code paths below do not exist in
+> this repo and are retained for design lineage only.
 
 **Symptom.** The ACP subprocess (`uv run hermes acp`) can die or
 have its stdin pipe close out from under the BFF — observed when
@@ -354,7 +364,7 @@ polish surface does: a polish call mid-edit would have crashed the
 session and lost the user's draft. The retry preserves the edit.
 
 **Cross-ref:** the bridge wiring itself is documented in
-`owner-assistant-tools.md` § 10, and the retry mechanics are
+[`legacy/owner-assistant-tools.md`](legacy/owner-assistant-tools.md) § 10 (sister-repo lineage), and the retry mechanics are
 restated there as a "Hermes bridge fault recovery" subsection.
 
 ### 8.5.3 New Open Questions
@@ -404,7 +414,7 @@ or both?
   surface (ADR-019) both use.
 - `data-model.md` — canonical schema home that *should* gain an
   `OwnerAssistant` subsection per Open Q 6-C
-- ADR-007 — V1 audit posture; ADR-013 — chat surface as Hermes loop;
+- ADR-007 — V1 audit posture; ADR-013 — chat surface as the AI conversational loop (sister-repo lineage: framed as Hermes loop; in `manage-your-cli` realized as the warm-CLI Secretary);
   ADR-015 — `myself` substrate (why `substrate` is excluded from PATCH);
   ADR-019 — runtime staff CRUD via chat (sibling surface using the
   same mutable-store + overrides pattern).

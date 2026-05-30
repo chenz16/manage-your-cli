@@ -72,10 +72,10 @@ The owner should not have to manage a deep internal org chart. The desk should m
 
 Local AI staff execute assignments through a runtime adapter.
 
-The first runtime adapter can be Hermes. Future adapters can include:
+In `manage-your-cli`, the shipping runtime adapter is the **direct multi-CLI adapter** — claude / codex / gemini / qwen, running on the user's own CLI subscription. (Sister-repo lineage `holon-engineering` shipped a Hermes adapter; `manage-your-cli` has no Hermes adapter — see ADR-040.) Future adapters can include:
 
 - OpenAI Agents SDK
-- Claude Code / Codex-style local workers
+- additional CLI binaries beyond the four above
 - browser automation workers
 - direct LLM runners
 - company-specific tool runners

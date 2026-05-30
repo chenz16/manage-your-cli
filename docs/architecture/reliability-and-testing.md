@@ -370,7 +370,7 @@ Multiple test layers, each owning a different failure class.
 ### 7.2 Integration Tests
 
 - Real local DB (SQLite or Postgres test container).
-- Real runtime adapter (dummy adapter for speed; Hermes adapter in nightly CI).
+- Real runtime adapter (dummy adapter for speed; the live CLI adapter — `cli-adapters.ts` + `cli-session-service.ts` — exercised in nightly CI). *Earlier sister-repo drafts used a Hermes adapter here; `manage-your-cli` has no Hermes adapter.*
 - Test scenarios per use case in `peer-communication-architecture.md` § 2.
 - Per-PR for fast scenarios; nightly for the full set.
 
@@ -384,7 +384,7 @@ Multiple test layers, each owning a different failure class.
 ### 7.4 Contract Tests
 
 - Wire-protocol conformance: a test rig that speaks to any Holon-conformant relay/desk and verifies all 13 RPC methods + error responses match spec.
-- Runtime adapter conformance: per `runtime-adapter-interface.md` § Acceptance Criteria; lives at `packages/runtime-conformance` and runs against both dummy and Hermes adapters.
+- Runtime adapter conformance: per [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md) § Acceptance Criteria (sister-repo lineage); lives at `packages/runtime-conformance` and runs against the dummy adapter and the live CLI adapter (`packages/core/src/cli-adapters.ts`).
 - Handoff form conformance: every form's lifecycle states transition correctly per `handoff-taxonomy.md` revocation matrix.
 
 ### 7.5 Chaos Tests
@@ -431,7 +431,7 @@ Adversarial tests live in `packages/adversarial-tests` and run on every PR.
 
 ### 8.1 Runtime Adapter Conformance
 
-Per `runtime-adapter-interface.md` § Acceptance Criteria. The same suite runs against the dummy adapter (reference behavior) and the Hermes adapter (production). New adapters MUST pass all tests before being allowed in production deployment.
+Per [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md) § Acceptance Criteria (sister-repo lineage). The same suite runs against the dummy adapter (reference behavior) and the live CLI adapter (production). New adapters MUST pass all tests before being allowed in production deployment.
 
 ### 8.2 Wire Protocol Conformance
 
@@ -466,7 +466,7 @@ Forms with side effects (payments, sent emails, published posts) carry a `compen
 | Component down | What still works |
 |---|---|
 | Cloud relay unreachable | Local AI work continues; cross-desk work queues locally; UI shows "offline mode" |
-| Runtime adapter (Hermes) unreachable | Owner can still review past work, accept/reject inbound missions, do work themselves; AI staff appear paused |
+| Runtime adapter (live CLI adapter) unreachable | Owner can still review past work, accept/reject inbound missions, do work themselves; AI staff appear paused |
 | DB unreachable (catastrophic) | App halts gracefully; user sees "database unreachable; please restart" |
 | Single connection broken | Other connections unaffected |
 
@@ -540,6 +540,6 @@ This spec is "implementation-ready" for V1 when:
 7. ✅ Test strategy covers unit / integration / E2E / contract / chaos / property / adversarial
 8. ✅ "No silent failure" pattern (audit-attempt-before-state-change) is concrete
 9. ⬜ Chaos test suite implemented covering all 10 scenarios in § 7.5 (verify in M3)
-10. ⬜ Conformance suites pass against dummy adapter (M1) and Hermes adapter (M2)
+10. ⬜ Conformance suites pass against dummy adapter (M1) and the live CLI adapter (M2)
 11. ⬜ SLO dashboard exists and shows live measurements (M3)
 12. ⬜ `holon_invariant_violations_total` is verifiably zero across a 30-day window in staging (M4 gate)

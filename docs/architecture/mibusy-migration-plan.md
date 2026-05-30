@@ -75,9 +75,9 @@ Per `implementation-architecture.md` § 9 M0:
 ### Iteration 005 — Runtime adapter (M1 partial)
 
 - `packages/runtime-dummy` first.
-- Then `packages/runtime-hermes` per `runtime-adapter-interface.md` § Hermes section.
+- Then `packages/runtime-hermes` per the sister-repo lineage in [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md) § Hermes section. *Not shipped in `manage-your-cli`; the live substrate is the direct CLI adapter (see ADR-040).*
 - mibusy doesn't have an abstract adapter — this is greenfield design.
-- The Hermes integration spike (per `runtime-adapter-interface.md` § "Open questions for Hermes integration spike") happens here.
+- The Hermes integration spike (per [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md) § "Open questions for Hermes integration spike") happened in the sister repo and does not apply to `manage-your-cli`.
 
 ### Iteration 006 — Auth + pairing (M2 partial)
 
@@ -196,7 +196,7 @@ mibusy has cases where a stuck assignment sits silently (e.g., `escalateStaleAss
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Hermes integration discovery is harder than expected | Medium | High | Spike in Iteration 005; early honest assessment; budget for replan |
+| Hermes integration discovery is harder than expected (sister-repo only; N/A for `manage-your-cli`) | Medium | High | Spike in Iteration 005; early honest assessment; budget for replan. Risk retired in `manage-your-cli` per ADR-040. |
 | Cloud relay introduces latency that violates SLOs | Low | Medium | Latency targets are realistic per industry; relay is small + simple |
 | Migration of UX patterns introduces regression | Medium | Low | mibusy patterns are reference, not destination; we redesign per Holon's spec |
 | Multi-device routing edge cases (UC-1 in peer-comms.md § 2) | Medium | Medium | Iteration test coverage focuses on multi-device flows |

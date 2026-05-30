@@ -244,13 +244,13 @@ Each threat: name, attacker capability, what they could achieve, mitigation, sev
 - **Mitigation**: Capability-bounded scope per T11 mitigation. All controller actions audit-logged with controller identity. Owner can pause controller instantly. Step-up authentication (V2) gates high-value actions. Audit log review.
 - **Severity**: Medium (scope-limited; detection-bounded)
 
-#### T23 — Compromised dependency (Hermes / Node modules / system packages)
+#### T23 — Compromised dependency (CLI binaries / Node modules / system packages)
 
 - **Attacker**: malicious code injected into a dependency
 - **Achievement**: arbitrary execution within the desk process; access to keys and data
 - **Mitigation**:
   - Dependency pinning + lockfiles
-  - Vendor / vendor-pinned for critical (Hermes is cloned as `deps/hermes`, treated as upstream)
+  - The user's CLI binaries (`claude`, `codex`, `gemini`, `qwen`) are installed by the user from their official vendors; `manage-your-cli` does not vendor them. *Sister-repo lineage: an earlier mitigation treated Hermes as a vendored upstream at `deps/hermes` — N/A here, no Hermes dependency.*
   - SBOM tracking (V2)
   - Renovate / Dependabot for known CVEs
 - **Severity**: High (supply-chain attacks are a real and growing threat)
