@@ -264,6 +264,8 @@ reference points — what we share, where we differ.
 | **Cross-vendor (Claude ↔ Codex etc.)** | ✅ Employees: any CLI mix (claude / codex / gemini / qwen). ⚠️ Secretary: claude-pinned today — relies on Claude Code's `--print --input-format stream-json` warm-process contract that the other three CLIs don't expose the same way | ❌ Each CLI sees only its own context | ❌ Single-agent | ⚠️ Routes to multiple model APIs but no shared memory | n/a |
 | **Multi-project hierarchy** | ✅ One secretary per project + owner-global memory above | ❌ Each project = a folder in claude.ai (no scoped agents); Claude Code is per-repo | ❌ Single agent, no project concept | ⚠️ Per-tenant routing, but no project layer | ⚠️ Per-vault, manually curated |
 | **Manager → worker pattern** | ✅ Secretary dispatches employees via MCP; `Task` tool fan-out preserved | ✅ Internally — Claude Code's `Task` does sub-agents | ❌ One-shot | ❌ Routing, not orchestration | n/a |
+| **Auto-create persistent employee teams** | ✅ Secretary `create_agent(role, persona, cwd)` at runtime → tmux-attached, own per-CLI memory file, survives restart, watchable | ⚠️ `Task` sub-agents are **ephemeral** (return-then-die); no persistent named role | ❌ Single agent | ❌ No team layer | n/a |
+| **Hierarchical memory recycling (harvest-on-retire)** | ✅ Employee dies → secretary distills its memory file into project boss-memory; project dies → owner distills into owner-global; **bubble-up + discard**, like a human life | ❌ Sub-agent returns a result; no memory harvesting | ❌ Within-agent compaction only (single budget) | ❌ Tenant-scoped, no hierarchy | ❌ Manual; notes never "retire" |
 | **Where memory lives** | Local files (`~/holon-agents/`), owner's disk, git-able | `CLAUDE.md` local (Claude Code); claude.ai Memory on Anthropic's servers | Local files (`~/.hermes/memories/`), owner's disk | Server (the tenant's gateway box) | Local files (vault folder), owner's disk |
 | **Data ownership** | ✅ Full — markdown on your box; vendor-neutral | ⚠️ Server-side context; Memory feature is opaque | ✅ Full — same markdown principle | ⚠️ Tenant trusts gateway operator | ✅ Full |
 | **Open source** | ✅ MIT-direction (license pending) | ⚠️ Mixed: Codex is OSS; Claude Code's binary is closed; Gemini CLI is OSS | ✅ OSS | ✅ OSS (nightsailer/wechat-clawbot) | ❌ Closed; ✅ vault format open |
@@ -287,9 +289,13 @@ different role:
   folder; we automate the curation with a memory-manager agent.
 
 Where we are alone is the intersection: **vendor-neutral CLI
-federation + per-project secretary layer + local-owned 0/1/2 memory
-with an agent curator + mobile thin-client**. Any one of those four
-exists somewhere; the **bundle** doesn't.
+federation + per-project secretary layer + auto-create persistent
+employee teams + System 0/1/2 memory with hierarchical
+harvest-on-retire (distill-then-discard) + mobile thin-client**. Any
+one of those exists somewhere; we may be the first to combine
+**persistent dispatched agents with hierarchical memory recovery
+between them** — the recursion of "the same pattern at every layer"
+is the actual moat, not any single dimension.
 
 ## The 6 core pieces
 
