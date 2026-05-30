@@ -32,9 +32,17 @@ But two real problems remain:
 - **For everyone else — the terminal is unfamiliar.** The most powerful AI tool on the
   planet is locked behind a command line most people won't touch.
 
-Today's tools try to *replace* the CLI with heavy custom stacks — and they suffer for
-it: **slow (high latency)**, and always a step behind the frontier because they
-re-implement intelligence instead of using the model directly.
+Today's tools take the opposite bet: each new agent framework rebuilds the **harness**
+— its own planner, tool router, memory layer, prompt-stack and orchestration engine — on
+top of the same underlying model. Our view: **the harness is exactly the part the
+frontier model itself will absorb next** (better tool-use, longer context, internal
+memory, native agent loops). Whatever a framework hard-codes today, the model will do
+inside its own loop tomorrow — and at that point the heavy harness becomes dead weight:
+**slower (high latency), more brittle, and always a step behind the frontier** because
+it re-implements intelligence instead of using the model directly.
+
+So we don't build a harness. We treat the CLI (which already ships the model's latest
+loop) as the harness, and add only the thin management layer it doesn't have.
 
 **We do the opposite: reuse the CLI, don't replace it.** We keep exactly what makes the
 CLI the fastest and most professional path, and add a thin management layer on top — a
@@ -42,6 +50,23 @@ Secretary, a dynamic team, shared memory, and a clean UI. Professionals get
 **management without losing CLI speed**; everyone else gets a **friendly surface over a
 pro-grade tool**. We don't build AI — we orchestrate the AI you already pay for, and we
 get faster and smarter every time the CLI does.
+
+What that looks like in practice:
+
+- **Two side-by-side surfaces per agent**: the **raw CLI window** (live tmux mirror —
+  every keystroke, every tool call, every line of output) PLUS a **clean summary feed**
+  (post-turn condensation in plain language). Professionals can drop into the CLI
+  window to inspect / drive directly; the summary surface is what the user reads and
+  what gets relayed to mobile / WeChat. Same agent, two views.
+- **The user talks to the Secretary, not to the CLI**. The Secretary is the only
+  voice the owner deals with day-to-day. It reads the team's CLIs through MCP, dispatches
+  work, and reports back in plain language. The CLIs stay watchable underneath, but they
+  are workers — not the user-facing surface.
+- **Every CLI is a manager-by-default**. Modern CLIs (claude-code, codex, gemini) can
+  fan out their own sub-agents internally — *that's the CLI's own capability, not ours*.
+  We only **define the role** (persona + tools + memory + cwd) and let the CLI's own
+  loop handle decomposition. No external orchestration engine. The CLI is the planner;
+  we are the org chart.
 
 ## Overhead
 
@@ -96,6 +121,103 @@ flowchart LR
 **Connection structure:** *local agents ↔ Secretary ↔ you ↔ the outside* — an
 **internet of agents**. The Secretary is the hub: it coordinates your local team and
 is the single gateway out to other people's agents (over the **A2A** standard).
+
+### System 0 / System 1 / System 2 — the memory hierarchy
+
+Daniel Kahneman partitioned the human mind into a **fast** intuitive
+**System 1** and a **slow** deliberate **System 2**. Recent
+vision-language-action (VLA) robotics architectures (NVIDIA Helix,
+Figure 02) adopt the same split as a fast policy + slow planner.
+
+**We apply this directly to agent memory** — and extend it downward
+with a **System 0** that Kahneman didn't model:
+
+| Layer | Name | What it holds | Speed |
+|---|---|---|---|
+| **System 0** | 会话 — session / reflexive | The current dispatch turn's working memory inside a warm CLI process. Ephemeral. *(below Kahneman — he didn't model it)* | ~1 second |
+| **System 1** | 项目 — project | The project secretary's accumulated state + dispatch intent + active jobs + project-scoped boss-memory. One instance per project. *(Kahneman's "fast, automatic, intuitive")* | Hours → weeks |
+| **System 2** | owner — identity | Owner's long-term needs, preferences, accumulated background knowledge across all projects. One instance per owner, shared by every project secretary. *(Kahneman's "deliberate, effortful, slow")* | Months → years |
+
+```mermaid
+flowchart TB
+  subgraph S2["System 2 — owner (slow, invisible)<br/>~/holon-agents/boss/owner/"]
+    O[("owner-global<br/>identity · preferences · background")]
+    MM["🧠 memory-manager CLI<br/>(curator, runs in background)"]
+  end
+
+  subgraph S1A["System 1 — project A (fast)"]
+    SA["🧑‍💼 Secretary A"]
+    PA[("project A boss-memory<br/>~/holon-agents/boss/projects/A/")]
+    EA1["🤖 Employee"]
+    EA2["🤖 Employee"]
+  end
+
+  subgraph S1B["System 1 — project B (fast)"]
+    SB["🧑‍💼 Secretary B"]
+    PB[("project B boss-memory<br/>~/holon-agents/boss/projects/B/")]
+    EB1["🤖 Employee"]
+  end
+
+  Owner["👤 owner"] --> SA & SB
+  SA --> EA1 & EA2
+  SB --> EB1
+  SA -.reads.-> O
+  SB -.reads.-> O
+  SA --- PA
+  SB --- PB
+  MM -.curates.-> O & PA & PB
+
+  classDef sys0 fill:#FFF5E0,stroke:#C69A35;
+  classDef sys1 fill:#E5F0E8,stroke:#2E7D52;
+  classDef sys2 fill:#E5EEF5,stroke:#1F6F9E;
+  class S1A,S1B sys1
+  class S2 sys2
+```
+
+**System 0 lives inside each colored box** — every CLI's warm process
+holds its own session memory; we don't draw it as a separate node
+because it's per-turn and ephemeral.
+
+**Harvest-on-retire — like a human life.** When a container is
+destroyed, its memory doesn't all get saved — it gets **distilled then
+discarded**. A small durable fraction bubbles **up** the hierarchy;
+the time-bound rest is dropped.
+
+The human parallel is exact. You don't remember every meal you ate
+this month, but you do remember "I like spicy food" — a
+higher-abstraction trace that survived the curation. The same shape
+runs through all three layers:
+
+| Container destroyed | Who harvests | What bubbles up | What gets discarded |
+|---|---|---|---|
+| CLI employee retired | The owning secretary | Durable contributions, role-shape lessons → project boss-memory (System 1) | Per-turn chat, scaffolding, resolved threads |
+| Project retired | Owner (or an optional super-agent if the owner spawns one) | Owner-relevant decisions, patterns, references → owner boss-memory (System 2) | Project-internal mechanics, time-bound scope |
+| Owner | — | Terminal — no layer above | — |
+
+The **memory-manager** (System 2's curator) is what runs this
+distillation — it's another CLI agent, runs in the background, and
+shapes the surviving memory the way a person sleeps on a day's events.
+Old projects get archived to `_archived/` (we don't grep history away,
+just retire it from active context), preserving the same "fadeable but
+recoverable" quality biological memory has.
+
+> **Why this matters as differentiation.** No agent framework we've
+> found applies Kahneman's System 1 / System 2 to agent memory; most
+> (Letta, Mem0, Zep, Cognee, AutoGen, CrewAI) treat memory as a single
+> service. We get the 3-layer split for free by being a **thin shell**:
+> System 0 is the CLI's own loop, System 1 is the secretary's warm
+> process, System 2 is the curator agent. No DB, no framework — just
+> markdown files and CLIs arranged in a recursion of the same pattern.
+
+> **Personal edition (this repo): single-machine, no database.** Everything lives in
+> local files — boss memory is markdown, owner state is a single SQLite file used as
+> a key-value store for personal preferences, and the CLI agents themselves keep state
+> in their own tmux sessions / `CLAUDE.md` files. No server, no cloud, no shared DB.
+>
+> **Commercial edition (planned): may add a database** for multi-tenant / team
+> scenarios — shared roster, cross-machine handoff, audit, billing. The personal
+> edition stays file-only on purpose: zero ops, zero lock-in, owner can grep / version
+> / back up everything as plain files.
 
 ### Two orthogonal axes: shell vs gateway
 
@@ -154,9 +276,23 @@ keep agents warm instead.
 
 ## Install & Use
 
+**Full install guide: [`INSTALL.md`](INSTALL.md)** (one page, copy-pasteable
+commands). The version below is the at-a-glance flow.
+
+### 0. Pre-flight (recommended)
+
+```bash
+bash scripts/check-deps.sh
+```
+
+Reports MISSING / OK for every required and optional dependency, with the
+exact distro-specific install command for each missing one.
+
 ### 1. Prerequisites
 
-- **Node.js 20.10.0+** with corepack: `corepack enable`
+- **Node.js 22.x** with corepack: `corepack enable`
+- **pnpm 9.10.0**: `corepack prepare pnpm@9.10.0 --activate`
+- **tmux** + **git**
 - **At least one CLI subscription** logged in on your machine:
   - Claude Code: `npm install -g @anthropic-ai/claude-code` then `claude` (OAuth)
   - Codex: `npm install -g @openai/codex` then `codex` (OAuth)
@@ -167,13 +303,24 @@ No API keys are ever entered into this app — it drives your existing CLI login
 
 ### 2. Desk (WSL2 / Linux)
 
+Dev mode (recommended, HMR-friendly):
+
 ```bash
 corepack pnpm install
-bash scripts/build-web.sh           # production build (isolated, won't clobber your config)
-HOLON_LAN_ACCESS=1 bash scripts/serve-production-wsl.sh  # bind 0.0.0.0, LAN-accessible
+HOLON_LAN_ACCESS=1 corepack pnpm -F web exec next dev --port 3110 -H 0.0.0.0
 ```
 
-Open `http://localhost:3000`, complete the onboarding wizard, and chat with the Secretary.
+Open `http://localhost:3110/`, complete the onboarding wizard, and chat with the Secretary.
+
+For auto-restart on crash / boot: `bash scripts/install-desk-systemd.sh`
+(see [`INSTALL.md`](INSTALL.md#run-auto-restart-on-boot--crash)).
+
+Advanced (production standalone build, slightly faster nav, no HMR):
+
+```bash
+bash scripts/build-web.sh                                # builds against a throwaway DB
+HOLON_LAN_ACCESS=1 bash scripts/serve-production-wsl.sh  # binds 0.0.0.0:3000
+```
 
 **Key flags:**
 
@@ -198,6 +345,14 @@ Tailscale is the simpler alternative — it gives the machine a stable `100.x.x.
 with no manual portproxy.
 
 ### 4. Android mobile app (微作)
+
+> **Why mobile**: the CLI is the fastest, most pro tool — but it's locked behind a
+> terminal nobody carries in their pocket. 微作 brings that same CLI loop to the
+> phone with **minimum overhead and maximum speed**: pure thin-client (HTTP fetch
+> proxy to your paired desktop), no on-device LLM, no extra orchestration, no native
+> bridges that add latency. The phone is a remote keyboard + screen for the CLI
+> already running warm on your machine. Sub-1s turn round-trip on LAN, identical
+> warm-CLI latency as the desktop.
 
 Build and sideload the APK (requires JDK 21 + Android SDK; see `docs/INSTALL.md §4`):
 
