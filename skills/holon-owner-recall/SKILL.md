@@ -55,5 +55,5 @@ Don't pass `sproj_id` — this skill is owner-only.
 ## Related
 
 - `~/.claude/projects/-home-chenz-project/memory/project_myc_system_0_1_2.md`
-- `apps/web/public/skills/holon-memory-recall/SKILL.md` (secretary variant)
+- `skills/holon-memory-recall/SKILL.md` (secretary variant)
 - `docs/adr/memory-as-skill.md`

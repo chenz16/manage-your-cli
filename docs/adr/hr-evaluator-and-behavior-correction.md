@@ -78,16 +78,25 @@ Cadence numbers are starting points; tune from owner-HR token cost (§4.6).
 - **Scope**: secretary-HR writes into employee memory; owner-HR writes into
   secretary memory.
 
-#### Path B — Live nudge (synthetic message into warm conversation)
+#### Path B — Next-turn nudge (non-preemptive injection)
 
-- **When**: immediate behavioral deviation **in the current turn**. The
-  canonical example is the owner's manual "Stop. You're the 7×24 manager."
-- **How**: reuse the Task #20 settle-watch → synthetic-message pipeline. HR
-  becomes a **new producer** on #20's existing channel; #20 already knows how
-  to push a synthetic user-message into a warm secretary's input stream. No
-  new transport.
+- **When**: behavioral deviation observed in the just-completed turn. The
+  canonical case is the owner's manual "Stop. You're the 7×24 manager." —
+  but HR does **not** interrupt the running turn. Owner clarification
+  2026-05-30: 不要打断 就是下一次提醒.
+- **How**: HR enqueues a synthetic system-or-user message that gets
+  **prepended to the next inbound message** (either the owner's next turn,
+  or the next dispatch result return). Reuses Task #20's settle-watch →
+  synthetic-message pipeline as transport; HR becomes a new producer on
+  that channel. The trigger semantics differ from #20's other producers:
+  HR's nudge waits for the NEXT input boundary rather than firing on
+  settle. No new transport, no preemption.
 - **Properties**: **Not persistent on its own** — vanishes with the
-  conversation. That's the point: cheap, immediate, no commitment.
+  conversation. Non-preemptive: the current turn finishes regardless, even
+  if mid-turn behavior was the trigger. Rationale: a single drifted turn is
+  usually already committed by the time HR scores it; preemption would
+  break execution continuity for no recovery gain. Next-turn correction is
+  cheap, low-risk, and matches how the owner manually intervenes.
 
 #### When to pick which
 
@@ -133,7 +142,45 @@ same target, auto-promote to Path A.
   separate transcript ingestion — reuses settle-watch / dispatch-completion
   signals.
 
-### 4.6 Open questions (flagged, not decided)
+### 4.6 Evaluation inputs (what HR reads)
+
+Pure read-only. HR never touches the secretary's process.
+
+| Source | Tier | Status |
+|---|---|---|
+| Secretary warm-agent stream-json log | owner-HR | ✅ already captured by `apps/web/lib/warm-agent.ts` |
+| Employee tmux pane history | secretary-HR | ✅ `tmux capture-pane` |
+| Boss-memory writes (git diff `~/holon-agents/boss/projects/<sproj_id>/`) | owner-HR | ✅ filesystem |
+| `process-registry` status changes / heartbeat events | both | ✅ `apps/web/lib/heartbeat.ts` emits |
+| settle-watch event | both | ⏳ Task #20 |
+| Per-agent token counter | both (budget cap, §4.8) | ✅ `project_myc_token_usage` instrumentation |
+
+owner-HR pulls these on cron tick + settle event; secretary-HR reads its
+employee's tmux + dispatch return as part of its normal loop step.
+
+### 4.7 Rubric (markdown checklist, not numeric)
+
+Each evaluation pass appends one checklist row per scored turn to the
+evaluation log at
+`~/holon-agents/boss/owner/hr/evaluations/<sproj_id>/YYYY-MM-DD.md`.
+Unchecked items are drift signals; counted toward §4.4 promotion threshold.
+
+```markdown
+## 2026-05-30 secretary=acme-ceo
+- [x] dispatched-not-DIY     — heavy work went to a sub-agent
+- [x] respected-north-star   — no RAG/vector/abstraction proposals
+- [ ] read-INDEX-before-act  — wrote memory without reading INDEX.md
+- [x] role-fidelity          — manager persona maintained
+- [ ] memory-hygiene         — boss-memory diff is clean and INDEX'd
+```
+
+Rubric items are checked off by HR via stream-json + tmux-history scan;
+each item maps to a normalized rule hash (§4.4) so repeats key correctly.
+Default rubric ships with the five items above (manager-role, north-star,
+INDEX-discipline, role-fidelity, memory-hygiene); owner can extend by
+editing owner-HR's persona.
+
+### 4.8 Open questions (flagged, not decided)
 
 - **Who reviews the reviewer?** owner-HR can drift too. No layer above it
   (System 2 is terminal). Options: periodic owner spot-check via a 🔴 weekly
@@ -150,7 +197,7 @@ same target, auto-promote to Path A.
   existing per-agent token counter (`project_myc_token_usage`) and set a soft
   budget; if HR exceeds N% of secretary tokens, halve its cadence.
 
-### 4.7 Additional open question (surfaced by this ADR)
+### 4.9 Additional open question (surfaced by this ADR)
 
 - **Owner-veto persistence across re-installs.** Promotion-veto lives in
   owner-HR memory; if owner-HR is rebuilt from scratch (re-scaffolded),
@@ -166,9 +213,10 @@ same target, auto-promote to Path A.
    reading the output).
 
 2. **Path A only (no live nudge).**
-   Rejected: the owner's canonical example is the single-turn "Stop." Memory
-   patches don't help mid-turn — the agent has already started doing the
-   wrong thing. Path B exists specifically to interrupt.
+   Rejected: memory patches only land on respawn / re-read; an active
+   conversation has no signal to re-load. Path B is the in-conversation
+   correction channel — applied at the next input boundary (not as a
+   preemptive interrupt; see §4.3 Path B).
 
 3. **Path B only (no persistent memory).**
    Rejected: every respawn loses every correction. Path A is what makes

@@ -30,7 +30,7 @@ Lift the recall protocol out of the persona prompt and into two skills:
 - **`holon-owner-recall`** — owner-CLI variant; owner scope only. Installed on
   the owner-CLI.
 
-Canonical copies live in-repo at `apps/web/public/skills/<name>/SKILL.md` and
+Canonical copies live in-repo at `skills/<name>/SKILL.md` and
 are mirrored to `~/.claude/skills/` at agent boot.
 
 The transport stays the same: the `read_memory` MCP tool from
@@ -86,8 +86,8 @@ recall* — not how reads happen.
 ## Related
 
 - `~/.claude/projects/-home-chenz-project/memory/project_myc_system_0_1_2.md`
-- `apps/web/public/skills/holon-memory-recall/SKILL.md`
-- `apps/web/public/skills/holon-owner-recall/SKILL.md`
+- `skills/holon-memory-recall/SKILL.md`
+- `skills/holon-owner-recall/SKILL.md`
 - `packages/holon-mcp/src/tools.ts` — `read_memory`
 - `packages/core/src/cli-memory-scaffold.ts` — install hook (future wiring)
 - commit `44be633` — per-binary memory file matrix
