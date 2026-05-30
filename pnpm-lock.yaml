@@ -28,8 +28,8 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1(@capacitor/core@6.2.1)
       '@capacitor-community/text-to-speech':
-        specifier: ^8.0.0
-        version: 8.0.0(@capacitor/core@6.2.1)
+        specifier: ^5.1.0
+        version: 5.1.0(@capacitor/core@6.2.1)
       '@capacitor/android':
         specifier: ^6.2.0
         version: 6.2.1(@capacitor/core@6.2.1)
@@ -39,6 +39,9 @@ importers:
       '@capacitor/ios':
         specifier: ^6.2.0
         version: 6.2.1(@capacitor/core@6.2.1)
+      '@capacitor/keyboard':
+        specifier: ^6
+        version: 6.0.4(@capacitor/core@6.2.1)
       '@holon/api-contract':
         specifier: workspace:*
         version: link:../../packages/api-contract
@@ -389,10 +392,10 @@ packages:
     peerDependencies:
       '@capacitor/core': ^6.0.0
 
-  '@capacitor-community/text-to-speech@8.0.0':
-    resolution: {integrity: sha512-8GCRavhp4uJft+DsJTywxUmMidMxJVTWHtrCKHjai5LPcJwHI93zpf1LsuvNtTSv/AeC0+oB0ULi/kHzqoB5Bg==}
+  '@capacitor-community/text-to-speech@5.1.0':
+    resolution: {integrity: sha512-Pe8i2M6bSlTPR83UeP7H7SouCdvQ6cAMq+nMatCuXKAd9rdRmyzdkurNj7EsM0FyjfAmGInhv9yhmVd3jNWzQQ==}
     peerDependencies:
-      '@capacitor/core': '>=8.0.0'
+      '@capacitor/core': ^6.0.0
 
   '@capacitor/android@6.2.1':
     resolution: {integrity: sha512-8gd4CIiQO5LAIlPIfd5mCuodBRxMMdZZEdj8qG8m+dQ1sQ2xyemVpzHmRK8qSCHorsBUCg3D62j2cp6bEBAkdw==}
@@ -421,6 +424,11 @@ packages:
     resolution: {integrity: sha512-tbMlQdQjxe1wyaBvYVU1yTojKJjgluZQsJkALuJxv/6F8QTw5b6vd7X785O/O7cMpIAZfUWo/vtAHzFkRV+kXw==}
     peerDependencies:
       '@capacitor/core': ^6.2.0
+
+  '@capacitor/keyboard@6.0.4':
+    resolution: {integrity: sha512-tNeyQGxIOTiSv3g+dTxJ/plVpGMnB4daJuCHz1E2Kelo+jOx+FKlyFY9L1Ow144SCzuXK48NXr8WoxXfXgQEKA==}
+    peerDependencies:
+      '@capacitor/core': ^6.0.0
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -4570,7 +4578,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 6.2.1
 
-  '@capacitor-community/text-to-speech@8.0.0(@capacitor/core@6.2.1)':
+  '@capacitor-community/text-to-speech@5.1.0(@capacitor/core@6.2.1)':
     dependencies:
       '@capacitor/core': 6.2.1
 
@@ -4652,6 +4660,10 @@ snapshots:
       tslib: 2.8.1
 
   '@capacitor/ios@6.2.1(@capacitor/core@6.2.1)':
+    dependencies:
+      '@capacitor/core': 6.2.1
+
+  '@capacitor/keyboard@6.0.4(@capacitor/core@6.2.1)':
     dependencies:
       '@capacitor/core': 6.2.1
 

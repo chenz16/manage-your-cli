@@ -78,9 +78,20 @@ const TEST_SCOPE =
 // in lib/encrypted-token-storage.ts throws at module load if absent, so
 // reaching the `secret:` field below already implies the var is set.
 const AUTH_SECRET = process.env.HOLON_TOKEN_ENC_KEY;
-if (process.env.NODE_ENV === 'production' && !AUTH_SECRET) {
-  throw new Error(
-    'auth.ts: HOLON_TOKEN_ENC_KEY is required in production (used as AUTH_SECRET).',
+// Pre-Release-2: this used to throw at module load when AUTH_SECRET was
+// unset in production, which broke `next build` on a fresh clone (Next
+// imports every route module during its page-data collection phase).
+// The placeholder below covers the build pass; real production deploys
+// MUST set HOLON_TOKEN_ENC_KEY or NextAuth requests will fail at runtime.
+if (
+  process.env.NODE_ENV === 'production' &&
+  !AUTH_SECRET &&
+  process.env.NEXT_PHASE !== 'phase-production-build'
+) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[auth] HOLON_TOKEN_ENC_KEY is unset; NextAuth requests will fail. ' +
+      'Generate via `openssl rand -base64 32` and set in .env.',
   );
 }
 

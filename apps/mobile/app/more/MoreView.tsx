@@ -227,7 +227,7 @@ export function MoreView() {
         <MoreSection
           title="关于"
           summary="Holon — 一个台面 (desk)、几个员工、其余靠你"
-          deskHref="mailto:chen.zhang6@gmail.com"
+          deskHref="mailto:feedback@example.com"
           ctaLabel="反馈给作者"
         >
           <div className="muted m-card-footnote">

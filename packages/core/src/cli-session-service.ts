@@ -29,7 +29,7 @@ import { spawnSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, statSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
-import { getStaffMerged } from './staff-management-service.js';
+import { getStaffMerged, listStaffMerged } from './staff-management-service.js';
 import { ensureAgentMemoryFile } from './cli-memory-scaffold.js';
 import { getCliAdapter } from './cli-adapters.js';
 
@@ -130,6 +130,51 @@ function emit(staffId: string, evt: 'cli.launched' | 'cli.killed' | 'cli.input',
 }
 
 /* ── Public API ────────────────────────────────────────────────────── */
+
+export interface DiscoveredTmuxSession {
+  name: string;
+  cwd: string;
+  command: string;
+  is_holon: boolean; // Holon's own holon-<id> session
+  adopted: boolean;  // already bound to a staff via external_session
+}
+
+/**
+ * List tmux sessions on this machine for the "adopt as employee" flow. One row
+ * per session (first pane's cwd + foreground command). Non-tmux processes are
+ * out of scope by design. Returns [] if no tmux server / no sessions.
+ */
+export function listTmuxSessions(): DiscoveredTmuxSession[] {
+  const r = spawnSync(TMUX,
+    ['list-panes', '-a', '-F', '#{session_name}\t#{pane_current_path}\t#{pane_current_command}'],
+    { encoding: 'utf8' });
+  if (r.status !== 0 || typeof r.stdout !== 'string') return [];
+  const adopted = new Set<string>();
+  for (const s of listStaffMerged()) {
+    // Archived (retired) staff release their session binding — a deleted
+    // adopted employee (retireCliAgentStaff sets status='archived') must not
+    // permanently block re-adopting that tmux session.
+    if (s.status === 'archived') continue;
+    const sub = s.substrate;
+    if (sub?.kind === 'cli_agent' && sub.external_session?.trim()) adopted.add(sub.external_session.trim());
+  }
+  const seen = new Map<string, DiscoveredTmuxSession>();
+  for (const line of r.stdout.split('\n')) {
+    if (!line.trim()) continue;
+    const parts = line.split('\t');
+    const name = parts[0]?.trim();
+    if (!name || seen.has(name)) continue;
+    seen.set(name, {
+      name,
+      cwd: parts[1]?.trim() ?? '',
+      command: parts[2]?.trim() ?? '',
+      is_holon: name.startsWith('holon-'),
+      adopted: adopted.has(name),
+    });
+  }
+  return [...seen.values()];
+}
+
 
 export interface LaunchResult {
   ok: true;

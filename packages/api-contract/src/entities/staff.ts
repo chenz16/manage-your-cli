@@ -204,6 +204,9 @@ export const Staff = z.object({
    *  Added iter-007 step 7 (create/update/dismiss staff from chat).
    *  Optional → backward-compatible with existing fixture rows. */
   system_prompt: z.string().optional(),
+  /** Optional custom avatar as a data URL (small, client-resized ~128px). When
+   *  absent the UI renders a generated gradient + initial. Capped server-side. */
+  avatar_data: z.string().max(300_000).optional(),
   created_at: zIsoDateTimeLoose.optional(),
 
   /* ── iter-009: virt agent config (deny-list model) ──────────── */
@@ -236,5 +239,28 @@ export const Staff = z.object({
    *  Default `[]` preserves backward-compat: existing rows without this
    *  field parse with an empty set (no project affiliation). */
   project_ids: z.array(idOf('proj')).default([]),
+
+  /* ── AI-agent config: TTS + reply language ──────────────────────────────
+   * All optional so existing rows parse without changes.
+   * TTS wiring: leave a // TODO where synthesizeSpeech is called — not wired yet.
+   * Owner global-default: deferred to a follow-up pass.
+   */
+
+  /** Azure / system TTS voice name for this staff member's spoken output.
+   *  Empty string or absent = system default. */
+  tts_voice: z.string().max(64).optional(),
+
+  /** TTS speaking style (e.g. 'calm', 'cheerful', 'serious').
+   *  Empty string or absent = system default. */
+  tts_style: z.string().max(64).optional(),
+
+  /** Language the staff should reply in.
+   *  'auto' = follow the conversation language (default when absent). */
+  reply_language: z.enum(['auto', 'zh-CN', 'en']).optional(),
+
+  /** TTS speech rate.
+   *  'inherit' = follow secretary's setting (employees only; secretary uses slow/normal/fast).
+   *  Absent = default (treated as inherit for employees, normal for secretary). */
+  tts_rate: z.enum(['inherit', 'slow', 'normal', 'fast']).optional(),
 });
 export type Staff = z.infer<typeof Staff>;

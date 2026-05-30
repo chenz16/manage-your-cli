@@ -24,8 +24,8 @@ async function maybeCreateGitHubIssue(opts: {
   const token = process.env.HOLON_FEEDBACK_GITHUB_TOKEN ?? '';
   if (!token) return { created: false, reason: 'token_absent' };
 
-  const repo =
-    process.env.HOLON_FEEDBACK_GITHUB_REPO ?? 'chenz16/holon-engineering';
+  const repo = process.env.HOLON_FEEDBACK_GITHUB_REPO;
+  if (!repo) return { created: false, reason: 'repo_unset' };
 
   // Title: "[feedback] <first 80 chars of description, single line>"
   const shortSummary = opts.description
@@ -194,12 +194,15 @@ interface BugPayload {
   description: string;
   url: string;
   route: string;
-  viewport: { w: number; h: number };
-  user_agent: string;
+  // Optional: some clients (e.g. mobile) may omit these. Never dereference
+  // without a guard — a missing viewport previously crashed the md template
+  // AFTER mkdir, leaving an empty bug folder + a 500 "提交失败".
+  viewport?: { w: number; h: number };
+  user_agent?: string;
   ts: string;
   // Legacy single-screenshot fields — kept so older clients still work.
-  screenshot_data_url: string | null;
-  screenshot_filename: string | null;
+  screenshot_data_url?: string | null;
+  screenshot_filename?: string | null;
   // 2026-05-17: multi-screenshot support. New clients send this; older
   // clients only populate the legacy fields above.
   screenshots?: BugScreenshot[];
@@ -294,8 +297,8 @@ export async function POST(req: Request): Promise<NextResponse> {
 **Filed:** ${body.ts}
 **Route:** ${body.route}
 **URL:** ${body.url}
-**Viewport:** ${body.viewport.w}×${body.viewport.h}
-**User-Agent:** \`${body.user_agent}\`
+**Viewport:** ${body.viewport ? `${body.viewport.w}×${body.viewport.h}` : '(unknown)'}
+**User-Agent:** \`${body.user_agent ?? '(unknown)'}\`
 **Screenshot:** ${screenshotLine}
 
 ---

@@ -917,7 +917,7 @@ function NewReferenceModal({
               }
               style={{
                 marginTop: 8, padding: '8px 16px',
-                background: 'var(--accent, #2a6)', color: '#fff', border: 'none', borderRadius: 4,
+                background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 4,
                 cursor: submitting ? 'not-allowed' : 'pointer', fontSize: 13,
                 opacity: (
                   submitting ||
@@ -1052,13 +1052,9 @@ export function ReferencesClient({ references }: { references: (ReferenceDescrip
         <div style={{ flex: 1 }} />
         <button
           type="button"
+          className="btn btn-primary"
           onClick={() => setShowModal(true)}
-          style={{
-            padding: '4px 10px', fontSize: 12,
-            background: 'var(--accent, #2a6)', color: '#fff',
-            border: 'none', borderRadius: 4, cursor: 'pointer',
-            marginRight: 12,
-          }}
+          style={{ marginRight: 12 }}
         >
           {t('references.new_button')}
         </button>

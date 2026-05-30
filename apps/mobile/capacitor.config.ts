@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli';
+import { KeyboardResize } from '@capacitor/keyboard';
 
 // Holon mobile — Capacitor wrap config.
 // webDir points at Next.js static export output (`pnpm -F mobile build`
@@ -33,6 +34,13 @@ const config: CapacitorConfig = {
     // so chunks arrive incrementally and the chat UI updates token-by-token.
     CapacitorHttp: {
       enabled: false,
+    },
+    // Keyboard: resize=None made the keyboard OVERLAY the composer (it vanished
+    // behind the keyboard). Native resizes the WebView so the composer stays
+    // visible above the keyboard. interactiveWidget is dropped (below) so the
+    // two don't double-resize. Remaining iOS bottom-gap is tuned in CSS.
+    Keyboard: {
+      resize: KeyboardResize.Native,
     },
   },
 };

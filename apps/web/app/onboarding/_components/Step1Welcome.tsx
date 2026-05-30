@@ -118,7 +118,7 @@ export function Step1Welcome({ onNext, onSkipStep, onSkipOnboarding }: Props) {
           type="button"
           className="btn onb-skip-link onb-skip-heavy"
           onClick={onSkipOnboarding}
-          title="Exit onboarding entirely. Resume any time from /me \u2192 Replay onboarding."
+          title={`Exit onboarding entirely. Resume any time from /me \u2192 Replay onboarding.`}
         >
           {t('onboarding.skip_onboarding', 'Skip onboarding')}
         </button>
@@ -133,7 +133,7 @@ export function Step1Welcome({ onNext, onSkipStep, onSkipOnboarding }: Props) {
         </button>
       </div>
       <p className="onb-sub onb-skip-hint">
-        You can complete this later from <a href="/me">/me \u2192 Replay onboarding</a>.
+        You can complete this later from <a href="/me">{'/me \u2192 Replay onboarding'}</a>.
       </p>
     </>
   );

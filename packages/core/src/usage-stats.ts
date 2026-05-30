@@ -22,9 +22,11 @@ export interface ClaudeUsage {
 }
 
 // ── in-memory cache ─────────────────────────────────────────────────────────
+// Owner: 596MB .jsonl 全量扫描太重, TTL 60s→300s 减少冷扫频率
+// (perf audit 2026-05-27). HMR 仍会丢内存缓存,但勉强能接受.
 let _cache: ClaudeUsage | null = null;
 let _cacheAt = 0;
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 300_000;
 
 // Scan only files modified in the last N days (for performance)
 const SCAN_WINDOW_DAYS = 14;
@@ -73,9 +75,12 @@ function extractUsage(line: Record<string, unknown>): { tokens: number; ts: stri
       const u = usage as Record<string, unknown>;
       const input = typeof u.input_tokens === 'number' ? u.input_tokens : 0;
       const output = typeof u.output_tokens === 'number' ? u.output_tokens : 0;
-      const cacheCreate = typeof u.cache_creation_input_tokens === 'number' ? u.cache_creation_input_tokens : 0;
-      const cacheRead = typeof u.cache_read_input_tokens === 'number' ? u.cache_read_input_tokens : 0;
-      const tokens = input + output + cacheCreate + cacheRead;
+      // Count only real new conversation tokens (input + output). We deliberately
+      // EXCLUDE cache_read_input_tokens — the warm process re-reads the same cached
+      // context every turn, so counting it inflates totals ~200× (a few K of real
+      // chat showed as millions) and misled the owner. cache_creation is likewise
+      // caching overhead, not consumption, so it's excluded too.
+      const tokens = input + output;
       if (tokens > 0) {
         const ts = typeof line.timestamp === 'string' ? line.timestamp : '';
         return { tokens, ts };
@@ -100,7 +105,7 @@ let _agentCacheAt = 0;
  *
  * Claude Code derives the project dir by replacing every `/` and `_` in the
  * absolute path with `-`.  E.g.
- *   /home/chenz/holon-agents/staff_ABC → -home-chenz-holon-agents-staff-ABC
+ *   $HOME/holon-agents/staff_ABC → -home-USER-holon-agents-staff-ABC
  */
 function cwdToProjectDirName(cwd: string): string {
   return cwd.replace(/[/_]/g, '-');

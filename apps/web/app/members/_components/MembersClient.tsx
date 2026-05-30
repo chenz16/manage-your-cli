@@ -15,6 +15,7 @@ import { useT } from '../../../lib/i18n/useT';
 import type { UseTReturn } from '../../../lib/i18n/useT';
 import { ProjectSwitcher } from '../../_components/ProjectSwitcher';
 import { useProjects } from '../../../lib/hooks/useProjects';
+import { useSecretaryProjects } from '../../_components/useSecretaryProjects';
 
 // xterm.js references `self` at module top-level → crashes SSR. Load
 // CliTerminal client-only via `next/dynamic` so its xterm import chain
@@ -530,11 +531,87 @@ function CliRuntimeBadges({ staff }: { staff: Staff }) {
   );
 }
 
+interface DiscoveredSession { name: string; cwd: string; command: string; is_holon: boolean; adopted: boolean }
+
+/** Adopt an existing owner-run tmux CLI session as an employee. De-duped:
+ *  Holon's own holon-* sessions are hidden; already-adopted ones are disabled. */
+function AdoptSessionsDialog({ open, onClose, onAdopted }: { open: boolean; onClose: () => void; onAdopted: () => void }) {
+  const [sessions, setSessions] = useState<DiscoveredSession[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function load(): Promise<void> {
+    setLoading(true); setError('');
+    try {
+      const r = await fetch('/api/v1/cli/discover', { cache: 'no-store' });
+      const j = (await r.json()) as { sessions?: DiscoveredSession[]; error?: string };
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setSessions(Array.isArray(j.sessions) ? j.sessions : []);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { if (open) void load(); }, [open]);
+
+  async function adopt(name: string): Promise<void> {
+    setBusy(name); setError('');
+    try {
+      const r = await fetch('/api/v1/cli/adopt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_name: name }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+      await load();
+      onAdopted();
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(null); }
+  }
+
+  if (!open) return null;
+  const candidates = sessions.filter((s) => !s.is_holon); // de-dup: hide Holon's own sessions
+  return (
+    <div className="bug-modal-backdrop" onClick={onClose}>
+      <div className="bug-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div className="bug-modal-header">
+          <h2 style={{ margin: 0, fontSize: 16 }}>收编 CLI 会话</h2>
+          <button type="button" className="bug-modal-close" onClick={onClose} aria-label="关闭">×</button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--ink-mute)', marginTop: 0, lineHeight: 1.5 }}>
+          把本机正在运行的 tmux CLI 会话收编为员工(非 tmux 会话不在列)。
+        </p>
+        {error && <div style={{ fontSize: 12, color: 'var(--red, #c0392b)', marginBottom: 8 }}>{error}</div>}
+        {!loading && candidates.length === 0 && (
+          <div style={{ color: 'var(--ink-mute)', padding: 20, textAlign: 'center', fontSize: 13 }}>没有可收编的 tmux 会话。</div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {candidates.map((s) => (
+            <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: '1px solid var(--line)', borderRadius: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>{s.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-mute)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.command} · {s.cwd}</div>
+              </div>
+              {s.adopted
+                ? <span className="badge">已收编</span>
+                : <button type="button" className="btn btn-primary" onClick={() => void adopt(s.name)} disabled={busy === s.name}>{busy === s.name ? '收编中…' : '收编'}</button>}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn" onClick={() => void load()} disabled={loading}>{loading ? '扫描中…' : '刷新'}</button>
+          <button type="button" className="btn" onClick={onClose}>关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MembersClient({ initial, owner }: { initial: ListStaffResponse; owner: OwnerAssistant }) {
   const { t, tFmt } = useT();
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StaffKind>('all');
   const [hireOpen, setHireOpen] = useState(false);
+  const [adoptOpen, setAdoptOpen] = useState(false);
   // Phase 1 — project filter
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const { projects } = useProjects();
@@ -602,16 +679,29 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
     );
   }, [roster, activeProjectId]);
 
+  // Multi-secretary-project scope (mobile parity): when an active sproj_*
+  // is set in the top-bar SecretaryProjectSwitcher, also filter by
+  // tags.includes('project:<sproj_id>'). This is STRICT — mirrors mobile's
+  // per-project staff scope where employees belong to a project, not a
+  // global pool. Old project_ids filter (above) keeps coexisting for the
+  // legacy holon-engineering project concept.
+  const { activeId: activeSecretaryProjectId } = useSecretaryProjects();
+  const sprojFiltered = useMemo(() => {
+    if (!activeSecretaryProjectId) return projectFiltered;
+    const tag = `project:${activeSecretaryProjectId}`;
+    return projectFiltered.filter((s) => (s.tags ?? []).includes(tag));
+  }, [projectFiltered, activeSecretaryProjectId]);
+
   const counts = useMemo(() => {
     const c: Record<Exclude<StaffKind, 'all'>, number> = { peer: 0, virtual: 0, linked: 0, cli: 0 };
-    for (const s of projectFiltered) c[staffKindOf(s)] += 1;
+    for (const s of sprojFiltered) c[staffKindOf(s)] += 1;
     return c;
-  }, [projectFiltered]);
+  }, [sprojFiltered]);
 
   const visible = useMemo(() => {
-    if (filter === 'all') return projectFiltered;
-    return projectFiltered.filter((s) => staffKindOf(s) === filter);
-  }, [projectFiltered, filter]);
+    if (filter === 'all') return sprojFiltered;
+    return sprojFiltered.filter((s) => staffKindOf(s) === filter);
+  }, [sprojFiltered, filter]);
 
   const chipOrder: StaffKind[] = ['all', 'peer', 'virtual', 'linked', 'cli'];
 
@@ -629,7 +719,7 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
           />
           {projects.length >= 2 && <div style={{ width: 8 }} />}
           {chipOrder.map((k) => {
-            const n = k === 'all' ? projectFiltered.length : counts[k];
+            const n = k === 'all' ? sprojFiltered.length : counts[k];
             const active = filter === k;
             return (
               <button
@@ -648,6 +738,15 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
             );
           })}
           <div style={{ flex: 1 }} />
+          <button
+            id="adopt-sessions"
+            type="button" className="btn"
+            onClick={() => setAdoptOpen(true)}
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            title="收编本机正在运行的 tmux CLI 会话为员工"
+          >
+            收编
+          </button>
           <button
             id="hire"
             type="button" className="btn btn-primary"
@@ -692,6 +791,7 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
       )}
 
       <HireDialog open={hireOpen} onClose={() => setHireOpen(false)} onHired={reloadRoster} owner={owner} />
+      <AdoptSessionsDialog open={adoptOpen} onClose={() => setAdoptOpen(false)} onAdopted={reloadRoster} />
     </>
   );
 }

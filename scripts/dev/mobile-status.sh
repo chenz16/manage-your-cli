@@ -4,8 +4,8 @@
 # Usage: bash scripts/mobile-status.sh
 # Reads only — never writes, commits, or pushes. Safe to run anytime.
 
-MOBILE=/home/chenz/project/holon-engineering-mobile
-RELEASE=/home/chenz/project/holon-engineering
+MOBILE=${MOBILE_REPO:?MOBILE_REPO required}
+RELEASE=${RELEASE_REPO:?RELEASE_REPO required}
 
 echo "===== HOLON MOBILE PIPELINE STATUS · $(date -u +%Y-%m-%dT%H:%M:%SZ) ====="
 echo
@@ -77,10 +77,10 @@ echo "─── Daemon tail (5 lines) ───"
 tmux capture-pane -t holon-mobile-daemon -p 2>/dev/null | grep -vE '^\s*$' | tail -5 | sed 's/^/  /' || echo "  (daemon not running)"
 echo
 
-echo "─── Mac iOS SSH (10.0.0.123:22) ───"
-if timeout 3 bash -c 'cat < /dev/tcp/10.0.0.123/22 2>/dev/null' >/dev/null 2>&1; then
+echo "─── Mac iOS SSH (${MAC_SSH_HOST_IP:-host}:22) ───"
+if timeout 3 bash -c 'cat < /dev/tcp/${MAC_SSH_HOST_IP:-host}/22 2>/dev/null' >/dev/null 2>&1; then
   echo "  port 22 OPEN"
-  if timeout 3 ssh -o BatchMode=yes -o StrictHostKeyChecking=no zuolinliu@10.0.0.123 'xcrun --version 2>/dev/null | head -1' 2>/dev/null; then
+  if timeout 3 ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${MAC_SSH_HOST:-user@host} 'xcrun --version 2>/dev/null | head -1' 2>/dev/null; then
     echo "  passwordless SSH OK + Xcode reachable"
   else
     echo "  port open but SSH auth failed (pubkey not authorized?)"

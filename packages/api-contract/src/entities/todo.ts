@@ -24,7 +24,7 @@ export const Todo = z.object({
 export type Todo = z.infer<typeof Todo>;
 
 export const AddTodoBody = z.object({
-  text: z.string().min(1),
+  text: z.string().min(1).max(2000), // BUG-012a: bound length (was unbounded)
   priority: TodoPriority.optional(),
   due_date: z.string().nullable().optional(),
 });

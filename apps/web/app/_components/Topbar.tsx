@@ -5,13 +5,19 @@
  * + the vanilla HTML topbar pattern reused across all pages.
  */
 
+import { HealthDot } from './HealthDot';
+import { SecretaryProjectSwitcher } from './SecretaryProjectSwitcher';
+import { TopbarMe } from './TopbarMe';
+
 export function Topbar() {
   return (
     <header className="topbar">
       <a href="/" className="topbar-brand" aria-label="Holon — go to Today">
         <img src="/assets/holon-logo.svg" alt="" />
       </a>
+      <SecretaryProjectSwitcher />
       <div className="topbar-actions">
+        <HealthDot />
         <button className="topbar-icon-btn" data-inert="search" aria-label="Search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="7" />
@@ -24,10 +30,7 @@ export function Topbar() {
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
         </button>
-        <div className="topbar-me" data-inert="user menu" tabIndex={0} role="button">
-          <span className="topbar-me-avatar">CZ</span>
-          <span className="topbar-me-name">Chen · laptop-desk</span>
-        </div>
+        <TopbarMe />
       </div>
     </header>
   );

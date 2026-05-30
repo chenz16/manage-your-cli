@@ -58,15 +58,23 @@ export function loadInitialMessages(): ThreadMessageLike[] {
   return readStored().map((m) => ({ role: m.role, content: m.content }));
 }
 
-/** chat-sync: fetch the shared desk transcript for the owner thread.
- *  This is the PRIMARY source of truth — it includes messages sent from
- *  mobile and any messages from this session. Returns [] on any error
- *  so the caller can gracefully fall back. Also primes sessionStorage
- *  with the latest transcript so refreshes remain fast. */
-export async function fetchTranscriptFromDesk(): Promise<ThreadMessageLike[]> {
+/** Resolves the chat thread id for an optional active secretary project.
+ *  No project → legacy 'owner' thread. Project id (sproj_*) → 'project:<id>'
+ *  (matches the desk-side secretaryProjectThreadId in @holon/core). */
+export function deskChatThreadId(projectId: string | null | undefined): string {
+  return projectId ? `project:${projectId}` : 'owner';
+}
+
+/** chat-sync: fetch the shared desk transcript for a thread. Pass projectId
+ *  to read the new secretary-project transcript; null/omitted = legacy
+ *  'owner' single-secretary thread.
+ *  Returns [] on any error so caller can gracefully fall back. Also primes
+ *  sessionStorage with the latest transcript so refreshes remain fast. */
+export async function fetchTranscriptFromDesk(projectId?: string | null): Promise<ThreadMessageLike[]> {
   if (typeof window === 'undefined') return [];
+  const thread = deskChatThreadId(projectId);
   try {
-    const res = await fetch('/api/v1/chat/history?thread=owner', { cache: 'no-store' });
+    const res = await fetch(`/api/v1/chat/history?thread=${encodeURIComponent(thread)}`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json() as {
       messages?: Array<{ role?: unknown; content?: unknown; ts?: unknown }>;
@@ -227,7 +235,14 @@ const SLASH_COMMANDS: Record<string, string> = {
   '/cli':   'Open a CLI member terminal. Usage: /cli <staff_name_or_id>.',
 };
 
-export function makeOwnerAdapter(): ChatModelAdapter {
+export interface MakeOwnerAdapterOpts {
+  /** Active secretary project id (sproj_*). When set, the adapter posts
+   *  `project_id` so the owner/stream route routes to that project's
+   *  secretary + persists into the per-project thread. Mirrors mobile. */
+  projectId?: string | null;
+}
+
+export function makeOwnerAdapter(opts: MakeOwnerAdapterOpts = {}): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
       const payload = messages
@@ -318,7 +333,10 @@ export function makeOwnerAdapter(): ChatModelAdapter {
         res = await fetch('/api/v1/chat/owner/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: payload }),
+          body: JSON.stringify({
+            messages: payload,
+            ...(opts.projectId ? { project_id: opts.projectId } : {}),
+          }),
           signal: abortSignal,
         });
       } catch (err) {

@@ -5,7 +5,12 @@
 // cache-first for hashed Next.js static assets. No background sync,
 // no push, no API caching — the desk BFF is the source of truth.
 
-const CACHE_VERSION = 'holon-shell-v3';
+// CACHE_VERSION includes the build SHA (injected via build script
+// substitution at SW publish time). Each build gets a unique cache name so
+// the SW's activate handler deletes the previous build's caches — without
+// this, WKWebView persists cached /_next/static across .ipa installs and the
+// new bundle never gets seen, leaving the phone running yesterday's code.
+const CACHE_VERSION = 'holon-shell-a34881b';
 // M-L-049 — the PWA start_url is `/chat/` (trailing-slash form chosen in
 // M-L-047 → `/chat/index.html`). Pre-cache it AND keep `/` so the installed
 // home-screen icon boots its real start page offline instead of a cache miss.

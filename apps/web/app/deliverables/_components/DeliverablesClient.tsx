@@ -245,6 +245,10 @@ export function DeliverablesClient({ initial }: { initial: ListDeliverablesRespo
         <DeliverableDetailInline id={openId} onClose={() => setOpenId(null)} />
       ) : (
         <>
+          {/* Day-one suppression: chips filtering an empty list read as
+           * broken UI. Render the chip-bar only once at least one drop
+           * exists. The chip-bar reappears as soon as work lands. */}
+          {!isPageEmpty && (
           <div className="deliv-chip-bar" role="tablist" aria-label="Filter deliverables by origin">
             {chips.map((k) => {
               const active = filter === k;
@@ -265,6 +269,7 @@ export function DeliverablesClient({ initial }: { initial: ListDeliverablesRespo
               );
             })}
           </div>
+          )}
 
           {sorted.length === 0 ? (
             <div className="deliv-empty">

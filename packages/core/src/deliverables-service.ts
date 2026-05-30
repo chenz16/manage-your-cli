@@ -18,7 +18,7 @@ import {
 } from '@holon/api-contract';
 import { z } from 'zod';
 import { loadFixtures } from './fixture-store.js';
-import { listMutableDeliverables, getMutableDeliverable, deleteMutableDeliverable } from './mutable-store.js';
+import { listMutableDeliverables, getMutableDeliverable, deleteMutableDeliverable, setMutableDeliverableStatus } from './mutable-store.js';
 
 /** Phase 1: extended query type with optional project_id filter. */
 export type ListDeliverablesQueryInput = z.input<typeof ListDeliverablesQuerySchema> & {
@@ -64,4 +64,18 @@ export function getDeliverable(id: string): GetDeliverableResponse | null {
  */
 export function deleteDeliverable(id: string): boolean {
   return deleteMutableDeliverable(id);
+}
+
+/**
+ * Set a deliverable's review status (accept/reject the human-in-the-loop gate).
+ * Only mutable-store (worker-produced) deliverables can change; fixture rows are
+ * read-only on disk → returns null. Returns the updated GetDeliverableResponse.
+ */
+export function setDeliverableStatus(
+  id: string,
+  status: Deliverable['status'],
+): GetDeliverableResponse | null {
+  const updated = setMutableDeliverableStatus(id, status);
+  if (!updated) return null;
+  return GetDeliverableResponseSchema.parse({ deliverable: updated });
 }

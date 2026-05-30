@@ -5,7 +5,8 @@
   "description": "Holon core domain services. iter-003 ships the connections-service stub; iter-004+ expands.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./sanitize-for-tts": "./src/sanitize-for-tts.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -50,8 +50,13 @@ import { Mission as MissionSchema, Staff as StaffSchema } from '@holon/api-contr
 //
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BetterSqliteDatabase = any;
-let _db: BetterSqliteDatabase | null = null;
-let _dbInitFailed = false;
+// Owner: HMR resets module-level singletons on every dev file edit, causing
+// 7800+ new Database() opens during normal development (perf audit 2026-05-27).
+// Store on globalThis so the connection survives module re-evaluation.
+const _g = globalThis as unknown as {
+  __holonOwnerDb?: BetterSqliteDatabase | null;
+  __holonOwnerDbFailed?: boolean;
+};
 const requireFn = createRequire(import.meta.url);
 
 function resolveDbPath(): string {
@@ -66,15 +71,12 @@ function resolveDbPath(): string {
 }
 
 function ensureDb(): BetterSqliteDatabase | null {
-  if (_db) return _db;
-  if (_dbInitFailed) return null;
+  if (_g.__holonOwnerDb) return _g.__holonOwnerDb;
+  if (_g.__holonOwnerDbFailed) return null;
   try {
     const dbPath = resolveDbPath();
     const parent = dirname(dbPath);
     if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
-    // Dynamic createRequire so missing native binary doesn't ESM-import-fail the
-    // whole module graph; createRequire keeps it CJS-compatible for the
-    // bundler.
     const Database = requireFn('better-sqlite3') as new (
       path: string,
     ) => BetterSqliteDatabase;
@@ -87,15 +89,15 @@ function ensureDb(): BetterSqliteDatabase | null {
         updated_at INTEGER NOT NULL
       )
     `);
-    _db = db;
+    _g.__holonOwnerDb = db;
     console.log(JSON.stringify({
       audit: 'persistence.opened',
       path: dbPath,
       ts: new Date().toISOString(),
     }));
-    return _db;
+    return _g.__holonOwnerDb;
   } catch (err) {
-    _dbInitFailed = true;
+    _g.__holonOwnerDbFailed = true;
     console.error(JSON.stringify({
       audit: 'persistence.open_failed',
       error: err instanceof Error ? err.message : String(err),
@@ -695,9 +697,9 @@ export function writeA2APeers(peers: A2APeerRecord[]): void {
  *  re-pointed between tests without process restart. NOT exported through
  *  packages/core/src/index.ts. */
 export function _resetForTest(): void {
-  if (_db) {
+  if (_g.__holonOwnerDb) {
     try {
-      _db.close();
+      _g.__holonOwnerDb.close();
     } catch (err) {
       console.warn(JSON.stringify({
         audit: 'persistence.test_reset_close_failed',
@@ -706,6 +708,6 @@ export function _resetForTest(): void {
       }));
     }
   }
-  _db = null;
-  _dbInitFailed = false;
+  _g.__holonOwnerDb = null;
+  _g.__holonOwnerDbFailed = false;
 }

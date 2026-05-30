@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   bossMemoryRoot,
+  projectMemoryRoot,
   captureCliOutput,
   createCliAgentStaff,
   dispatchMemoryConsolidationTask,
@@ -13,7 +14,7 @@ import {
   readBossMemory,
   readBossMemoryLog,
   retireCliAgentStaff,
-  writeBossMemory,
+  writeBossMemoryWithRecovery,
 } from '@holon/core';
 
 export const TOOL_NAMES = [
@@ -49,11 +50,13 @@ export const retireAgentSchema = {
 
 export const readMemorySchema = {
   scope: z.string().min(1).optional().describe('Optional boss-memory scope. Omit to read INDEX.md only. Use "__log" for the raw append-log snapshot.'),
+  project_id: z.string().min(1).optional().describe('Secretary project ID to scope memory. Omit for global (legacy) memory.'),
 };
 
 export const writeMemorySchema = {
   scope: z.string().min(1).describe('Boss-memory scope such as decisions, roster, or project/foo.'),
   text: z.string().min(1).describe('Memory note to append.'),
+  project_id: z.string().min(1).optional().describe('Secretary project ID to scope memory. Omit for global (legacy) memory.'),
 };
 
 interface ToolError {
@@ -180,23 +183,22 @@ export async function retireAgent(agent: string): Promise<unknown> {
   }
 }
 
-export async function readMemory(scope?: string): Promise<unknown> {
+export async function readMemory(scope?: string, project_id?: string): Promise<unknown> {
   try {
-    if (scope?.trim() === '__log') return readBossMemoryLog();
-    return readBossMemory(scope);
+    if (scope?.trim() === '__log') return readBossMemoryLog(project_id);
+    return readBossMemory(scope, project_id);
   } catch (err) {
     return classifyError(err);
   }
 }
 
-export async function writeMemory(scope: string, text: string): Promise<unknown> {
+export async function writeMemory(scope: string, text: string, project_id?: string): Promise<unknown> {
   try {
-    return writeBossMemory(scope, text);
+    return await writeBossMemoryWithRecovery(scope, text, project_id);
   } catch (err) {
     return classifyError(err);
   }
 }
-
 export async function consolidateMemory(): Promise<unknown> {
   try {
     return dispatchMemoryConsolidationTask();
@@ -205,8 +207,8 @@ export async function consolidateMemory(): Promise<unknown> {
   }
 }
 
-export function memoryRoot(): string {
-  return bossMemoryRoot();
+export function memoryRoot(project_id?: string): string {
+  return project_id ? projectMemoryRoot(project_id) : bossMemoryRoot();
 }
 
 export const toolResult = okJson;

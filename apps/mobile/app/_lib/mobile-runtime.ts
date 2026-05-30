@@ -7,6 +7,10 @@
 export interface MobileDesktopConnection {
   baseUrl: string;
   deviceToken: string;
+  /** Full base URLs (no trailing slash) for all known reachable addresses.
+   *  Used for automatic failover when the primary baseUrl stops responding.
+   *  Optional — absent on old paired clients; treated as empty. */
+  candidates?: string[];
 }
 
 const STORAGE_KEY = 'holon.mobile.desktopConnection.v1';
@@ -45,9 +49,17 @@ export function readDesktopConnection(): MobileDesktopConnection | null {
     const parsed = JSON.parse(raw) as Partial<MobileDesktopConnection>;
     if (typeof parsed.baseUrl !== 'string' || typeof parsed.deviceToken !== 'string') return null;
     if (!parsed.baseUrl || !parsed.deviceToken) return null;
+    // candidates is optional — tolerate missing field for back-compat with old paired clients
+    const rawCandidates = (parsed as { candidates?: unknown }).candidates;
+    const candidates: string[] | undefined = Array.isArray(rawCandidates)
+      ? (rawCandidates as unknown[])
+          .filter((u): u is string => typeof u === 'string' && u.length > 0)
+          .map((u) => normalizeBaseUrl(u))
+      : undefined;
     return {
       baseUrl: normalizeBaseUrl(parsed.baseUrl),
       deviceToken: parsed.deviceToken,
+      ...(candidates !== undefined ? { candidates } : {}),
     };
   } catch {
     return null;
@@ -59,8 +71,54 @@ export function writeDesktopConnection(connection: MobileDesktopConnection): voi
   const normalized: MobileDesktopConnection = {
     baseUrl: normalizeBaseUrl(connection.baseUrl),
     deviceToken: connection.deviceToken,
+    ...(connection.candidates !== undefined
+      ? {
+          candidates: connection.candidates
+            .map((u) => normalizeBaseUrl(u))
+            .filter((u, i, a) => a.indexOf(u) === i),
+        }
+      : {}),
   };
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+}
+
+/**
+ * Probes a single base URL by fetching /api/v1/ping with the device token.
+ * Returns true if the server responds with HTTP 200 within timeoutMs.
+ */
+export async function probeBaseUrl(url: string, token: string, timeoutMs: number): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(`${url}/api/v1/ping`, {
+      cache: 'no-store',
+      signal: ctrl.signal,
+      headers: { 'x-holon-device-token': token },
+    });
+    return r.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Tries [conn.baseUrl, ...conn.candidates] in order (deduped, primary first).
+ * Returns the first URL that responds to ping, or null if none does.
+ * Sequential — first-hit fast on the common path (primary still alive).
+ */
+export async function pickLiveBaseUrl(conn: MobileDesktopConnection): Promise<string | null> {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const u of [conn.baseUrl, ...(conn.candidates ?? [])]) {
+    if (!seen.has(u)) { seen.add(u); ordered.push(u); }
+  }
+  for (const url of ordered) {
+    const alive = await probeBaseUrl(url, conn.deviceToken, 4000);
+    if (alive) return url;
+  }
+  return null;
 }
 
 export function clearDesktopConnection(): void {

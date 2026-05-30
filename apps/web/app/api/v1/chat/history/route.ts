@@ -36,10 +36,11 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   // Validate thread ID shape to prevent arbitrary key injection.
-  // Valid: 'owner' or 'staff:<id>' where id is alphanumeric + underscore/dash/dot.
+  // Valid: 'owner', 'staff:<id>', or 'project:<id>' where id is alphanumeric + underscore/dash/dot.
   const isValidThread =
     thread === 'owner' ||
-    /^staff:[a-zA-Z0-9_\-.]+$/.test(thread);
+    /^staff:[a-zA-Z0-9_\-.]+$/.test(thread) ||
+    /^project:[a-zA-Z0-9_\-.]+$/.test(thread);
   if (!isValidThread) {
     return NextResponse.json(
       { error: 'invalid thread id format', code: 'invalid_thread' },

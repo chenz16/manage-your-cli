@@ -133,9 +133,11 @@ bugs/bug-*
 # spreadsheets). Out of git by default — the owner can `git add -f`
 # specific ones they want versioned.
 deliverables/
-# Negate mobile app route folder — that's UI source, not job output.
+# Negate source folders — these are UI / API source, not job output.
 !apps/mobile/app/deliverables/
 !apps/mobile/app/deliverables/**
+!apps/web/app/api/v1/deliverables/
+!apps/web/app/api/v1/deliverables/**
 
 # ─── QA / one-off audit artifacts ────────────────────────────────
 tmp/

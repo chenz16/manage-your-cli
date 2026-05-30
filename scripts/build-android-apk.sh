@@ -47,8 +47,10 @@ log "0/6 pre-flight"
 # JDK presence (Capacitor 6.x requires Java 17+; we ship 21 to match local).
 if [ ! -x "$JDK/bin/java" ]; then
   fail "JDK not found at $JDK
-  Install (WSL2): mkdir -p ~/.local/jdk && curl -sL https://aka.ms/download-jdk/microsoft-jdk-21-linux-x64.tar.gz | tar -xz -C ~/.local/jdk
-  Or override:    JDK_PATH=/path/to/jdk $0"
+  Install (WSL2):  mkdir -p ~/.local/jdk && curl -sL https://aka.ms/download-jdk/microsoft-jdk-21-linux-x64.tar.gz | tar -xz -C ~/.local/jdk
+  Install (Linux): apt-get install openjdk-21-jdk  (Debian/Ubuntu)
+                   dnf install java-21-openjdk-devel  (Fedora/RHEL)
+  Override:        JDK_PATH=/path/to/jdk $0"
 fi
 jdk_ver="$("$JDK/bin/java" -version 2>&1 | head -1)"
 log "  JDK: $jdk_ver"
@@ -56,8 +58,11 @@ log "  JDK: $jdk_ver"
 # Android SDK presence (must have platforms + build-tools + platform-tools).
 if [ ! -d "$ANDROID_SDK/platforms" ]; then
   fail "Android SDK not at $ANDROID_SDK/platforms
-  Install (WSL2): winget install Google.AndroidStudio (Windows side) — first launch populates the SDK
-  Or override:    ANDROID_SDK_PATH=/path/to/sdk $0"
+  Install (WSL2):  winget install Google.AndroidStudio (Windows side) — first launch populates the SDK
+  Install (Linux): https://developer.android.com/studio — Studio Setup
+                   Wizard, or apt-get install android-sdk + sdkmanager
+                   --install \"platforms;android-34\" \"build-tools;34.0.0\"
+  Override:        ANDROID_SDK_PATH=/path/to/sdk $0"
 fi
 log "  SDK: $ANDROID_SDK"
 
@@ -88,7 +93,19 @@ cd "$APP_DIR"
 # Clean out/ so a partial/stale build cannot mask a real failure (was the
 # 2026-05-18 silent-fallback bug in scripts/build-android.sh).
 rm -rf out
-NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN="$NEXT_PUBLIC_DESK_ORIGIN" pnpm exec next build 2>&1 | tail -8
+# Stamp the build so the 我 tab can show exactly which APK is installed (owner asked
+# to verify the right build is on the phone). SHA from git; date in local YYYY-MM-DD.
+BUILD_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BUILD_DATE="$(date +%Y-%m-%d)"
+log "stamping build: sha=$BUILD_SHA date=$BUILD_DATE"
+# Bake the SHA into sw.js CACHE_VERSION so the SW invalidates old caches on
+# each new install (WKWebView/SW storage persists across .apk reinstalls and
+# would otherwise serve yesterday's hashed bundle with the old DESK_ORIGIN).
+sed -i.bak "s|__BUILD_SHA__|$BUILD_SHA|g" public/sw.js
+trap 'mv public/sw.js.bak public/sw.js 2>/dev/null || true' EXIT
+NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN="$NEXT_PUBLIC_DESK_ORIGIN" \
+  NEXT_PUBLIC_BUILD_SHA="$BUILD_SHA" NEXT_PUBLIC_BUILD_DATE="$BUILD_DATE" \
+  pnpm exec next build 2>&1 | tail -8
 [ -d out ] || fail "next build did not produce apps/mobile/out/ · static export config is broken (commonly: a dynamic [param] route is missing generateStaticParams)"
 
 # ---------- 2/6 · capacitor sync ----------

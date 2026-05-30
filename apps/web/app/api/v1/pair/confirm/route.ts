@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { confirmPairingRequest } from '@/lib/device-pairing-store';
+import { confirmPairingRequest, selectLanIPv4 } from '@/lib/device-pairing-store';
 
 // Mobile-initiated pairing: phone POSTs the 4-digit code it read off the desk
 // screen. Remote-allowed — the phone reaches the desk directly.
@@ -45,11 +45,20 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'persistence error', code: 'persistence_failed' }, { status: 500 });
   }
 
+  // Build full base URLs for every LAN candidate so the mobile client can
+  // failover across network switches (WiFi ↔ cellular / Tailscale) without
+  // re-pairing. Port is taken from the Host header of this request.
+  const hostHeader = req.headers.get('host') ?? 'localhost:3000';
+  const port = hostHeader.includes(':') ? hostHeader.split(':').at(-1)! : '3000';
+  const { candidates } = selectLanIPv4();
+  const lan_candidates = candidates.map((ip) => `http://${ip}:${port}`);
+
   return NextResponse.json({
     ok: true,
     device_token: result.device_token,
     device_id: result.device_id,
     paired_at: result.paired_at,
+    lan_candidates,
   });
 }
 

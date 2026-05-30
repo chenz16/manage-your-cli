@@ -2,8 +2,23 @@ import { NextResponse } from 'next/server';
 import { createStaff, listStaffMerged, type CreateStaffInput } from '@holon/core';
 import { SubstrateSchema } from '@holon/api-contract';
 
-export async function GET(): Promise<NextResponse> {
-  return NextResponse.json({ items: listStaffMerged() });
+export async function GET(req: Request): Promise<NextResponse> {
+  const url = new URL(req.url);
+  const projectFilter = url.searchParams.get('project');
+
+  const allStaff = listStaffMerged();
+
+  // ?project=ID — STRICT: return ONLY staff with matching `project:{ID}` tag.
+  // No "shared" fallback (owner: 通讯录 = 当前项目员工,不该看到别的项目的人).
+  // Without ?project, return all (back-compat for non-project surfaces).
+  const items = projectFilter
+    ? allStaff.filter((s) => {
+        const tags: string[] = Array.isArray(s.tags) ? s.tags : [];
+        return tags.includes(`project:${projectFilter}`);
+      })
+    : allStaff;
+
+  return NextResponse.json({ items });
 }
 
 export async function POST(req: Request): Promise<NextResponse> {

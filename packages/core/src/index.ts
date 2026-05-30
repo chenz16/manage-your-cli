@@ -55,7 +55,9 @@ export {
   sendPrompt,
   paneCurrentCommand,
   captureCliOutput,
+  listTmuxSessions,
   type CliStatus,
+  type DiscoveredTmuxSession,
 } from './cli-session-service.js';
 export {
   ensureAgentMemoryFile,
@@ -86,11 +88,16 @@ export {
 } from './a2a-peer-store.js';
 export {
   bossMemoryRoot,
+  projectMemoryRoot,
   readBossMemory,
   readBossMemoryLog,
   writeBossMemory,
+  parseFrontmatter,
+  DEFAULT_SCOPE_BUDGET,
   type BossMemoryRead,
   type BossMemoryWrite,
+  type BossMemoryFrontmatter,
+  type BossMemoryBudgetExceeded,
 } from './boss-memory-service.js';
 export {
   getOrCreateSecretaryStaff,
@@ -100,6 +107,11 @@ export {
   getOrCreateMemoryManagerStaff,
   dispatchMemoryConsolidationTask,
 } from './memory-manager-service.js';
+export {
+  writeBossMemoryWithRecovery,
+  setBossMemoryRecoveryDispatcher,
+  type RecoveryDispatcher,
+} from './boss-memory-recovery-service.js';
 export {
   startMemoryConsolidationService,
   type MemoryConsolidationServiceState,
@@ -131,6 +143,13 @@ export {
   personaToolScope,
   type PersonaPreset,
 } from './persona-catalog.js';
+
+export {
+  TEAM_PACKS,
+  getTeamPack,
+  type TeamPack,
+  type TeamPackStaff,
+} from './team-pack-catalog.js';
 
 export {
   listSkills,
@@ -181,6 +200,7 @@ export {
   listDeliverables,
   getDeliverable,
   deleteDeliverable,
+  setDeliverableStatus,
   type ListDeliverablesQueryInput,
 } from './deliverables-service.js';
 
@@ -204,6 +224,21 @@ export {
   type MessagingCfg,
   type MessagingSendResult,
 } from './messaging-service.js';
+
+export {
+  type ReceiveTransport,
+  type IncomingChannelMessage,
+  type MessagingChannelAdapter,
+  channelAccountPath,
+  registerChannelAdapter,
+  getChannelAdapter,
+  listChannelAdapters,
+  _resetChannelRegistryForTests,
+  WeChatAdapter,
+  TelegramAdapter,
+  LineAdapter,
+  KakaoAdapter,
+} from './messaging-channels.js';
 
 // Feedback / bug-report (ported from holon-engineering main)
 export {
@@ -254,3 +289,37 @@ export {
   clearChatTranscript,
   type TranscriptMessage,
 } from './chat-transcript-store.js';
+
+// Secretary projects service (multi-project / multi-secretary UI)
+export {
+  listSecretaryProjects,
+  getSecretaryProject,
+  createSecretaryProject,
+  updateSecretaryProject,
+  deleteSecretaryProject,
+  secretaryProjectThreadId,
+  _resetSecretaryProjectMigrationForTests,
+  type SecretaryProject,
+  type CreateSecretaryProjectInput,
+} from './secretary-projects-service.js';
+
+// Meeting rooms service
+export {
+  listRooms,
+  getRoom,
+  createRoom,
+  renameRoom,
+  deleteRoom,
+  listMembers,
+  addMember,
+  removeMember,
+  clearRoomsStore,
+  getOrCreateDefaultTeamRoom,
+  DEFAULT_TEAM_ROOM_ID,
+  type CreateRoomInput,
+  type MemberSeed,
+  type AddMemberInput,
+} from './rooms-service.js';
+
+// TTS preprocessing (shared by desk + mobile)
+export { sanitizeForTts } from './sanitize-for-tts.js';
