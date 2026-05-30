@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,14 @@ import type { McpPluginInstallSpec, Staff } from '@holon/api-contract';
 import { MCP_PLUGIN_REGISTRY, findMcpPluginManifest } from '@holon/api-contract';
 import { getOwner } from './owner-config-service.js';
 import { mcpPluginId } from './plugin-store.js';
+import {
+  ROLE_COMPOSITION_HEADING,
+  ROLE_COMPOSITION_SENTINEL,
+  ROLE_COMPOSITION_OWNER_SENTINEL,
+  ROLE_COMPOSITION_CONFLICTS_HEADING,
+  renderPersona,
+  type ComposedPersona,
+} from './role-composer.js';
 
 function warnMemoryScaffold(action: string, err: unknown): void {
   const code = err && typeof err === 'object' && 'code' in err ? ` ${(err as { code?: string }).code}` : '';
@@ -433,4 +441,126 @@ export function ensureMemoryManagerWorkspace(): string {
   writeFileIfAbsent(join(cwd, 'AGENTS.md'), MEMORY_MANAGER_PERSONA);
   ensureMcpJson(join(cwd, '.mcp.json'), repoRoot);
   return cwd;
+}
+
+/**
+ * Write (or refresh) the `## Role-Composition` managed section into a
+ * per-CLI memory file (CLAUDE.md / AGENTS.md / GEMINI.md / QWEN.md).
+ *
+ * Spec: docs/adr/role-templates-and-persona-composition.md §3 / §4.
+ *
+ * Mirrors `writeHrCorrection`'s managed-section discipline:
+ *  - Atomic (tempfile + rename).
+ *  - Heading present WITHOUT sentinel = owner-authored → throws (no clobber).
+ *  - Re-run REPLACES the managed block above `<!-- owner-edits below -->`
+ *    and leaves everything below it verbatim.
+ *  - When a sibling `## Composition-conflicts` section is present from a
+ *    prior write, it is replaced too (managed). Owner notes beyond the
+ *    owner-edits sentinel are preserved.
+ */
+export function writeRoleComposition(
+  memoryFilePath: string,
+  persona: ComposedPersona,
+): { added: boolean; replaced: boolean; conflictsWritten: number } {
+  const existing = existsSync(memoryFilePath) ? readFileSync(memoryFilePath, 'utf8') : '';
+  const hadTrailingNL = existing.endsWith('\n');
+  const lines = existing.split('\n');
+  if (hadTrailingNL) lines.pop();
+
+  // Locate `## Role-Composition`.
+  let headingIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if ((lines[i] ?? '').trim() === ROLE_COMPOSITION_HEADING) { headingIdx = i; break; }
+  }
+
+  let replaced = false;
+  let added = false;
+  let beforeBlock: string[];
+  let afterBlock: string[];
+
+  if (headingIdx < 0) {
+    beforeBlock = lines.slice();
+    afterBlock = [];
+    added = true;
+  } else {
+    // Sentinel check — must appear within a few lines of the heading.
+    let sentinelIdx = -1;
+    for (let j = headingIdx + 1; j < Math.min(lines.length, headingIdx + 4); j++) {
+      const lj = (lines[j] ?? '').trim();
+      if (lj === ROLE_COMPOSITION_SENTINEL) { sentinelIdx = j; break; }
+      if (lj && !lj.startsWith('<!--')) break;
+    }
+    if (sentinelIdx < 0) {
+      throw new Error(
+        `writeRoleComposition: ${memoryFilePath} has a '${ROLE_COMPOSITION_HEADING}' ` +
+        `heading without the managed-section sentinel — refusing to overwrite owner content.`,
+      );
+    }
+    // Find owner-edits sentinel inside the section.
+    let ownerIdx = -1;
+    for (let k = sentinelIdx + 1; k < lines.length; k++) {
+      if ((lines[k] ?? '').trim() === ROLE_COMPOSITION_OWNER_SENTINEL) { ownerIdx = k; break; }
+      // Stop searching if we hit another non-conflicts top-level heading.
+      const ltrim = (lines[k] ?? '').trim();
+      if (ltrim.startsWith('## ') && ltrim !== ROLE_COMPOSITION_HEADING && ltrim !== ROLE_COMPOSITION_CONFLICTS_HEADING) break;
+    }
+    if (ownerIdx < 0) {
+      // No owner-edits sentinel — managed section is everything until next `## `.
+      let endIdx = lines.length;
+      for (let k = sentinelIdx + 1; k < lines.length; k++) {
+        const ltrim = (lines[k] ?? '').trim();
+        if (ltrim.startsWith('## ') && ltrim !== ROLE_COMPOSITION_HEADING) { endIdx = k; break; }
+      }
+      beforeBlock = lines.slice(0, headingIdx);
+      afterBlock = lines.slice(endIdx);
+    } else {
+      // Preserve everything from after owner-edits sentinel onward — BUT we
+      // need to skip a managed `## Composition-conflicts` block if it sits
+      // between owner-edits sentinel and the next non-managed section. Spec
+      // puts the conflicts block as a SIBLING after Role-Composition; here
+      // we keep it simple — the conflicts heading lives ABOVE the
+      // owner-edits sentinel in our render shape (renderPersona), so the
+      // owner-edits sentinel demarcates managed-vs-preserved cleanly.
+      beforeBlock = lines.slice(0, headingIdx);
+      // Skip the old conflicts heading if it appears right after owner-edits
+      // (legacy shape) by finding next non-conflicts `## ` boundary.
+      let preserveStart = ownerIdx + 1;
+      // Skip blank lines immediately following owner-edits to avoid blank
+      // pile-up on re-runs.
+      while (preserveStart < lines.length && (lines[preserveStart] ?? '').trim() === '') preserveStart++;
+      // If a managed conflicts heading follows, drop it through to next `## `.
+      if (preserveStart < lines.length && (lines[preserveStart] ?? '').trim() === ROLE_COMPOSITION_CONFLICTS_HEADING) {
+        let dropEnd = lines.length;
+        for (let k = preserveStart + 1; k < lines.length; k++) {
+          const ltrim = (lines[k] ?? '').trim();
+          if (ltrim.startsWith('## ')) { dropEnd = k; break; }
+        }
+        preserveStart = dropEnd;
+      }
+      afterBlock = lines.slice(preserveStart);
+      replaced = true;
+    }
+  }
+
+  const renderedBlock = renderPersona(persona).split('\n');
+  const out: string[] = [];
+  // Trim trailing blank line on beforeBlock to avoid double-blank.
+  while (beforeBlock.length > 0 && beforeBlock[beforeBlock.length - 1] === '') beforeBlock.pop();
+  out.push(...beforeBlock);
+  if (beforeBlock.length > 0) out.push('');
+  out.push(...renderedBlock);
+  if (afterBlock.length > 0) {
+    out.push('');
+    // Drop a leading blank line on afterBlock to avoid triple-blank.
+    while (afterBlock.length > 0 && afterBlock[0] === '') afterBlock.shift();
+    out.push(...afterBlock);
+  }
+
+  const finalText = out.join('\n') + '\n';
+  // Atomic write: temp + rename.
+  mkdirIfNeeded(dirname(memoryFilePath));
+  const tmp = `${memoryFilePath}.role-tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(tmp, finalText);
+  renameSync(tmp, memoryFilePath);
+  return { added, replaced, conflictsWritten: persona.conflicts.length };
 }

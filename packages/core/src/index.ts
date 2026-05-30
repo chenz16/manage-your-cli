@@ -65,7 +65,25 @@ export {
   ensureSecretaryWorkspace,
   ensureMemoryManagerWorkspace,
   installRecallSkill,
+  writeRoleComposition,
 } from './cli-memory-scaffold.js';
+
+// Role templates + persona composition (ADR: docs/adr/role-templates-and-persona-composition.md)
+export {
+  loadRoleTemplate,
+  listRoleTemplates,
+  findRepoRoot as findRoleTemplatesRepoRoot,
+  type RoleTemplate,
+} from './role-template-loader.js';
+export {
+  composeRoles,
+  renderPersona,
+  ROLE_COMPOSITION_HEADING,
+  ROLE_COMPOSITION_SENTINEL,
+  ROLE_COMPOSITION_OWNER_SENTINEL,
+  ROLE_COMPOSITION_CONFLICTS_HEADING,
+  type ComposedPersona,
+} from './role-composer.js';
 
 export {
   dispatchCliTask,
