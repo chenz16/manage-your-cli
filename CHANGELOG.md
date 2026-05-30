@@ -6,7 +6,47 @@ ISO-8601.
 
 ## [Unreleased]
 
-The first public-release-ready cut. Branch: `feat/native-stt-hardening`.
+The first public-release-ready cut.
+
+### Added (post-CHANGELOG-init)
+
+- **HR evaluator + two-path behavior correction** ([ADR](docs/adr/hr-evaluator-and-behavior-correction.md))
+  — owner-HR agent (System 2) + secretary-HR inline loop step. Path A
+  writes persistent rules to `## HR-Corrections` in the target's per-CLI
+  memory file (rule-hash idempotent). Path B enqueues a synthetic message
+  that's prepended on the next inbound (non-preemptive). ≥3 Path-B fires
+  in 24h auto-promote to Path A with 🔴 owner accept/edit/revert.
+  Promotion-veto store at `~/holon-agents/boss/owner/hr/promotion-vetoes.json`.
+- **Memory-as-skill** ([ADR](docs/adr/memory-as-skill.md)) — recall lifted
+  from secretary persona prompt to Claude Code Skill. Two skills shipped:
+  `skills/holon-memory-recall` (secretary scope) and
+  `skills/holon-owner-recall` (owner-CLI scope). Install hook at agent
+  boot (`installRecallSkill` in `cli-memory-scaffold.ts`).
+- **Settle-watch + synthetic-producer registry** (closes Task #20) —
+  3-minute idle detection on warm secretaries; producer registry for any
+  out-of-band message source; non-preemptive next-turn prepend queue on
+  the warm-agent input stream.
+- **Multi-CLI employee hardening** — per-binary memory file matrix
+  (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `QWEN.md`), shared STT-
+  correction protocol injected into both Secretary persona and employee
+  template, cross-CLI `--resume` flag in heartbeat respawn, first-launch
+  auth-picker guards for codex / gemini / qwen.
+- **README**: memory-update flow diagram (read on demand via Skill;
+  write-up via harvest-on-retire; write-down via HR Path A/B). Comparison
+  table sharpened with *auto-create persistent employee teams* and
+  *hierarchical memory recycling* rows. Per-CLI install links to each
+  CLI's docs + repo (Claude Code, Codex, Gemini CLI, Qwen Code).
+- **Tooling**: `scripts/install-git-hooks.sh` + `scripts/git-commit-narrow.sh`
+  — off-by-default path-scoped commit guard, prevents accidentally
+  bundling unrelated previously-staged files.
+
+### Fixed (post-CHANGELOG-init)
+
+- `apps/web/app/api/v1/boss-memory/route.ts`: discriminate
+  `BossMemoryBudgetExceeded` (now returns 413 with usage details) from
+  `BossMemoryError` (500); was a pre-existing typecheck error.
+- Webpack `node:` scheme imports in HR modules — switched to
+  `eval('require')` + bare module names (mirrors `heartbeat.ts` pattern).
 
 ### Added
 
