@@ -9,6 +9,7 @@ import {
   fetchTranscriptFromDesk,
   clearStoredMessages,
 } from './owner-adapter';
+import { useSecretaryProjects } from './useSecretaryProjects';
 
 /**
  * Lives at the root layout level (above AppShell + nav) so the
@@ -54,6 +55,22 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
 }
 
 function ChatRuntimeInner({ children }: { children: ReactNode }) {
+  // Multi-secretary-project parity with mobile. activeId drives which
+  // transcript to hydrate from + which project_id to post on each turn.
+  const { activeId } = useSecretaryProjects();
+  // Re-mount the bound runtime whenever the active project changes so the
+  // adapter closure captures the new project_id and assistant-ui drops the
+  // old project's message buffer (would otherwise leak across switches).
+  return <ChatRuntimeForProject key={activeId ?? 'owner'} projectId={activeId}>{children}</ChatRuntimeForProject>;
+}
+
+function ChatRuntimeForProject({
+  projectId,
+  children,
+}: {
+  projectId: string | null;
+  children: ReactNode;
+}) {
   const stored = useMemo(() => loadInitialMessages(), []);
   // chat-sync: always try to hydrate from the desk transcript (shared source of
   // truth) so messages sent from mobile show up here. Strategy:
@@ -69,7 +86,7 @@ function ChatRuntimeInner({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchTranscriptFromDesk().then((deskMsgs) => {
+    fetchTranscriptFromDesk(projectId).then((deskMsgs) => {
       if (cancelled) return;
       if (deskMsgs.length > 0) {
         // Desk transcript is the primary source. Use it if it has more messages
@@ -94,13 +111,13 @@ function ChatRuntimeInner({ children }: { children: ReactNode }) {
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [projectId]);
 
   const initialMessages = hydrated ?? (stored.length > 0 ? stored : []);
   const remountKey = hydrated ? 'desk-transcript' : (stored.length > 0 ? 'stored' : 'empty');
 
   return (
-    <ChatRuntimeBound key={remountKey} initialMessages={initialMessages}>
+    <ChatRuntimeBound key={remountKey} initialMessages={initialMessages} projectId={projectId}>
       {children}
     </ChatRuntimeBound>
   );
@@ -108,12 +125,14 @@ function ChatRuntimeInner({ children }: { children: ReactNode }) {
 
 function ChatRuntimeBound({
   initialMessages,
+  projectId,
   children,
 }: {
   initialMessages: ThreadMessageLike[];
+  projectId: string | null;
   children: ReactNode;
 }) {
-  const adapter = useMemo(() => makeOwnerAdapter(), []);
+  const adapter = useMemo(() => makeOwnerAdapter({ projectId }), [projectId]);
   const runtime = useLocalRuntime(adapter, { initialMessages });
   return (
     <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>

@@ -6,6 +6,7 @@
  */
 
 import { HealthDot } from './HealthDot';
+import { SecretaryProjectSwitcher } from './SecretaryProjectSwitcher';
 
 export function Topbar() {
   return (
@@ -13,6 +14,7 @@ export function Topbar() {
       <a href="/" className="topbar-brand" aria-label="Holon — go to Today">
         <img src="/assets/holon-logo.svg" alt="" />
       </a>
+      <SecretaryProjectSwitcher />
       <div className="topbar-actions">
         <HealthDot />
         <button className="topbar-icon-btn" data-inert="search" aria-label="Search">
