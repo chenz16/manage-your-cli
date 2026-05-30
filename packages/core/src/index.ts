@@ -311,3 +311,6 @@ export {
   type MemberSeed,
   type AddMemberInput,
 } from './rooms-service.js';
+
+// TTS preprocessing (shared by desk + mobile)
+export { sanitizeForTts } from './sanitize-for-tts.js';

@@ -196,46 +196,12 @@ function speakViaSpeechSynthesis(text: string, opts: TtsOpts): Promise<void> {
  * @param opts   Optional per-staff lang (BCP 47) and rate (0.7/1.0/1.3).
  * @throws Error if all paths fail.
  */
-/**
- * Strip the noise that TTS engines mispronounce or read literally:
- *  - markdown markers (#, *, _, `, ~, > blockquotes)
- *  - fenced code blocks (the engine drones the language tag + every char)
- *  - bullet markers (-, +, • at line start)
- *  - URLs (read as letter-by-letter, useless aloud)
- *  - emojis + most other non-text symbol glyphs
- *  - markdown link text [foo](url) → keep "foo", drop the URL
- * Owner ask: "TTS读取的时候 你能不能先做个preprocess 特殊字符不是文字那种的不要读".
- */
-function sanitizeForTts(raw: string): string {
-  let s = raw;
-  // Strip fenced code blocks first (their content is rarely worth speaking).
-  s = s.replace(/```[\s\S]*?```/g, ' ');
-  // Inline `code` → drop backticks, keep text.
-  s = s.replace(/`([^`]+)`/g, '$1');
-  // Markdown links [text](url) → text.
-  s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-  // Bare URLs (http/https/www).
-  s = s.replace(/https?:\/\/\S+/g, ' ');
-  s = s.replace(/\bwww\.\S+/g, ' ');
-  // Heading hashes at line start.
-  s = s.replace(/^\s{0,3}#{1,6}\s+/gm, '');
-  // Blockquote markers.
-  s = s.replace(/^\s*>+\s?/gm, '');
-  // List bullet markers at line start.
-  s = s.replace(/^\s*[-*+•]\s+/gm, '');
-  // Bold/italic/strike markers — keep word inside.
-  s = s.replace(/(\*{1,3}|_{1,3}|~{1,2})(\S[\s\S]*?\S)\1/g, '$2');
-  // Stray standalone markers.
-  s = s.replace(/[*_~]+/g, ' ');
-  // Emojis + most pictographs. Keep CJK + Latin + Cyrillic + Arabic +
-  // Devanagari + common punctuation. Strip Extended Pictographic.
-  s = s.replace(/\p{Extended_Pictographic}/gu, ' ');
-  // Collapse leftover symbol clusters that aren't textual punctuation.
-  s = s.replace(/[#@^|<>{}[\]\\]/g, ' ');
-  // Collapse whitespace.
-  s = s.replace(/\s+/g, ' ').trim();
-  return s;
-}
+// Shared TTS preprocessor (covers markdown, urls, emojis, file paths,
+// symbol blocks, etc.). Lives in @holon/core so the desk endpoint
+// (/api/v1/connectors/voice/tts) and the mobile speak() path filter
+// identically and never drift. Owner asked twice ("再试一遍优化方案") —
+// see packages/core/src/sanitize-for-tts.ts for the full spec.
+import { sanitizeForTts } from '@holon/core';
 
 export async function speak(text: string, opts: TtsOpts = {}): Promise<void> {
   text = sanitizeForTts(text);

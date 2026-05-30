@@ -23,7 +23,7 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { synthesizeEdgeTts } from '@holon/core';
+import { synthesizeEdgeTts, sanitizeForTts } from '@holon/core';
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 
 function isSameOriginRequest(req: Request): boolean {
@@ -71,8 +71,20 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
+  // Strip markdown / urls / emojis / symbols / file paths before handing
+  // text to edge-tts (owner: "TTS 把特殊字符和信号符号也读出来,需要过滤").
+  // Shared with mobile through @holon/core so both clients filter the same
+  // way — server-posted text (e.g. from desk-side speak) doesn't bypass.
+  const cleaned = sanitizeForTts(text);
+  if (!cleaned) {
+    return NextResponse.json(
+      { error: 'bad_request', message: 'text contained no speakable content after sanitization.' },
+      { status: 400 },
+    );
+  }
+
   const result = await synthesizeEdgeTts({
-    text,
+    text: cleaned,
     ...(typeof lang === 'string' && lang.length > 0 ? { lang } : { lang: 'zh-CN' }),
   });
 
