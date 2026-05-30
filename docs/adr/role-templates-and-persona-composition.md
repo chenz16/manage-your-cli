@@ -269,6 +269,45 @@ Six lookups across the major candidate sources. Findings:
 4. Owner's `~/.claude/projects/-home-chenz-project/memory/` (canonical owner roles)
 5. CrewAI schema (design influence only — not content)
 
+### Part A addendum (owner ask 2026-05-30) — Karpathy + dev-leaning community + role-play coverage
+
+Owner flagged two gaps after the first pass:
+
+> 特别关注 Andrew Karpathy 啥的那个 Tesla 的那个以前的 CTO 相关的 还有网友总结的那些 可能主要针对开发者的; 但是应该也有针对不同角色扮演的.
+
+**Karpathy as architectural reference (NOT a role-template source).** Karpathy's
+April 2026 [LLM Wiki Gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+proposes a plain-markdown agent-maintained personal knowledge base that pre-
+compiles knowledge into structured interlinked entity pages — explicitly
+anti-RAG. **Our boss-memory layout is architecturally a multi-agent + hierarchical
+generalization of this.** Cite him as kindred-art prior work in marketing /
+positioning, not in the source library. Same for his persona-prompting commentary
+("review from senior code reviewer perspective" raises quality) — that's an
+inspiration for composition's `compose_with`-mode roles, not content to import.
+
+**Additional community-curated seed candidates (dev-leaning).** Three repos
+worth weighing against `wshobson/agents` for the engineering layer:
+
+| Source | URL | Scale | Verdict |
+|---|---|---|---|
+| `VoltAgent/awesome-claude-code-subagents` | https://github.com/VoltAgent/awesome-claude-code-subagents | 154+ subagents, 10 categories | **Seed (dev layer).** Already listed alongside `wshobson` in the main table; keep both. |
+| `rohitg00/awesome-claude-code-toolkit` | https://github.com/rohitg00/awesome-claude-code-toolkit | 135 agents, 35 skills, 42 commands | **Watch.** Largest aggregate, but mixed quality and license discipline (per-entry check needed). Use as discovery, not bulk-import. |
+| `GetBindu/awesome-claude-code-and-skills` | https://github.com/GetBindu/awesome-claude-code-and-skills | Community-curated | **Watch.** Smaller; complementary to VoltAgent / wshobson rather than additive. |
+| `sub-agents.directory` | https://sub-agents.directory | 100+ subagent prompts + MCP servers | **Watch.** Lookup surface, not a forkable corpus. |
+
+Lesson: the developer-focused supply is **abundant and overlapping** — picking
+one canonical seed (wshobson) + watch-list for new entries beats merging four
+catalogs into noise. Cull aggressively at import.
+
+**Role-play coverage (non-dev).** `f/awesome-chatgpt-prompts` already carries
+the role-play long tail (interviewer, linguist, doctor, life coach, language
+tutor, etc.) — most are CC0 single-string `act_as` prompts. The conversion
+from `act_as` → our 5-section schema is mechanical. Treat as a separate import
+pass after the dev layer ships, since role-play personas need light
+domain-prefix curation (e.g., "doctor" → "medical thinking partner — not
+clinical advice" framing) to avoid liability/scope drift. Note this as an
+import-pipeline filter, not a per-template hand-edit.
+
 ## Part C — Catalog seed
 
 See `role-templates/CATALOG.md` (sibling file in this commit) for the full

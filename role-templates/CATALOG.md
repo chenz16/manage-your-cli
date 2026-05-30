@@ -24,6 +24,23 @@ reviews the ADR; seeding lands as a follow-up PR.
 | `finance-analyst` | Unit economics, runway, pricing scenarios. | `[]` | f/awesome-chatgpt-prompts |
 | `customer-support` | Triage tickets, draft replies, route escalations. | `[writer-editor]` | f/awesome-chatgpt-prompts |
 
+### Role-play cluster (non-dev — owner ask 2026-05-30 "应该也有针对不同角色扮演的")
+
+`f/awesome-chatgpt-prompts` (CC0) carries a deep role-play long tail; these
+are the priority picks. Convert from single-string `act_as` → 5-section
+schema during import; apply a non-clinical / non-legal-advice framing prefix
+where the role flirts with regulated domains.
+
+| ID | One-line | Suggested `compose_with` defaults | Likely source |
+|---|---|---|---|
+| `life-coach` | Thinking partner for goals, habits, decisions. Reflective, non-prescriptive. | `[]` | f/awesome-chatgpt-prompts |
+| `interviewer` | Mock interviewer: behavioral / technical / case. Owner picks the role + level. | `[]` | f/awesome-chatgpt-prompts |
+| `negotiator` | Walks owner through positions, BATNA, scripts; rehearses tough conversations. | `[]` | f/awesome-chatgpt-prompts |
+| `language-tutor` | Drills target language; corrects mistakes; explains grammar in owner's L1. | `[]` | f/awesome-chatgpt-prompts |
+| `thinking-partner` | Socratic counterpart for complex decisions; surfaces blind spots, not opinions. | `[]` | f/awesome-chatgpt-prompts + Karpathy-style "review from <perspective>" pattern |
+| `medical-thinking-partner` | **Non-clinical** information partner for symptoms / research; routes to real care. | `[]` | f/awesome-chatgpt-prompts (with non-advice framing prefix) |
+| `legal-thinking-partner` | **Non-legal-advice** issue-spotter; flags risk, says "see a lawyer". | `[]` | f/awesome-chatgpt-prompts (with non-advice framing prefix) |
+
 ## Tag taxonomy (initial)
 
 Used by `holon-create-agent`'s fuzzy match (§3 step 1):
