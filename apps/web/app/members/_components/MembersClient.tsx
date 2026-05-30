@@ -15,6 +15,7 @@ import { useT } from '../../../lib/i18n/useT';
 import type { UseTReturn } from '../../../lib/i18n/useT';
 import { ProjectSwitcher } from '../../_components/ProjectSwitcher';
 import { useProjects } from '../../../lib/hooks/useProjects';
+import { useSecretaryProjects } from '../../_components/useSecretaryProjects';
 
 // xterm.js references `self` at module top-level → crashes SSR. Load
 // CliTerminal client-only via `next/dynamic` so its xterm import chain
@@ -678,16 +679,29 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
     );
   }, [roster, activeProjectId]);
 
+  // Multi-secretary-project scope (mobile parity): when an active sproj_*
+  // is set in the top-bar SecretaryProjectSwitcher, also filter by
+  // tags.includes('project:<sproj_id>'). This is STRICT — mirrors mobile's
+  // per-project staff scope where employees belong to a project, not a
+  // global pool. Old project_ids filter (above) keeps coexisting for the
+  // legacy holon-engineering project concept.
+  const { activeId: activeSecretaryProjectId } = useSecretaryProjects();
+  const sprojFiltered = useMemo(() => {
+    if (!activeSecretaryProjectId) return projectFiltered;
+    const tag = `project:${activeSecretaryProjectId}`;
+    return projectFiltered.filter((s) => (s.tags ?? []).includes(tag));
+  }, [projectFiltered, activeSecretaryProjectId]);
+
   const counts = useMemo(() => {
     const c: Record<Exclude<StaffKind, 'all'>, number> = { peer: 0, virtual: 0, linked: 0, cli: 0 };
-    for (const s of projectFiltered) c[staffKindOf(s)] += 1;
+    for (const s of sprojFiltered) c[staffKindOf(s)] += 1;
     return c;
-  }, [projectFiltered]);
+  }, [sprojFiltered]);
 
   const visible = useMemo(() => {
-    if (filter === 'all') return projectFiltered;
-    return projectFiltered.filter((s) => staffKindOf(s) === filter);
-  }, [projectFiltered, filter]);
+    if (filter === 'all') return sprojFiltered;
+    return sprojFiltered.filter((s) => staffKindOf(s) === filter);
+  }, [sprojFiltered, filter]);
 
   const chipOrder: StaffKind[] = ['all', 'peer', 'virtual', 'linked', 'cli'];
 
@@ -705,7 +719,7 @@ export function MembersClient({ initial, owner }: { initial: ListStaffResponse; 
           />
           {projects.length >= 2 && <div style={{ width: 8 }} />}
           {chipOrder.map((k) => {
-            const n = k === 'all' ? projectFiltered.length : counts[k];
+            const n = k === 'all' ? sprojFiltered.length : counts[k];
             const active = filter === k;
             return (
               <button
