@@ -189,9 +189,23 @@ keep agents warm instead.
 
 ## Install & Use
 
+**Full install guide: [`INSTALL.md`](INSTALL.md)** (one page, copy-pasteable
+commands). The version below is the at-a-glance flow.
+
+### 0. Pre-flight (recommended)
+
+```bash
+bash scripts/check-deps.sh
+```
+
+Reports MISSING / OK for every required and optional dependency, with the
+exact distro-specific install command for each missing one.
+
 ### 1. Prerequisites
 
-- **Node.js 20.10.0+** with corepack: `corepack enable`
+- **Node.js 22.x** with corepack: `corepack enable`
+- **pnpm 9.10.0**: `corepack prepare pnpm@9.10.0 --activate`
+- **tmux** + **git**
 - **At least one CLI subscription** logged in on your machine:
   - Claude Code: `npm install -g @anthropic-ai/claude-code` then `claude` (OAuth)
   - Codex: `npm install -g @openai/codex` then `codex` (OAuth)
