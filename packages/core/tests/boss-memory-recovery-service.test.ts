@@ -16,11 +16,11 @@ let auditLines: string[];
 let originalLog: typeof console.log;
 
 function rosterPath(): string {
-  return join(workDir, 'boss', 'MEMORY', 'roster.md');
+  return join(workDir, 'boss', 'owner', 'MEMORY', 'roster.md');
 }
 
 function seedRosterAtBudget(): void {
-  const mDir = join(workDir, 'boss', 'MEMORY');
+  const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
   mkdirSync(mDir, { recursive: true });
   const big = 'x'.repeat(95);
   writeFileSync(rosterPath(), `---\nscope: roster\nbudget: 100\n---\n${big}`);
