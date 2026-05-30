@@ -1003,20 +1003,6 @@ export default function ConnectorsPage() {
             </div>
           </div>
 
-          {/* Hermes HTTP API */}
-          <div className="conn-plugin" style={{ padding: '12px 14px' }}>
-            <div className="conn-plugin-head">
-              <div className="conn-plugin-title-wrap">
-                <div className="conn-plugin-title-row">
-                  <span className="conn-plugin-name">Hermes (HTTP API)</span>
-                </div>
-                <p className="conn-plugin-desc">
-                  Connects the Hermes HTTP API to the A2A protocol via a lightweight HTTP adapter that translates Hermes requests into A2A tasks.
-                </p>
-              </div>
-              <span className="conn-plugin-state">Planned</span>
-            </div>
-          </div>
         </div>
       </section>
 
