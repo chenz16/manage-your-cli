@@ -64,6 +64,17 @@ import { discoverDeskOnLan } from '../_lib/desk-discovery';
 import { speak as deviceTtsSpeak, stop as deviceTtsStop, primeAudio as ttsPrimeAudio, type TtsOpts } from '../_lib/tts';
 import * as nativeStt from '../_lib/native-stt';
 import { deskOrigin } from '../_lib/desk-origin';
+import {
+  readDeskOrigin,
+  clearAllDeskUrls,
+  pingDesk,
+  writeTailscaleUrl,
+  readTailscaleUrl,
+  readTailscaleEnabled,
+  writeTailscaleEnabled,
+  clearTailscaleUrl,
+} from '../_lib/desk-url-storage';
+import { OnboardingDeskUrl } from './OnboardingDeskUrl';
 import { useHealth, type HealthSnapshot } from '../_lib/health';
 
 // ─── TTS staff context ────────────────────────────────────────────────────────
@@ -7613,15 +7624,140 @@ function MarketplaceView({
 
 // ─── End Marketplace views ───────────────────────────────────────────────────
 
+// Slice-1 settings block: shows the current desk URL, lets the user wipe it
+// to re-run onboarding, and configures an optional Tailscale failover URL.
+function DeskConnectionSection({
+  connection,
+  onChangeDesk,
+}: {
+  connection: MobileDesktopConnection;
+  onChangeDesk: () => void;
+}) {
+  const [tailscaleEnabled, setTailscaleEnabled] = useState<boolean>(() => readTailscaleEnabled());
+  const [tailscaleUrl, setTailscaleUrl] = useState<string>(() => readTailscaleUrl() ?? '');
+  const [tailscaleState, setTailscaleState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'verifying' }
+    | { kind: 'ok'; version?: string }
+    | { kind: 'fail'; error: string }
+  >({ kind: 'idle' });
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  async function verifyTailscale() {
+    if (!tailscaleUrl.trim()) {
+      setTailscaleState({ kind: 'fail', error: '请输入 Tailscale URL' });
+      return;
+    }
+    setTailscaleState({ kind: 'verifying' });
+    const r = await pingDesk(tailscaleUrl, 5000);
+    if (r.ok) {
+      try { writeTailscaleUrl(tailscaleUrl); } catch { /* ignore */ }
+      setTailscaleState(r.version !== undefined ? { kind: 'ok', version: r.version } : { kind: 'ok' });
+    } else {
+      setTailscaleState({ kind: 'fail', error: r.error ?? '无法连接' });
+    }
+  }
+
+  function toggleEnabled() {
+    const next = !tailscaleEnabled;
+    setTailscaleEnabled(next);
+    writeTailscaleEnabled(next);
+    if (!next) {
+      clearTailscaleUrl();
+      setTailscaleUrl('');
+      setTailscaleState({ kind: 'idle' });
+    }
+  }
+
+  const stateIndicator =
+    tailscaleState.kind === 'ok' ? '🟢 可达'
+    : tailscaleState.kind === 'fail' ? '🔴 不可达'
+    : tailscaleState.kind === 'verifying' ? '⏳ 验证中…'
+    : '⚪ 未验证';
+
+  return (
+    <div className="mobile-me-section" style={{ padding: '12px 16px', borderTop: '1px solid #eee', marginTop: 12 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Desk 连接</div>
+      <div style={{ fontSize: 13, color: '#444', marginBottom: 8 }}>
+        当前桌面: <code>{connection.baseUrl}</code>
+      </div>
+      <button
+        type="button"
+        className="mobile-me-row"
+        onClick={() => {
+          if (window.confirm('更换桌面会清除配对和桌面地址,需要重新设置和配对。继续?')) {
+            onChangeDesk();
+          }
+        }}
+      >
+        <span className="mobile-me-row-title">更换桌面</span>
+        <span className="mobile-collapse-chevron">›</span>
+      </button>
+
+      <div style={{ fontWeight: 600, marginTop: 16, marginBottom: 8 }}>远程访问 (Tailscale)</div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+        <input type="checkbox" checked={tailscaleEnabled} onChange={toggleEnabled} />
+        启用 Tailscale 备用通道
+      </label>
+
+      {tailscaleEnabled && (
+        <div style={{ marginTop: 10 }}>
+          <input
+            type="url"
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="http://100.x.x.x:3110"
+            value={tailscaleUrl}
+            onChange={(e) => { setTailscaleUrl(e.target.value); setTailscaleState({ kind: 'idle' }); }}
+            style={{ width: '100%', padding: 8, fontSize: 14, border: '1px solid #ddd', borderRadius: 4 }}
+          />
+          <button
+            type="button"
+            className="mobile-pairing-submit"
+            style={{ marginTop: 8 }}
+            onClick={() => { void verifyTailscale(); }}
+            disabled={tailscaleState.kind === 'verifying'}
+          >
+            验证
+          </button>
+          <div style={{ marginTop: 8, fontSize: 13 }}>
+            {stateIndicator}
+            {tailscaleState.kind === 'fail' && tailscaleState.error ? ` — ${tailscaleState.error}` : ''}
+          </div>
+        </div>
+      )}
+
+      <details
+        open={helpOpen}
+        onToggle={(e) => setHelpOpen((e.target as HTMLDetailsElement).open)}
+        style={{ marginTop: 10, fontSize: 13, color: '#555' }}
+      >
+        <summary>如何配置 Tailscale?</summary>
+        <ol style={{ paddingLeft: 18, marginTop: 6 }}>
+          <li>桌面安装 Tailscale: <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">tailscale.com/download</a></li>
+          <li>此手机安装 Tailscale (App Store / Play Store)</li>
+          <li>两端登录同一个 Tailscale 账号</li>
+          <li>桌面终端运行 <code>tailscale ip</code> 找到 IP</li>
+          <li>粘贴 URL 后点 验证</li>
+        </ol>
+      </details>
+    </div>
+  );
+}
+
 function MeTab({
   connection,
   onDisconnect,
+  onChangeDesk,
   onUseSkill,
   onSubviewChange,
   activeProjectId,
 }: {
   connection: MobileDesktopConnection;
   onDisconnect: () => void;
+  onChangeDesk: () => void;
   onUseSkill: (text: string) => void;
   onSubviewChange: (inSubview: boolean) => void;
   activeProjectId?: string | null | undefined;
@@ -8083,6 +8219,8 @@ function MeTab({
         <span className="mobile-me-row-title">{dedupeBusy ? '清理中…' : '清理重复员工'}</span>
         <span className="mobile-collapse-chevron">›</span>
       </button>
+      <DeskConnectionSection connection={connection} onChangeDesk={onChangeDesk} />
+
       <button
         type="button"
         className="mobile-disconnect-button"
@@ -8743,6 +8881,13 @@ export function WeizoApp() {
   const [connection, setConnection] = useState<MobileDesktopConnection | null>(null);
   const discoveringRef = useRef(false); // guards LAN re-discovery (one sweep at a time)
   const [booted, setBooted] = useState(false);
+  // Slice-1 user-configurable desk URL. Null until the user completes
+  // OnboardingDeskUrl (or a build-time env baked one is present). When null,
+  // the entire shell is replaced by the onboarding screen.
+  const [hasDeskUrl, setHasDeskUrl] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return !!process.env.NEXT_PUBLIC_DESK_ORIGIN;
+    return !!readDeskOrigin() || !!process.env.NEXT_PUBLIC_DESK_ORIGIN;
+  });
   const [tab, setTab] = useState<TabKey>('chats');
   const [staff, setStaff] = useState<Staff[]>(() => getCachedStaff());
   const [agentUsage, setAgentUsage] = useState<Record<string, AgentUsage>>({});
@@ -9083,6 +9228,19 @@ export function WeizoApp() {
     setDesktopOffline(false);
   }
 
+  // Slice-1 "Change desk": wipe BOTH the pair token AND the stored desk URL
+  // so the app falls all the way back to OnboardingDeskUrl. Used when the
+  // user is moving to a different desk machine.
+  function changeDesk() {
+    clearDesktopConnection();
+    clearAllDeskUrls();
+    setConnection(null);
+    setHasDeskUrl(false);
+    setSelectedStaff(null);
+    setSelectedRoom(null);
+    setDesktopOffline(false);
+  }
+
   function openTab(next: TabKey) {
     setTab(next);
     setSelectedStaff(null);
@@ -9129,6 +9287,14 @@ export function WeizoApp() {
 
   // Don't flash anything on SSR — wait until client boot
   if (!booted) return null;
+
+  // Slice-1 generic-APK onboarding: if no desk URL is configured yet (clean
+  // install, no build-time env baked in), show OnboardingDeskUrl. After it
+  // saves to localStorage we flip hasDeskUrl=true, which then renders the
+  // normal pairing screen below (with the user-typed URL as the default).
+  if (!hasDeskUrl) {
+    return <OnboardingDeskUrl onContinue={() => setHasDeskUrl(true)} />;
+  }
 
   // M-L-FIX3: pair-first. First-run (no stored connection) renders the pairing
   // screen as the sole UI. Once PairingPrompt calls onPaired(), handlePaired()
@@ -9291,6 +9457,7 @@ export function WeizoApp() {
           <MeTab
             connection={connection!}
             onDisconnect={disconnect}
+            onChangeDesk={changeDesk}
             onSubviewChange={setMeSubview}
             activeProjectId={activeProjectId}
             onUseSkill={(text) => {
