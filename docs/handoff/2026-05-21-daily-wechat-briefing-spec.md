@@ -1,15 +1,9 @@
 # Spec: 每日微信 Briefing（定时自动摘要）
 
-> **Status: Historical record.** This document captures a point-in-time
-> snapshot. References to **Hermes** / `hermes-acp` /
-> `hermes_profile_generic_v1` describe the runtime used by the sister
-> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
-> at the time of writing. `manage-your-cli` does not bundle, link to, or
-> depend on Hermes — its live substrate is a direct multi-CLI adapter
-> (`claude` / `codex` / `gemini` / `qwen`) under
-> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
-> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
-> The body below is preserved unedited for history.
+> **Status: design-ready spec (provider-agnostic).** This spec dates from
+> 2026-05-21. The runtime references in the body are provider-agnostic;
+> implement against the current multi-CLI substrate
+> (`packages/core/src/cli-adapters.ts`, `apps/web/lib/warm-agent.ts`).
 
 Status: design-ready
 Priority: P0（所有 5 个目标行业都需要）
