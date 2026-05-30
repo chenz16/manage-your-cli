@@ -9,7 +9,10 @@ Position: This is the practical "how do we build the MVP" guide. It lives betwee
 Build the Holon MVP as a coherent app that:
 
 - exposes both Cores cleanly (Core 1 = local agent management; Core 2 = hybrid employment interconnect, per `functional-architecture.md` § 2)
-- ships Hermes as the only production runtime adapter (per `runtime-adapter-interface.md`)
+- ships the **multi-CLI adapter** as the production runtime (per
+  `runtime-adapter-interface.md` and `packages/core/src/cli-adapters.ts` —
+  claude / codex / gemini / qwen; no Hermes; intelligence comes from the
+  user's CLI subscription)
 - carries forward the working pieces of the mibusy V3 prototype (peer routing, facade pattern, explicit subagent creation)
 - enforces the seven invariants from `functional-architecture.md` § 7 (especially flat-roster and no-silent-failure) at the code level
 
@@ -71,7 +74,8 @@ V1 build approach: mobile-responsive web (PWA). No native iOS/Android shell, no 
 Primary V1 execution surface.
 
 - packaged web app (Tauri preferred over Electron for footprint)
-- local Hermes-based AI staff via the runtime adapter
+- local AI staff via the multi-CLI adapter (each AI member is a CLI process
+  the user has logged into — Claude Code / Codex / Gemini CLI / Qwen Code)
 - local Postgres or SQLite database
 - exposes the same product API used by hosted nodes
 
@@ -83,7 +87,7 @@ Out of V1. CLI takeover is hard to secure and normalize; provider CLIs are not H
 
 ### 3.4 Cowork-Like External Agent Results
 
-Out of V1. External agent products may later become runtime adapters if they expose stable APIs (per the abstract interface in `runtime-adapter-interface.md`). V1 ships Hermes only.
+Out of V1. External agent products may later become runtime adapters if they expose stable APIs (per the abstract interface in `runtime-adapter-interface.md`). V1 ships the multi-CLI adapter only.
 
 ### 3.5 The MVP Execution Rule
 
@@ -92,9 +96,12 @@ MVP local agents are controlled by Holon end-to-end:
 ```
 Holon assignment
   ↓ Core 1 router (per functional-architecture.md § 3.3)
-Holon runtime adapter (per runtime-adapter-interface.md)
+Holon runtime adapter (per runtime-adapter-interface.md;
+                       impl: packages/core/src/cli-adapters.ts)
   ↓
-Hermes local agent
+Official CLI binary (claude / codex / gemini / qwen) —
+  secretary: warm `claude --print --input-format stream-json`
+  employee: tmux session running the chosen CLI
   ↓ normalized RuntimeEvent stream (per runtime-adapter-interface.md § RuntimeEvent)
 Holon deliverable (per deliverable-spec.md)
 ```
@@ -111,7 +118,7 @@ No V1 path requires a third-party agent CLI, a manually watched terminal, an ext
 | API routes | Next.js API or Hono on Node |
 | Core domain | TypeScript (pure, framework-free where possible) |
 | Protocol & types | TypeScript + Zod for runtime validation |
-| Runtime adapter | TypeScript wrapper; Hermes integration in whichever language Hermes prefers (likely Python) — adapter exposes the TypeScript interface |
+| Runtime adapter | TypeScript — drives the user's installed CLI binary (claude / codex / gemini / qwen) via `child_process.spawn` (warm `stream-json` for the secretary; tmux for employees). See `packages/core/src/cli-adapters.ts` + `apps/web/lib/warm-agent.ts`. |
 | Database access | Drizzle (preferred) or Kysely; TypeScript-first, schema reflection works in both Postgres and SQLite |
 | Validation | Zod everywhere boundaries |
 | Monorepo | pnpm workspace |
@@ -158,7 +165,7 @@ holon/
 │   ├── peer-protocol          # JSON-RPC client/server, signing, idempotency
 │   ├── peer-relay-client      # SSE + HTTPS POST against the cloud relay
 │   ├── runtime-contract       # RuntimeAdapter interface + RuntimeEvent types
-│   ├── runtime-hermes         # Hermes implementation of RuntimeAdapter
+│   ├── core                   # includes cli-adapters.ts — the multi-CLI RuntimeAdapter (claude/codex/gemini/qwen)
 │   ├── runtime-dummy          # Test/dev implementation of RuntimeAdapter
 │   ├── runtime-conformance    # Conformance suite that runs against any adapter
 │   ├── core1-types            # Staff, Role, Substrate, Autonomy types
@@ -187,7 +194,7 @@ holon/
 | `packages/peer-protocol` | `peer-communication-architecture.md` § 5 wire format + § 9 idempotency |
 | `packages/peer-relay-client` | `peer-communication-architecture.md` § 6 transport (POST + SSE) |
 | `packages/runtime-contract` | `runtime-adapter-interface.md` |
-| `packages/runtime-hermes` | `runtime-adapter-interface.md` § "First Implementation: Hermes Adapter" |
+| `packages/core` (`cli-adapters.ts`, `cli-session-service.ts`, `cli-dispatch-service.ts`) + `apps/web/lib/warm-agent.ts` | `runtime-adapter-interface.md` § runtime contract — implemented as the multi-CLI adapter (warm secretary + tmux employees) |
 | `packages/runtime-dummy` | `runtime-adapter-interface.md` § "Test/Dummy Adapter" |
 | `packages/runtime-conformance` | `runtime-adapter-interface.md` § "Acceptance Criteria" |
 | `packages/core1-types` | `local-agent-management.md` § 11 schemas |
@@ -207,7 +214,7 @@ When a contributor asks "where does X live?", this table is the answer.
 ```
 single web app process (Tauri shell or local browser)
 local database (SQLite or Postgres)
-Hermes runtime adapter
+Multi-CLI runtime adapter (drives user's installed CLI binaries)
 no cloud connection
 ```
 
@@ -313,14 +320,49 @@ Implements `peer-communication-architecture.md` § 6:
 - Heartbeat tracking (15s) and reconnect with `Last-Event-ID`
 - (V2) WebRTC data channel for direct-peer
 
-### 7.5 Runtime Adapter Layer (`packages/runtime-contract` + `packages/runtime-hermes`)
+### 7.5 Runtime Adapter Layer — The Multi-CLI Adapter
 
-The contract is fully specified in `runtime-adapter-interface.md`. Implementation notes:
+The contract is fully specified in `runtime-adapter-interface.md`. The
+shipped implementation is **not a wrapped LLM runtime**; it is a thin shell
+over the user's installed CLI binaries. Per `CLAUDE.md` § North Star: all
+intelligence is the CLI's; we add only context + memory + orchestration.
 
-- `runtime-contract` is pure types + helpers; no dependencies.
-- `runtime-hermes` lives in TypeScript; calls into Hermes via whatever language binding Hermes provides. The Holon side normalizes all events into `RuntimeEvent` before they cross the package boundary.
-- `runtime-dummy` is the reference test implementation (per spec § "Test/Dummy Adapter").
-- Hermes spike (per spec § "Open questions for Hermes integration spike") is a 1-week investigation that MUST happen before M1 starts.
+**Where it lives**
+
+| File | Role |
+|---|---|
+| `packages/core/src/cli-adapters.ts` | Per-binary descriptor (`binary`, `label`, `interactiveArgs`, `pretrust`) for `claude` / `codex` / `gemini` / `qwen`. Single source of truth for "what CLIs are supported." |
+| `packages/core/src/cli-session-service.ts` | Long-running tmux sessions for employees — watchable, driveable. |
+| `packages/core/src/cli-dispatch-service.ts` | Dispatch an instruction to an employee; capture pane; surface result. |
+| `packages/core/src/cli-screen-format.ts` | Clean-up + dedent of tmux capture for UI display. |
+| `packages/core/src/cli-memory-scaffold.ts` | Per-binary memory file matrix: writes `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `QWEN.md` according to which CLI the employee runs. Also installs recall Skills (per ADR `../adr/memory-as-skill.md`). |
+| `apps/web/lib/warm-agent.ts` | Owner-facing **Secretary** as a warm headless `claude --print --input-format stream-json` process. ~1s/turn after cold start. Drains synthetic-message queue (HR Path B, settle-watch followups) at turn boundary. |
+
+**Multi-CLI status**
+
+- **Employees**: any CLI mix (claude / codex / gemini / qwen). Each employee
+  runs in its own tmux session and reads its own per-binary memory file (per
+  matrix above).
+- **Secretary**: claude-pinned today — relies on Claude Code's
+  `--print --input-format stream-json` warm-process contract that the other
+  three CLIs don't expose the same way. Tracked in the README's comparison
+  table as a known asymmetry.
+
+**No bundled runtime**
+
+- No `runtime-hermes` package. No Hermes runtime adapter binary.
+- No model client library, no API-key surface in this app — every CLI handles
+  its own auth (user's OAuth/subscription).
+- The `runtime-dummy` package (test/dev double) is preserved for conformance
+  testing per `runtime-adapter-interface.md` § "Test/Dummy Adapter".
+
+**Why this shape**
+
+The thin-shell rule from `CLAUDE.md` § North Star — any "smart layer" must
+justify itself or default no. A bundled runtime would re-implement what the
+CLI already does, ship a step behind the frontier, and pull us off
+subscription-only. The multi-CLI adapter inverts the relationship: each CLI
+*is* the runtime; we orchestrate.
 
 ### 7.6 Database Layer (`packages/db`)
 
@@ -428,7 +470,7 @@ Exit gates:
 
 Goals:
 - `packages/runtime-dummy` complete with 5 test scenarios
-- `packages/runtime-hermes` minimum viable: spike findings doc landed; happy-path Hermes calls produce `RuntimeEvent` stream
+- multi-CLI adapter minimum viable (`packages/core/src/cli-adapters.ts` + warm-agent): warm secretary serves owner chat in ~1s/turn; employee tmux dispatch round-trip; happy path produces `RuntimeEvent` stream
 - `packages/core` services for: desk, staff, role, router, assignment, deliverable, audit
 - UI: create local AI staff, create assignment, watch event stream, view deliverable
 - Cultivation profile basic plumbing (storage; cultivation logic per `local-agent-management.md` § 7 in M2)
@@ -436,7 +478,7 @@ Goals:
 Exit gates:
 - ✓ Owner can create a desk, add an AI staff, give an assignment, see streamed events, get a deliverable — all in browser, all local
 - ✓ Runtime conformance suite passes against `runtime-dummy`
-- ✓ `runtime-adapter-interface.md` § "Acceptance Criteria" 1–7 pass against `runtime-hermes`
+- ✓ `runtime-adapter-interface.md` § "Acceptance Criteria" 1–7 pass against the multi-CLI adapter
 - ✓ Latency budget SLOs (`runtime-adapter-interface.md` § Latency Budget) met
 - ✓ Flat-roster invariant enforced at DB + API + runtime
 
@@ -493,7 +535,7 @@ Exit gates:
 
 These are the rules that keep the architecture coherent over time.
 
-1. **Product state lives above the runtime.** Holon decides what work exists, who owns it, who can receive it, and when it is done. Hermes (or any runtime) executes bounded local AI work — nothing more.
+1. **Product state lives above the runtime.** Holon decides what work exists, who owns it, who can receive it, and when it is done. The CLI adapter (or any future runtime) executes bounded local AI work — nothing more.
 2. **The two cores stay separate.** Core 1 code never imports from Core 2 except through the four declared seam crossings (per `functional-architecture.md` § 2.3). Linter enforces.
 3. **Specs are the contract; code is the implementation.** When code disagrees with a spec, the bug is in the code — open a PR to update the code. When the design is wrong, update the spec FIRST, then update the code.
 4. **No silent failure (per `functional-architecture.md` § 7.3).** Every error path surfaces in audit + UI. No bare `catch` blocks.
@@ -523,7 +565,7 @@ This doc depends on, in roughly the order a new contributor should read:
 4. **Job/queue infrastructure.** For the retry queue. PostgreSQL-backed (e.g., pg-boss) is simplest in V1; Redis/BullMQ if scale demands.
 5. **Object storage SDK.** AWS SDK for S3-compatible everywhere, or something abstraction-free. AWS SDK is fine; the deliverable layer abstracts the choice.
 6. **Tracing backend default.** Jaeger? Tempo? Honeycomb? Default to OTel collector forwarding wherever the operator chooses; ship a docker-compose with Jaeger for local dev.
-7. **Hermes language binding.** If Hermes is Python-first, the runtime-hermes adapter has a TypeScript ↔ Python boundary. gRPC? IPC over Unix socket? Direct subprocess with JSON streaming? Decide in the M1 spike.
+7. **Hermes language binding.** RESOLVED (2026-05-30): Hermes was removed. Intelligence comes from the user's installed CLI binaries via `child_process.spawn` (warm `stream-json` for the secretary, tmux for employees). No language boundary, no spike needed. See § 7.5.
 8. **Tauri vs Electron commitment.** DECIDED (ADR-005, 2026-05-15): Tauri for V1 packaged desktop; Electron pre-authorized as fallback if a hard blocker emerges during M1.x packaging investigation (three-criteria test in ADR-005 § 2). See `docs/decisions/005-v1-desktop-tauri.md`.
 
 These are tactical; resolve as we hit them. They do not block the spec set.
