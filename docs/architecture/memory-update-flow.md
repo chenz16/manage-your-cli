@@ -30,10 +30,10 @@ tree shape (`INDEX.md` + `MEMORY/*.md`) and the same Skill-based recall.
 ├── owner/                          # System 2
 │   ├── INDEX.md
 │   ├── MEMORY/*.md
+│   ├── hr-promotion-vetoes.json    # owner-authored vetoes (survive HR re-scaffold; see ADR § 4.9)
 │   └── hr/
 │       ├── persona.md              # owner-HR role + rubric
-│       ├── evaluations/<sproj_id>/YYYY-MM-DD.md
-│       └── promotion-vetoes.json
+│       └── evaluations/<sproj_id>/YYYY-MM-DD.md
 ├── projects/<sproj_id>/            # System 1
 │   ├── INDEX.md
 │   ├── MEMORY/*.md
@@ -189,7 +189,8 @@ the same target, HR auto-promotes:
 
 ### Promotion-veto JSON
 
-`~/holon-agents/boss/owner/hr/promotion-vetoes.json`:
+`~/holon-agents/boss/owner/hr-promotion-vetoes.json` (owner-global System 2
+root, **not** the HR-scoped subdir — see ADR § 4.9 for rationale):
 
 ```json
 {
@@ -229,10 +230,15 @@ smallest "pattern" signal. 24h matches a typical owner workday.
 - **Path A write race.** Two HR runs, same rule, same second: both compute
   the same rule-hash; atomic `renameSync` commits; identical content either
   way.
-- **Re-scaffold loses promotion-vetoes (ADR § 4.9 OPEN).** If owner-HR is
-  rebuilt from scratch, `promotion-vetoes.json` is lost. Two options:
-  (1) move vetoes into owner System 2 boss-memory proper; (2) make HR
-  scaffolding preservation-aware. (1) cleaner; (2) closer to current code.
+- **Re-scaffold loses promotion-vetoes (ADR § 4.9 — Resolved 2026-05-30).**
+  Resolution: vetoes now live at
+  `~/holon-agents/boss/owner/hr-promotion-vetoes.json` (owner-global
+  System 2 root), not inside the HR-scoped subdir. HR re-scaffolding
+  rebuilds `…/owner/hr/` only, leaving the veto file untouched. Legacy
+  installs migrate on first HR boot via atomic rename from the old
+  `…/owner/hr/promotion-vetoes.json` path (idempotent; no-op if the file
+  already lives at the new location). Spec lives in ADR § 4.9;
+  implementation deferred to Task #19.
 - **Skill edits don't hot-reload.** Skill files are read at CLI startup.
   Restart the secretary to pick up a description change.
 - **Author/target CLI mismatch.** Path A picks the file by the **target**'s
