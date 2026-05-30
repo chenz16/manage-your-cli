@@ -52,7 +52,14 @@ export async function POST(req: Request): Promise<Response> {
 
   const result = writeBossMemory(b.scope, b.text, projectId);
   if (!result.ok) {
-    return NextResponse.json({ error: result.message, code: result.error }, { status: 500 });
+    if ('error' in result) {
+      return NextResponse.json({ error: result.message, code: result.error }, { status: 500 });
+    }
+    return NextResponse.json({
+      error: 'budget_exceeded', code: 'budget_exceeded',
+      scope: result.scope, path: result.path,
+      used: result.used, limit: result.limit, attempted_chars: result.attempted_chars,
+    }, { status: 413 });
   }
   return NextResponse.json({ ok: true, scope: result.scope, path: result.path, ...(projectId ? { project_id: projectId } : {}) });
 }
