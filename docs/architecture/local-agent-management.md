@@ -188,7 +188,23 @@ A staff member's *substrate* is what physically backs them. Holon supports three
 
 ### 5.1 Local AI Staff
 
-Backed by the runtime adapter (Hermes for V1). Executes assignments through the contract defined in `runtime-adapter-interface.md`. Has tool scope, context permissions, budget caps, and autonomy level set by the owner. Produces deliverables that flow into the deliverable store.
+Backed by the **multi-CLI runtime adapter** — an official CLI binary the
+user has logged into (`claude` / `codex` / `gemini` / `qwen` — see
+`packages/core/src/cli-adapters.ts`). The secretary on each project runs as
+a warm `claude --print --input-format stream-json` process
+(`apps/web/lib/warm-agent.ts`); employees run inside persistent tmux
+sessions (`packages/core/src/cli-session-service.ts`), watchable and
+driveable. Each AI member reads its own per-binary memory file
+(`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `QWEN.md`) materialized by
+`packages/core/src/cli-memory-scaffold.ts`. Executes assignments through the
+contract defined in `runtime-adapter-interface.md`. Has tool scope, context
+permissions, budget caps, and autonomy level set by the owner. Produces
+deliverables that flow into the deliverable store.
+
+> Earlier drafts named the runtime "Hermes." The codebase no longer carries a
+> Hermes adapter — intelligence comes entirely from the user's CLI
+> subscription. See `implementation-architecture.md` § 7.5 for the current
+> shape.
 
 ### 5.2 CLI Executor
 
@@ -246,7 +262,7 @@ This is a hard rule. There is no "auto-spawn" path: no AI staff member can reque
 2. Owner picks substrate type (AI / CLI / peer). Per ADR-015, myself is no longer a substrate; owner manual work goes to Today's personal queue.
 3. Owner picks role (from standard library or custom).
 4. Owner sets initial config (name, tool scope, autonomy level).
-5. (For AI staff) Owner picks the underlying agent profile (from a library of Hermes profiles).
+5. (For AI staff) Owner picks the underlying CLI binary (claude / codex / gemini / qwen) and an agent profile (system prompt + tool scope template).
 6. (For CLI executors) Owner configures the CLI wrapping (binary, args template, approval rules).
 7. (For peer identities) Owner picks an existing connection or creates a new one.
 8. System creates the staff record; emits `staff_created` audit event; surfaces a "first-assignment" walkthrough.
@@ -421,7 +437,7 @@ Not all substrates can reach all levels:
 
 | Substrate | Maximum autonomy |
 |---|---|
-| Local AI member (Hermes) | Autonomous |
+| Local AI member (CLI-backed) | Autonomous |
 | CLI executor | Bounded (cannot reach Autonomous — CLI side effects warrant per-assignment touch via the budget gate) |
 | Peer identity | N/A (autonomy of the actual work is the remote desk's concern) |
 
@@ -634,7 +650,7 @@ export type AutonomyLevel = "Supervised" | "Bounded" | "Autonomous";  // per ADR
 // Per ADR-015: myself substrate removed. Owner manual work routes to Today personal queue
 // via target.kind == "owner"; it is not a member substrate.
 export type Substrate =
-  | { kind: "local_ai"; agentProfileId: HermesProfileId; toolScope: ToolName[]; budget: BudgetCaps }
+  | { kind: "local_ai"; cliBinary: "claude" | "codex" | "gemini" | "qwen"; agentProfileId: string; toolScope: ToolName[]; budget: BudgetCaps }
   | { kind: "cli"; binary: string; argsTemplate: string; approvalRules: ApprovalRule[] }
   | { kind: "peer"; connectionId: ConnectionId; remoteStaffName: string };
 
@@ -866,6 +882,69 @@ The Members service (`packages/core/src/members-service.ts`) now sources from th
 - ADR-019 — the canonical ADR for this surface; see `docs/decisions/019-runtime-staff-crud.md`.
 - `owner-assistant-tools.md` § 5 — the tool catalogue including the three new entries.
 - `data-model.md` § 4.4 — the `staff` schema and the optional `system_prompt` / `created_at` extension.
+
+## 14.7 Per-Binary Memory File Matrix
+
+Each AI member has its own memory file, named after the CLI binary that
+backs it. The mapping is owned by
+`packages/core/src/cli-memory-scaffold.ts`:
+
+| Substrate `cliBinary` | Memory file at member cwd |
+|---|---|
+| `claude` | `CLAUDE.md` |
+| `codex` | `AGENTS.md` |
+| `gemini` | `GEMINI.md` |
+| `qwen` | `QWEN.md` |
+
+The scaffold also installs the two recall **Skills**
+(`holon-memory-recall` on per-project secretaries, `holon-owner-recall` on
+the owner-CLI) per ADR `../adr/memory-as-skill.md`. Employees do NOT get
+recall Skills — their boss injects the relevant memory slice at dispatch
+time.
+
+Each file carries a managed `## HR-Corrections` section written by HR Path A
+(see `hr-evaluator.md` § Path A; `packages/core/src/hr-path-a.ts`). The
+section is idempotent by rule-hash and bracketed by a sentinel so HR
+re-emits refresh in place rather than appending duplicates.
+
+## 14.8 Dispatch-Completion HR Loop Step
+
+Per ADR `../adr/hr-evaluator-and-behavior-correction.md` § 4.1: every
+secretary runs **secretary-HR** as an inline loop step (NOT a separate
+process) at every dispatch completion. The shape:
+
+```
+secretary dispatches employee
+  → employee returns (tmux pane history + deliverable)
+  → secretary already reads the output (this is its normal loop)
+  → secretary-HR scores against the rubric (`hr-evaluator.md` § Rubric)
+  → on unchecked rubric items: enqueue Path A patch on the employee's
+    per-binary memory file, OR enqueue Path B synthetic message for the
+    employee's next turn (via the synthetic-producers channel —
+    `apps/web/lib/synthetic-producers.ts`)
+```
+
+This is "free" in tokens — the secretary is already reading the output —
+and immediate. owner-HR runs separately on a ~30 min cron tick plus
+settle-watch events; it scores **secretaries** across all projects (see
+`hr-evaluator.md` § Scheduling).
+
+## 14.9 Harvest-on-Retire Hook
+
+When an employee retires, the owning secretary **harvests** its per-binary
+memory file: distills the durable contributions into project boss-memory,
+discards the per-turn / scaffolding / resolved-thread cruft. Implementation:
+`packages/core/src/boss-memory-harvest-service.ts`. See
+`memory-update-flow.md` § "Write-up path" for the distillation prompt shape
+and idempotence rules.
+
+The same hook also feeds HR (last chance to score the retiring employee, per
+the ADR § 4.2 trigger table). Knowledge bubbles up the System 0 → 1 → 2
+hierarchy; ephemeral content is discarded.
+
+When a **project** retires, the owner (or an optional super-agent) distills
+project memory into owner-global boss-memory via the same service —
+recursively the same pattern at the higher layer.
 
 ## 15. Workspace Concept (V2)
 
