@@ -219,6 +219,54 @@ recoverable" quality biological memory has.
 > edition stays file-only on purpose: zero ops, zero lock-in, owner can grep / version
 > / back up everything as plain files.
 
+### HR evaluator + two-path behavior correction
+
+Secretaries drift. The 7×24 manager pattern says "dispatch, don't do" — but
+on any given turn, an agent can decide to just do it. **HR is the loop that
+catches drift and corrects it.** Two tiers, two correction paths, no new
+runtime tier.
+
+**Two HR tiers**
+
+- **owner-HR** (System 2, fixed) — one agent under `~/holon-agents/boss/owner/hr/`
+  that evaluates **secretaries** across all projects. Catches cross-project
+  drift: the same mistake in N projects = an owner-level signal.
+- **secretary-HR** (per secretary, inline loop step — not a separate process)
+  — each secretary scores its **employees** after dispatch completion. The
+  manager already reads the output; HR is just "score what you read."
+
+Employees do not get HR. They're ephemeral.
+
+**Two correction paths**
+
+| Path | When | How | Persistence |
+|---|---|---|---|
+| **A — memory patch** | Rule-shaped, recurring (role definition, "always X / never Y") | Append to a managed `## HR-Corrections` section in the target's per-CLI memory file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `QWEN.md`). Idempotent by rule-hash. | Survives respawn |
+| **B — next-turn nudge** | Single-turn deviation (e.g., manager did work instead of dispatching) | HR enqueues a synthetic message; it's **prepended to the next inbound** (owner turn or dispatch return). **Non-preemptive** — does not interrupt the running turn. | Vanishes with the conversation |
+
+**Auto-promotion B → A.** If the same Path-B nudge fires ≥ 3 times in a
+24-hour window for the same target, HR auto-promotes the rule to Path A
+and surfaces a 🔴 line to owner: `HR auto-promoted on <agent>: "<rule>".
+Accept / edit / revert`. Owner stays in the loop on persistent changes;
+ephemeral corrections HR ships on its own.
+
+**Triggers.** owner-HR cron-ticks every ~30 min (drift is statistical);
+secretary-HR scores every dispatch completion (already in the loop);
+both wake on settle-watch events and on employee retirement (the harvest
+hook also feeds HR). Manual override: `review <agent>` from owner.
+
+**Rubric** is a markdown checklist, not a numeric score. Default ships
+with `dispatched-not-DIY · respected-north-star · read-INDEX-before-act ·
+role-fidelity · memory-hygiene`. Owner extends by editing the owner-HR
+persona. Evaluations log to
+`~/holon-agents/boss/owner/hr/evaluations/<sproj_id>/YYYY-MM-DD.md`.
+
+HR is pure read-only on the agents it watches — it never mutates the
+secretary's process. All correction goes through Path A (memory file
+write) or Path B (synthetic next-turn message). See
+[`docs/adr/hr-evaluator-and-behavior-correction.md`](docs/adr/hr-evaluator-and-behavior-correction.md)
+for the full spec.
+
 ### Two orthogonal axes: shell vs gateway
 
 Every connection above is "agent ↔ agent," but they differ on **two independent
