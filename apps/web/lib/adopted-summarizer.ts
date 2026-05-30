@@ -168,6 +168,9 @@ interface WarmSummarizer {
   proc: import('node:child_process').ChildProcessWithoutNullStreams;
   busy: boolean;
   buf: string;
+  // Text assembled across the turn's `assistant` events. The final `result`
+  // event uses this if no separate result.result was emitted.
+  assembled: string;
   onResolve: ((v: string | null) => void) | null;
 }
 const _g2 = globalThis as unknown as { __holonSummarizerPool?: Map<string, WarmSummarizer> };
@@ -186,8 +189,15 @@ function spawnWarmSummarizer(cwd: string | undefined): WarmSummarizer {
     '--dangerously-skip-permissions',
   ], { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
 
-  const w: WarmSummarizer = { proc, busy: false, buf: '', onResolve: null };
+  const w: WarmSummarizer = { proc, busy: false, buf: '', assembled: '', onResolve: null };
 
+  // Stream-json events from `claude --print` use the same shape that
+  // warm-agent.ts parses. Previous version checked `type==='message'`
+  // (doesn't exist) and read `message.content` on the `result` event
+  // (wrong field — it's `result.result` as a plain string). Result: this
+  // resolver always fired with empty/null text, leaving the summary
+  // pipeline silent (audit logs showed `skipped_short, len:0`). Fixed
+  // here to match the warm-agent parser exactly.
   proc.stdout.on('data', (d) => {
     w.buf += d.toString('utf8');
     let nl: number;
@@ -195,21 +205,32 @@ function spawnWarmSummarizer(cwd: string | undefined): WarmSummarizer {
       const line = w.buf.slice(0, nl);
       w.buf = w.buf.slice(nl + 1);
       if (!line.trim()) continue;
-      try {
-        const ev = JSON.parse(line) as { type?: string; message?: { content?: Array<{ type: string; text?: string }> } };
-        if (ev.type === 'result' || ev.type === 'message') {
-          const text = (ev.message?.content ?? [])
-            .filter((p) => p.type === 'text' && typeof p.text === 'string')
-            .map((p) => p.text as string)
-            .join('').trim();
-          if (text && w.onResolve) {
-            const cb = w.onResolve;
-            w.onResolve = null;
-            w.busy = false;
-            cb(text);
-          }
+      let ev: {
+        type?: string;
+        message?: { content?: Array<{ type: string; text?: string }> };
+        result?: unknown;
+      };
+      try { ev = JSON.parse(line); } catch { continue; }
+      if (ev.type === 'assistant' && ev.message?.content) {
+        // Authoritative full message for the turn — extract text parts.
+        const text = ev.message.content
+          .filter((b) => b.type === 'text' && typeof b.text === 'string')
+          .map((b) => b.text as string).join('');
+        if (text) w.assembled = text;
+      } else if (ev.type === 'result') {
+        // Turn boundary. Prefer the result string when present (covers
+        // edge cases where assistant text was empty), otherwise use the
+        // assembled text from earlier `assistant` events.
+        if (typeof ev.result === 'string' && ev.result.trim()) {
+          w.assembled = ev.result;
         }
-      } catch { /* partial line */ }
+        const final = w.assembled.trim();
+        const cb = w.onResolve;
+        w.assembled = '';
+        w.onResolve = null;
+        w.busy = false;
+        cb?.(final || null);
+      }
     }
   });
   proc.on('error', () => {
