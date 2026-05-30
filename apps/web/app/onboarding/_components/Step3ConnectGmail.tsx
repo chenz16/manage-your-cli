@@ -109,7 +109,7 @@ export function Step3ConnectGmail({ onBack, onSkip, onSkipOnboarding }: Props) {
             <button
               type="button"
               className="btn"
-              onClick={() => { void signIn('google', { prompt: 'consent', callbackUrl: '/onboarding?step=3' }); }}
+              onClick={() => { void signIn('google', { prompt: 'consent', callbackUrl: '/onboarding?step=4' }); }}
               title="Re-run the Google consent screen — useful if you need to add a scope or switch accounts."
             >
               Re-auth
@@ -125,7 +125,7 @@ export function Step3ConnectGmail({ onBack, onSkip, onSkipOnboarding }: Props) {
             <button
               type="button"
               className="btn"
-              onClick={() => { void signOut({ callbackUrl: '/onboarding?step=3' }); }}
+              onClick={() => { void signOut({ callbackUrl: '/onboarding?step=4' }); }}
               title="Disconnect Gmail and return to this step to reconnect or skip."
             >
               Disconnect
@@ -175,7 +175,7 @@ export function Step3ConnectGmail({ onBack, onSkip, onSkipOnboarding }: Props) {
                 // TEST_MODE handling lives in auth.ts via Credentials-as-google
                 // provider swap; UI stays mode-agnostic (no NEXT_PUBLIC mirror,
                 // no client-side branch).
-                void signIn('google', { callbackUrl: '/onboarding?step=3&gmail=connected' });
+                void signIn('google', { callbackUrl: '/onboarding?step=4&gmail=connected' });
               }}
               className="btn btn-primary"
               style={{ alignSelf: 'flex-start' }}
