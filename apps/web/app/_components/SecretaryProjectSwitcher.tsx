@@ -16,9 +16,12 @@
 
 import { useState } from 'react';
 import { useSecretaryProjects, type SecretaryProject } from './useSecretaryProjects';
+import { useT } from '../../lib/i18n/useT';
 
 export function SecretaryProjectSwitcher() {
   const { projects, active, setActiveId, refresh } = useSecretaryProjects();
+  const { lang } = useT();
+  const zh = lang === 'zh-CN';
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -58,7 +61,7 @@ export function SecretaryProjectSwitcher() {
         className="desk-proj-switcher-btn"
         onClick={() => setOpen(true)}
       >
-        + New project
+        {zh ? '+ 新建项目' : '+ New project'}
       </button>
     );
   }

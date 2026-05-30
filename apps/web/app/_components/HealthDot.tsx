@@ -12,6 +12,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useT } from '../../lib/i18n/useT';
 
 type HealthLevel = 'green' | 'yellow' | 'red' | 'gray';
 
@@ -33,16 +34,24 @@ interface HealthSnapshot {
 
 const EMPTY: HealthSnapshot = { level: 'gray', reason: 'Empty registry', entries: [], ts: null };
 
-function deriveLevel(entries: HealthEntry[]): { level: HealthLevel; reason: string } {
-  if (entries.length === 0) return { level: 'gray', reason: 'Empty registry' };
+function deriveLevel(entries: HealthEntry[], zh: boolean): { level: HealthLevel; reason: string } {
+  if (entries.length === 0) return { level: 'gray', reason: zh ? '无活动进程' : 'Empty registry' };
   const dead = entries.filter((e) => e.status === 'dead' || !e.pidAlive);
-  if (dead.length > 0) return { level: 'red', reason: `${dead.length} agent${dead.length > 1 ? 's' : ''} dead` };
+  if (dead.length > 0) {
+    const r = zh ? `${dead.length} 个 agent 挂了` : `${dead.length} agent${dead.length > 1 ? 's' : ''} dead`;
+    return { level: 'red', reason: r };
+  }
   const stuck = entries.filter((e) => e.status === 'stuck');
-  if (stuck.length > 0) return { level: 'yellow', reason: `${stuck.length} agent${stuck.length > 1 ? 's' : ''} stuck` };
-  return { level: 'green', reason: 'All healthy' };
+  if (stuck.length > 0) {
+    const r = zh ? `${stuck.length} 个 agent 卡住` : `${stuck.length} agent${stuck.length > 1 ? 's' : ''} stuck`;
+    return { level: 'yellow', reason: r };
+  }
+  return { level: 'green', reason: zh ? '全部健康' : 'All healthy' };
 }
 
 export function HealthDot() {
+  const { lang } = useT();
+  const zh = lang === 'zh-CN';
   const [snap, setSnap] = useState<HealthSnapshot>(EMPTY);
   const [open, setOpen] = useState(false);
 
@@ -57,16 +66,16 @@ export function HealthDot() {
         }
         const json = await res.json() as { ts?: string; processes?: HealthEntry[] };
         const entries = json.processes ?? [];
-        const { level, reason } = deriveLevel(entries);
+        const { level, reason } = deriveLevel(entries, zh);
         if (!cancelled) setSnap({ level, reason, entries, ts: json.ts ?? null });
       } catch {
-        if (!cancelled) setSnap({ ...EMPTY, level: 'red', reason: 'health fetch failed' });
+        if (!cancelled) setSnap({ ...EMPTY, level: 'red', reason: zh ? '获取健康状态失败' : 'health fetch failed' });
       }
     };
     void tick();
     const id = setInterval(tick, 30_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, []);
+  }, [zh]);
 
   const unhealthy = snap.entries.filter((e) => e.status === 'dead' || e.status === 'stuck' || !e.pidAlive);
 
@@ -82,14 +91,15 @@ export function HealthDot() {
       {open && (
         <>
           <div className="desk-health-popover-backdrop" onClick={() => setOpen(false)} />
-          <div className="desk-health-popover" role="dialog" aria-label="System status">
-            <div className="desk-health-popover-title">System · {snap.reason}</div>
-          {/* (title uses derived reason from deriveLevel, kept English) */}
+          <div className="desk-health-popover" role="dialog" aria-label={zh ? '系统状态' : 'System status'}>
+            <div className="desk-health-popover-title">{zh ? '系统' : 'System'} · {snap.reason}</div>
             {snap.entries.length === 0 ? (
-              <div className="desk-health-popover-empty">No tracked processes.</div>
+              <div className="desk-health-popover-empty">{zh ? '没有跟踪进程。' : 'No tracked processes.'}</div>
             ) : unhealthy.length === 0 ? (
               <div className="desk-health-popover-empty">
-                {snap.entries.length} agent{snap.entries.length > 1 ? 's' : ''} healthy.
+                {zh
+                  ? `${snap.entries.length} 个 agent 健康。`
+                  : `${snap.entries.length} agent${snap.entries.length > 1 ? 's' : ''} healthy.`}
               </div>
             ) : (
               <ul className="desk-health-popover-list">

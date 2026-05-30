@@ -73,7 +73,7 @@ const primaryItems: NavItem[] = [
     key: 'chat',
     href: '/',
     label: 'Chat',
-    labelZh: 'Chat',
+    labelZh: '聊天',
     activeWhen: (p) => p === '/' || p.startsWith('/today'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -85,7 +85,7 @@ const primaryItems: NavItem[] = [
     key: 'members',
     href: '/members',
     label: 'Team',
-    labelZh: 'Team',
+    labelZh: '团队',
     optionalFeature: 'members',
     activeWhen: (p) => p.startsWith('/members'),
     icon: (
@@ -101,7 +101,7 @@ const primaryItems: NavItem[] = [
     key: 'deliverables',
     href: '/deliverables',
     label: 'Drops',
-    labelZh: 'Drops',
+    labelZh: '交付',
     optionalFeature: 'deliverables',
     activeWhen: (p) => p.startsWith('/deliverables'),
     icon: (
@@ -146,7 +146,7 @@ const secondaryItems: NavItem[] = [
     key: 'connectors',
     href: '/connectors',
     label: 'Connectors',
-    labelZh: 'Connectors',
+    labelZh: '连接器',
     optionalFeature: 'connectors',
     activeWhen: (p) => p.startsWith('/connectors'),
     icon: (
@@ -179,6 +179,7 @@ const footerItems: NavItem[] = [
     key: 'me',
     href: '/me',
     label: 'Me',
+    labelZh: '我',
     activeWhen: (p) => p.startsWith('/me'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
