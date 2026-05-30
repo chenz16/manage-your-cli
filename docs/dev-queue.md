@@ -71,7 +71,7 @@ Roughly priority-ordered (top = most likely next-up). Refresh ordering at each i
 
 - `[x] eb7da55` **D6 — Reference local-path UI + `extract_references` plugin tool**
   - "+ New Reference" modal: add `source_type` selector + `local_path` input.
-  - Implement `extract_references` Hermes tool: takes a folder path, enumerates files, reads each, returns a list of proposed ReferenceDescriptors for owner confirmation.
+  - Implement `extract_references` MCP tool: takes a folder path, enumerates files, reads each, returns a list of proposed ReferenceDescriptors for owner confirmation.
   - Done = user can point at `/home/me/specs/` and get N reference cards back, accept each.
   - Blast radius: medium (unlocks the "drop a docs folder" workflow).
   - Originating: TECH-DEBT D6 (iter-009).
@@ -115,7 +115,7 @@ Roughly priority-ordered (top = most likely next-up). Refresh ordering at each i
   - No actual circular dep existed; static import added directly in reference-catalog.ts.
 
 - `[ ]` **Competitive: MCP client support** (competitive scan rec #1, `docs/reviews/2026-05-17-competitive-landscape.md`)
-  - Highest-leverage single move per competitive scan. Wire at runtime-adapter so Hermes calls MCP tools the same way as local plugin tools — preserves Engineering Rule #1.
+  - Highest-leverage single move per competitive scan. Wire at the multi-CLI adapter so CLI employees call MCP tools the same way as local plugin tools — preserves Engineering Rule #1.
   - Sized: ~1 eng-week. Candidate for iter-012 after D8 settles runtime-adapter pattern.
 
 - `[ ]` **Competitive: SSE streaming + mid-flight intervention on long jobs** (competitive scan rec #2)
