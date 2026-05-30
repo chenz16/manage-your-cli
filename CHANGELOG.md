@@ -6,7 +6,99 @@ ISO-8601.
 
 ## [Unreleased]
 
-The first public-release-ready cut.
+Post-0.2 prep — release-shape hygiene and follow-ups.
+
+### Added (post-Hermes-decouple)
+
+- **Role-templates library + composition spec** ([ADR](docs/adr/role-templates-and-persona-composition.md))
+  — agents have a *nominal* role + composition of *actual* roles
+  merged at create-time. Nominal wins identity/voice; behaviors/
+  responsibilities/knowledge unioned via the HR rule-hash; do/don't
+  collisions surfaced not auto-resolved. Karpathy's LLM Wiki cited as
+  architectural cousin; 5 curated sources + 22-role catalog seed (15
+  work + 7 role-play).
+- **Role-templates slice 1 runtime** (commit `384fcb8`) — loader,
+  composer, persona renderer, `writeRoleComposition` memory-file
+  integration mirroring HR's `writeHrCorrection`; `holon-create-agent`
+  SKILL.md scaffold with inline catalog; 3 seed `ROLE.md` (secretary +
+  7x24-manager lifted from owner memory; code-reviewer authored).
+- **Architecture doc sync** — six existing arch docs updated to
+  System 0/1/2 + multi-CLI adapter terminology; two new docs:
+  [`memory-update-flow.md`](docs/architecture/memory-update-flow.md) +
+  [`hr-evaluator.md`](docs/architecture/hr-evaluator.md).
+- **Doc + design audit** ([report](docs/reviews/audit-2026-05-30-docs-and-design.md))
+  — critical pass over the whole shipped wave.
+
+### Changed (post-Hermes-decouple)
+
+- **Formal decouple from sister-repo `holon-engineering` runtime
+  (Hermes).** `manage-your-cli` runs entirely on the user's CLI
+  subscriptions (claude / codex / gemini / qwen) via the multi-CLI
+  adapter. All Hermes references that described the runtime as live
+  in this repo have been removed or moved to clearly-bracketed
+  `Lineage` callouts.
+  - UI: Hermes (HTTP API) connector card removed from
+    `apps/web/app/connectors/page.tsx`.
+  - Tauri scaffold (`apps/web/src-tauri/`) moved to
+    `apps/web/legacy-src-tauri/`; `tauri:*` npm scripts and the
+    `@tauri-apps/cli` devDep removed.
+  - Sister-repo build paths parked:
+    `scripts/build-all.sh` →
+    `scripts/legacy/build-all.sh`;
+    `.github/workflows/windows-installer.yml` →
+    `.github/workflows/legacy/windows-installer.yml`;
+    plus the Windows installer + slice-5 smoke scripts.
+  - Live MYC scripts washed in place: `serve-production-wsl.sh`,
+    `dev-prewarm.sh`, `start-production.sh`, `oauth-test-mode-on.sh`,
+    `.env.test.local.example`. `HOLON_HERMES_PORT` dropped from
+    live env (still exists only in `legacy-src-tauri/`).
+  - Sister-repo arch spec docs moved to `docs/architecture/legacy/`:
+    `owner-assistant-tools.md`, `runtime-adapter-interface.md`,
+    `worker-dispatcher.md`. Five sister-repo install docs moved to
+    `docs/install/legacy/`.
+- **README** primary-purpose framing sharpened: *boss/manager view
+  of workers, stable team, secretary as buffer, supports
+  micromanagement, extremely optimized for mobile management, don't
+  reinvent the wheel*. Memory-update flow diagram inserted between
+  System 0/1/2 and the shell-vs-gateway axes. Per-CLI install links
+  added.
+- **Pre-commit hygiene**: `scripts/install-git-hooks.sh` (off-by-
+  default narrow-path guard) + `scripts/git-commit-narrow.sh`
+  (path-scoped commit wrapper) prevent bundling unrelated staged
+  files across concurrent sub-agents.
+
+### Fixed (post-Hermes-decouple)
+
+- `apps/web/app/api/v1/boss-memory/route.ts`: discriminate
+  `BossMemoryBudgetExceeded` (413) from `BossMemoryError` (500);
+  pre-existing typecheck error blocked production builds.
+- Webpack `node:` scheme imports in HR modules — `eval('require')`
+  + bare module names (mirrors `heartbeat.ts` pattern). Production
+  build now green.
+
+### Verified
+
+- Typecheck clean across `api-contract` / `core` / `holon-mcp` / `web`.
+- `@holon/core` tests: **98 passed** / 16 skipped.
+- `@holon/web` tests: **56 passed**.
+- `bash scripts/build-web.sh` production standalone build green.
+- `grep -rli "hermes" apps/ packages/ scripts/ .github/ | grep -v "/legacy/" | grep -v "/.next/"` → no live-runtime references; only inline `[Lineage]` notes (≤ 3) + 2 test-file string fixtures.
+
+### Known follow-ups (next release window)
+
+- ADR §4.9: HR promotion-veto persistence across re-scaffold.
+- Warm-agent stream-json transcript persistence — tightens 3 of 5
+  HR rubric heuristics.
+- Role-templates slice 2: bulk-seed remaining 19 roles from
+  `f/awesome-chatgpt-prompts` + wire MCP tool for the
+  `holon-create-agent` skill's runtime discovery.
+- Backlog: #8 self-test DB isolation, #12 NextAuth removal (owner
+  not yet authorized), #18 desk UI language mix (owner direction
+  pending), #19 sleep-time CLAUDE.md consolidator.
+
+---
+
+## [0.2.0] — 2026-05-30 (HR + memory-as-skill + multi-CLI hardening)
 
 ### Added (post-CHANGELOG-init)
 
