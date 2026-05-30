@@ -204,7 +204,7 @@ function materializeSeed(seed: StarterStaffSeed, desk_id: string): Staff {
     role_label: seed.role_label,
     substrate: {
       kind: 'local_ai',
-      agent_profile_id: 'hermes_profile_generic_v1',
+      agent_profile_id: 'local_ai_generic_v1',
       tool_scope: seed.tool_scope,
     },
     autonomy_level: 'Supervised',
@@ -217,6 +217,7 @@ function materializeSeed(seed: StarterStaffSeed, desk_id: string): Staff {
     created_at: new Date().toISOString(),
     denied_skills: [],
     tags: ['suggested'],
+    project_ids: [],
   };
 }
 

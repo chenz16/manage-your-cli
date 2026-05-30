@@ -73,7 +73,7 @@ const primaryItems: NavItem[] = [
     key: 'chat',
     href: '/',
     label: 'Chat',
-    labelZh: 'Chat',
+    labelZh: '聊天',
     activeWhen: (p) => p === '/' || p.startsWith('/today'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -82,10 +82,31 @@ const primaryItems: NavItem[] = [
     ),
   },
   {
+    key: 'deliverables',
+    href: '/deliverables',
+    // Owner: 对老板来讲 看 to-do 是他可能最重要的 或者是 正在交互过程当中的状态.
+    // Mobile already merges todos + in-progress jobs + drops under one
+    // surface; desk follows by renaming the menu to "Work" / 工作 and
+    // lifting it to position #2 (right under Chat, in the boss's primary
+    // attention path). The /deliverables page will grow a
+    // [Todo · In progress · Delivered] tri-section in a separate change.
+    label: 'Work',
+    labelZh: '工作',
+    optionalFeature: 'deliverables',
+    activeWhen: (p) => p.startsWith('/deliverables'),
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+        <path d="M9 15l2 2 4-5" />
+      </svg>
+    ),
+  },
+  {
     key: 'members',
     href: '/members',
     label: 'Team',
-    labelZh: 'Team',
+    labelZh: '团队',
     optionalFeature: 'members',
     activeWhen: (p) => p.startsWith('/members'),
     icon: (
@@ -94,21 +115,6 @@ const primaryItems: NavItem[] = [
         <circle cx="9" cy="7" r="4" />
         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-    ),
-  },
-  {
-    key: 'deliverables',
-    href: '/deliverables',
-    label: 'Drops',
-    labelZh: 'Drops',
-    optionalFeature: 'deliverables',
-    activeWhen: (p) => p.startsWith('/deliverables'),
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <path d="M14 2v6h6" />
-        <path d="M9 15l2 2 4-5" />
       </svg>
     ),
   },
@@ -146,7 +152,7 @@ const secondaryItems: NavItem[] = [
     key: 'connectors',
     href: '/connectors',
     label: 'Connectors',
-    labelZh: 'Connectors',
+    labelZh: '连接器',
     optionalFeature: 'connectors',
     activeWhen: (p) => p.startsWith('/connectors'),
     icon: (
@@ -179,6 +185,7 @@ const footerItems: NavItem[] = [
     key: 'me',
     href: '/me',
     label: 'Me',
+    labelZh: '我',
     activeWhen: (p) => p.startsWith('/me'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -1,7 +1,11 @@
 import { validateDeviceTokenDetailed } from './device-pairing-store';
+import { safeSecretEqual } from './loopback-guard';
 
 const LOOPBACK_HOST_RE = /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$/;
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\])(:\d+)?$/;
+// Dev/demo only: the desktop owner may reach their own desk via a private-LAN IP
+// (e.g. the §6 mobile preview at http://<wsl-ip>:3100/me). Loopback + private LAN.
+const DEV_LAN_HOST_RE = /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[::1\]|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|100\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$/;
 
 function isLoopbackIp(raw: string): boolean {
   const s = raw.trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
@@ -12,6 +16,15 @@ function isLoopbackIp(raw: string): boolean {
 
 export function isLoopbackRequest(req: Request): boolean {
   const host = req.headers.get('host') ?? '';
+  // Dev/demo escape hatch: the owner accessing their OWN desk via a private-LAN
+  // IP counts as "the desktop" (so QR pair-start works from http://<lan-ip>/me).
+  // Production (no OPEN_DEMO/LAN_ACCESS) stays strict loopback-only.
+  if (
+    (process.env.HOLON_OPEN_DEMO === '1' || process.env.HOLON_LAN_ACCESS === '1') &&
+    DEV_LAN_HOST_RE.test(host)
+  ) {
+    return true;
+  }
   if (!LOOPBACK_HOST_RE.test(host)) return false;
 
   const origin = req.headers.get('origin');
@@ -37,7 +50,7 @@ export function isLoopbackRequest(req: Request): boolean {
 }
 
 export type DeviceAuthResult =
-  | { ok: true; mode: 'loopback' | 'device_token' }
+  | { ok: true; mode: 'loopback' | 'local_secret' | 'device_token' }
   | { ok: false; status: 401 | 403 | 500; code: 'missing_device_token' | 'invalid_device_token' | 'device_store_unavailable' };
 
 export function requireDeviceTokenForRemote(req: Request): DeviceAuthResult {
@@ -45,6 +58,10 @@ export function requireDeviceTokenForRemote(req: Request): DeviceAuthResult {
   // Local personal use only — do NOT set this on a shared/cloud deployment.
   if (process.env.HOLON_OPEN_DEMO === '1') return { ok: true, mode: 'loopback' };
   if (isLoopbackRequest(req)) return { ok: true, mode: 'loopback' };
+  const localSecret = process.env.HOLON_LOCAL_SHARED_SECRET;
+  if (localSecret && safeSecretEqual(req.headers.get('x-holon-local-secret'), localSecret)) {
+    return { ok: true, mode: 'local_secret' };
+  }
   const token = req.headers.get('x-holon-device-token');
   if (!token) return { ok: false, status: 401, code: 'missing_device_token' };
   const validation = validateDeviceTokenDetailed(token);

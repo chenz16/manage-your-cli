@@ -1,4 +1,4 @@
-import { getOrCreateSecretaryStaff } from '@holon/core';
+import { getOrCreateSecretaryStaff, ensureSecretaryWorkspace } from '@holon/core';
 import { prewarmAgent } from '@/lib/warm-agent';
 
 /**
@@ -6,12 +6,14 @@ import { prewarmAgent } from '@/lib/warm-agent';
  * owner's FIRST message does not pay the ~4s cold-start. Called by
  * ChatRuntimeProvider on chat mount → pre-warms automatically, no typing needed.
  *
- * Idempotent: if already warm, resolves immediately. Subscription-only; no Hermes.
+ * Idempotent: if already warm, resolves immediately. Subscription-only.
  */
 function warmSecretary() {
   const s = getOrCreateSecretaryStaff();
   const sub = s.substrate;
-  const cwd = sub.kind === 'cli_agent' ? sub.cwd : undefined;
+  // For local_ai secretaries, use the scaffolded workspace so the warm
+  // process auto-loads .mcp.json (holon-mcp tools). Mirrors chat/owner/stream.
+  const cwd = sub.kind === 'cli_agent' ? sub.cwd : ensureSecretaryWorkspace();
   const binary = sub.kind === 'cli_agent' && sub.binary ? sub.binary : 'claude';
   const r = prewarmAgent(s.id, binary, cwd, /* keep always-warm */ true);
   return { staffId: s.id, binary, ...r };

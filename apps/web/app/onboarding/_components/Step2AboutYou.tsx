@@ -89,7 +89,7 @@ export function Step2AboutYou({ onBack, onNext, onSkipStep, onSkipOnboarding }: 
 
       <div className="onb-card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Language / 语言</span>
+          <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Language</span>
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value as 'auto' | 'en' | 'zh-CN')}
@@ -99,7 +99,7 @@ export function Step2AboutYou({ onBack, onNext, onSkipStep, onSkipOnboarding }: 
               outline: 'none',
             }}
           >
-            <option value="auto">Auto (detect from browser) / 自动</option>
+            <option value="auto">Auto (detect from browser)</option>
             <option value="en">English</option>
             <option value="zh-CN">中文 (Simplified)</option>
           </select>

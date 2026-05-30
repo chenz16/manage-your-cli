@@ -3,7 +3,7 @@
  * from chat. iter-007 step 7.
  *
  * Engineering rules (CLAUDE.md):
- *   - Rule 1: Holon owns the roster — Hermes is just an executor.
+ *   - Rule 1: Holon owns the roster — CLI agents are executors.
  *   - Rule 5: flat-roster invariant — these tools create staff on the
  *     OWNER's desk, never under another staff record. Enforced by
  *     parsing `desk_id = primary_desk_id`.
@@ -23,6 +23,7 @@ import {
   dismissStaff as markDismissed, isStaffDismissed,
   type StaffPatch,
 } from './mutable-store.js';
+import { getCliAdapter } from './cli-adapters.js';
 import { ensureAgentMemoryFile } from './cli-memory-scaffold.js';
 import { readDynamicStaff } from './owner-state-persistence.js';
 
@@ -94,10 +95,7 @@ export function createCliAgentStaff(input: CreateCliAgentInput): Staff {
     substrate: {
       kind: 'cli_agent',
       binary,
-      args_template:
-        binary === 'claude' ? '--dangerously-skip-permissions'
-        : binary === 'codex' ? '--dangerously-bypass-approvals-and-sandbox'
-        : '',
+      args_template: getCliAdapter(binary).interactiveArgs,
       approval_rules: [],
       lifecycle,
       cwd,
@@ -113,6 +111,7 @@ export function createCliAgentStaff(input: CreateCliAgentInput): Staff {
     created_at: new Date().toISOString(),
     denied_skills: [],
     tags: lifecycle === 'long' ? ['long_term'] : ['short_term'],
+    project_ids: [],
   };
   addDynamicStaff(staff);
   if (lifecycle === 'long') ensureAgentMemoryFile(cwd, staff, binary);
@@ -133,8 +132,11 @@ export interface CreateStaffInput {
   role_name?: string;            // snake_case; auto-derived from role_label if absent
   system_prompt?: string;
   max_concurrent_jobs?: number;  // default 1
-  agent_profile_id?: string;     // default 'hermes_profile_generic_v1'
+  agent_profile_id?: string;     // default 'local_ai_generic_v1'
   tool_scope?: string[];          // default ['web_search', 'read_file']
+  /** Free-form tag labels (e.g. ['task_group:选题&研究', 'pack:youtube-creator']).
+   *  Defaults to [] when not provided. */
+  tags?: string[];
   /** Explicit substrate override — used by the connectors flow to create
    *  cli_agent staff for Claude Code / Codex without going through chat.
    *  When present, overrides all substrate-related defaults (agent_profile_id
@@ -154,7 +156,7 @@ export function createStaff(input: CreateStaffInput): Staff {
 
   const substrate: Staff['substrate'] = input.substrate ?? {
     kind: 'local_ai',
-    agent_profile_id: input.agent_profile_id ?? 'hermes_profile_generic_v1',
+    agent_profile_id: input.agent_profile_id ?? 'local_ai_generic_v1',
     tool_scope: input.tool_scope ?? ['web_search', 'read_file'],
   };
 
@@ -178,7 +180,10 @@ export function createStaff(input: CreateStaffInput): Staff {
     denied_skills: [],
     // iter-012 Pass #4: free-form labels. Owner-created staff via chat
     // get no tags (only persona-seeded "suggested" staff carry one).
-    tags: [],
+    // Team-pack imports may supply tags like ['task_group:X', 'pack:Y'].
+    tags: input.tags ?? [],
+    // Phase 1: no project affiliation by default (shared/cross-project).
+    project_ids: [],
   };
 
   addDynamicStaff(staff);
@@ -191,7 +196,15 @@ export function createStaff(input: CreateStaffInput): Staff {
 export function getStaffMerged(id: string): Staff | null {
   if (isStaffDismissed(id)) return null;
   const fx = loadFixtures();
-  const base = fx.staff.find((s) => s.id === id) ?? getDynamicStaff(id);
+  // Mirror listStaffMerged: dynamic staff created by a SEPARATE process (the
+  // Secretary's Holon MCP create_agent) live only in the DB — the in-memory Map
+  // is hydrated once at boot. Without the DB fallback, getStaffMerged returns
+  // null for those (404), so they show in the roster but can't be opened/chatted
+  // ("staff 不能私聊"). DB is authoritative for cross-process creates.
+  const base = fx.staff.find((s) => s.id === id)
+    ?? getDynamicStaff(id)
+    ?? readDynamicStaff().find((s) => s.id === id)
+    ?? null;
   if (!base) return null;
   const ov = getStaffOverride(id);
   return ov ? { ...base, ...ov } : base;
@@ -259,6 +272,13 @@ export function retireCliAgentStaff(id: string): { ok: boolean; lifecycle?: 'sho
     return { ok: false, reason: `substrate_not_cli_agent (${s.substrate.kind})` };
   }
   const lifecycle = s.substrate.kind === 'cli_agent' ? s.substrate.lifecycle ?? 'short' : 'short';
+
+  // Harvest-on-retire (System 0/1/2 bubble-up): the owning secretary
+  // distills the employee's role memory into project boss-memory (System 1)
+  // or owner boss-memory (System 2) before the container is gone.
+  // Fire-and-forget — see boss-memory-harvest-service.ts JSDoc.
+  triggerEmployeeHarvest(s);
+
   if (lifecycle === 'short') {
     patchStaffOverride(id, { status: 'archived' });
     markDismissed(id);
@@ -279,4 +299,31 @@ export function retireCliAgentStaff(id: string): { ok: boolean; lifecycle?: 'sho
     ts: new Date().toISOString(),
   }));
   return { ok: true, lifecycle, staff: updated ?? s };
+}
+
+/**
+ * Fire-and-forget kick of the employee-retire harvest. Resolves first
+ * project_id from the staff's project_ids list (System 1); if none →
+ * cross-project employee → harvest to owner scope (System 2).
+ *
+ * Errors are swallowed and audited as `boss.harvest_failed`; retire MUST
+ * NOT fail because the harvester dispatch failed.
+ */
+function triggerEmployeeHarvest(staff: Staff): void {
+  const projectId: string | null = Array.isArray(staff.project_ids) && staff.project_ids.length > 0
+    ? (staff.project_ids[0] ?? null)
+    : null;
+  // Defer the import to avoid an import cycle: harvest-service imports
+  // listStaffMerged from this file.
+  void import('./boss-memory-harvest-service.js').then(({ harvestEmployeeRetire }) =>
+    harvestEmployeeRetire({ staff_id: staff.id, project_id: projectId, staff }),
+  ).catch((err) => {
+    console.error(JSON.stringify({
+      audit: 'boss.harvest_failed',
+      kind: 'employee',
+      employee_staff_id: staff.id,
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
+  });
 }

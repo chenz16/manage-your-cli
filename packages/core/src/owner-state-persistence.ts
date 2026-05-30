@@ -50,8 +50,13 @@ import { Mission as MissionSchema, Staff as StaffSchema } from '@holon/api-contr
 //
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BetterSqliteDatabase = any;
-let _db: BetterSqliteDatabase | null = null;
-let _dbInitFailed = false;
+// Owner: HMR resets module-level singletons on every dev file edit, causing
+// 7800+ new Database() opens during normal development (perf audit 2026-05-27).
+// Store on globalThis so the connection survives module re-evaluation.
+const _g = globalThis as unknown as {
+  __holonOwnerDb?: BetterSqliteDatabase | null;
+  __holonOwnerDbFailed?: boolean;
+};
 const requireFn = createRequire(import.meta.url);
 
 function resolveDbPath(): string {
@@ -66,15 +71,12 @@ function resolveDbPath(): string {
 }
 
 function ensureDb(): BetterSqliteDatabase | null {
-  if (_db) return _db;
-  if (_dbInitFailed) return null;
+  if (_g.__holonOwnerDb) return _g.__holonOwnerDb;
+  if (_g.__holonOwnerDbFailed) return null;
   try {
     const dbPath = resolveDbPath();
     const parent = dirname(dbPath);
     if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
-    // Dynamic createRequire so missing native binary doesn't ESM-import-fail the
-    // whole module graph; createRequire keeps it CJS-compatible for the
-    // bundler.
     const Database = requireFn('better-sqlite3') as new (
       path: string,
     ) => BetterSqliteDatabase;
@@ -87,15 +89,15 @@ function ensureDb(): BetterSqliteDatabase | null {
         updated_at INTEGER NOT NULL
       )
     `);
-    _db = db;
+    _g.__holonOwnerDb = db;
     console.log(JSON.stringify({
       audit: 'persistence.opened',
       path: dbPath,
       ts: new Date().toISOString(),
     }));
-    return _db;
+    return _g.__holonOwnerDb;
   } catch (err) {
-    _dbInitFailed = true;
+    _g.__holonOwnerDbFailed = true;
     console.error(JSON.stringify({
       audit: 'persistence.open_failed',
       error: err instanceof Error ? err.message : String(err),
@@ -432,8 +434,8 @@ export function writeDynamicMissions(missions: Mission[]): void {
 /* ── ADR-040 slice 1 — per-CLI-staff manager-managed memory ────────────
  * A cli_agent staff is stateless muscle; Holon (the manager) owns its
  * persistent memory and injects it as context on each dispatch. Stored as a
- * single JSON object { [staffId]: memoryMarkdown } under one owner_state key —
- * NOT routed through Hermes. Read returns '' on miss/parse-failure (audited). */
+ * single JSON object { [staffId]: memoryMarkdown } under one owner_state key.
+ * Read returns '' on miss/parse-failure (audited). */
 export function readCliStaffMemory(staffId: string): string {
   const db = ensureDb();
   if (!db) return '';
@@ -643,15 +645,61 @@ export function writeWechatContacts(contacts: WechatContact[]): void {
   writeKey('wechat_contacts', contacts);
 }
 
+/* ── A2A peer registry ─────────────────────────────────────────────────────
+ * Persists the list of known A2A peer desks/agents under key 'a2a_peers'.
+ * Each entry carries a stable `id` (= the normalized base URL) plus the full
+ * agent-card snapshot at the time of connection. Upsert semantics: connecting
+ * a known URL overwrites the prior card rather than duplicating it.
+ *
+ * Same read/write posture as every other key in this module: read returns []
+ * on DB-unavailable / parse-error (audit-logged); write swallows errors
+ * inside writeKey so a disk failure does NOT block the HTTP response. */
+
+export interface A2APeerRecord {
+  /** Stable identifier = normalized base URL (no trailing slash). */
+  id: string;
+  /** The agent-card data as fetched from /.well-known/agent-card.json. */
+  card: Record<string, unknown>;
+  /** ISO timestamp of first connect. */
+  connected_at: string;
+  /** ISO timestamp of last card refresh (may differ from connected_at on updates). */
+  last_seen_at: string;
+}
+
+export function readA2APeers(): A2APeerRecord[] {
+  const db = ensureDb();
+  if (!db) return [];
+  try {
+    const stmt = db.prepare('SELECT value FROM owner_state WHERE key = ?');
+    const row = stmt.get('a2a_peers') as { value: string } | undefined;
+    if (!row) return [];
+    const parsed = JSON.parse(row.value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as A2APeerRecord[];
+  } catch (err) {
+    console.error(JSON.stringify({
+      audit: 'persistence.read_failed',
+      key: 'a2a_peers',
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
+    return [];
+  }
+}
+
+export function writeA2APeers(peers: A2APeerRecord[]): void {
+  writeKey('a2a_peers', peers);
+}
+
 /* ── Test helper ───────────────────────────────────────────────────────── */
 
 /** Vitest-only: drop the singleton + the table so `HOLON_DB_PATH` can be
  *  re-pointed between tests without process restart. NOT exported through
  *  packages/core/src/index.ts. */
 export function _resetForTest(): void {
-  if (_db) {
+  if (_g.__holonOwnerDb) {
     try {
-      _db.close();
+      _g.__holonOwnerDb.close();
     } catch (err) {
       console.warn(JSON.stringify({
         audit: 'persistence.test_reset_close_failed',
@@ -660,6 +708,6 @@ export function _resetForTest(): void {
       }));
     }
   }
-  _db = null;
-  _dbInitFailed = false;
+  _g.__holonOwnerDb = null;
+  _g.__holonOwnerDbFailed = false;
 }

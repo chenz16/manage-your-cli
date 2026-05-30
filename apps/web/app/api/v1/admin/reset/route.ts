@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { clearAllCliSessions, clearMutableStore } from '@holon/core';
+import { clearAllCliSessions, clearMutableStore, clearProjectStore } from '@holon/core';
 
 export async function GET(): Promise<NextResponse> {
   return NextResponse.json({
@@ -13,10 +13,12 @@ export async function GET(): Promise<NextResponse> {
 export async function POST(): Promise<NextResponse> {
   const storeRes = clearMutableStore();
   const cliRes = clearAllCliSessions();
+  const projectsCleared = clearProjectStore();
   return NextResponse.json({
     ok: true,
     store: storeRes,
     cli_sessions: cliRes,
+    projects_cleared: projectsCleared,
     note: 'CLI tmux sessions and thin-core runtime state wiped.',
   });
 }

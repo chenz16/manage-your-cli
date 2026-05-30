@@ -6,8 +6,10 @@ import {
   makeOwnerAdapter,
   loadInitialMessages,
   fetchInitialMessagesFromApi,
+  fetchTranscriptFromDesk,
   clearStoredMessages,
 } from './owner-adapter';
+import { useSecretaryProjects } from './useSecretaryProjects';
 
 /**
  * Lives at the root layout level (above AppShell + nav) so the
@@ -40,8 +42,8 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('holon:reset', onReset);
 
-    // Warm up Hermes ACP bridge on mount — spawns Hermes + creates ACP
-    // session so the first user message doesn't pay the ~6s cold-start.
+    // Pre-warm the Secretary on mount — spawns the warm-agent process so
+    // the first user message doesn't pay the cold-start latency.
     fetch('/api/v1/chat/warm').catch(() => {/* best effort */});
 
     return () => window.removeEventListener('holon:reset', onReset);
@@ -53,30 +55,69 @@ export function ChatRuntimeProvider({ children }: { children: ReactNode }) {
 }
 
 function ChatRuntimeInner({ children }: { children: ReactNode }) {
+  // Multi-secretary-project parity with mobile. activeId drives which
+  // transcript to hydrate from + which project_id to post on each turn.
+  const { activeId } = useSecretaryProjects();
+  // Re-mount the bound runtime whenever the active project changes so the
+  // adapter closure captures the new project_id and assistant-ui drops the
+  // old project's message buffer (would otherwise leak across switches).
+  return <ChatRuntimeForProject key={activeId ?? 'owner'} projectId={activeId}>{children}</ChatRuntimeForProject>;
+}
+
+function ChatRuntimeForProject({
+  projectId,
+  children,
+}: {
+  projectId: string | null;
+  children: ReactNode;
+}) {
   const stored = useMemo(() => loadInitialMessages(), []);
-  // L-050 follow-up: always render the bound runtime (Provider must be
-  // present in the tree from first paint, otherwise descendants like
-  // ThreadPrimitiveEmpty throw "requires an AuiProvider"). When stored
-  // is empty we fire the /chat/threads fetch and, once it resolves,
-  // bump remountKey so ChatRuntimeBound re-mounts with the hydrated
-  // initialMessages. Warm reloads (stored.length > 0) skip the fetch
-  // entirely and never remount.
+  // chat-sync: always try to hydrate from the desk transcript (shared source of
+  // truth) so messages sent from mobile show up here. Strategy:
+  //   1. Paint immediately with sessionStorage (stored) if non-empty — zero
+  //      extra latency for warm reloads.
+  //   2. In background, fetch /api/v1/chat/history?thread=owner (the desk
+  //      transcript). If it's longer than sessionStorage (i.e. messages sent
+  //      from mobile that haven't hit this session), re-mount with the full set.
+  //      If not longer, keep the stored view (avoids unnecessary re-render).
+  //   3. If sessionStorage was empty, fall back to /api/v1/chat/threads
+  //      (persona starter greeting — existing L-050 path).
   const [hydrated, setHydrated] = useState<ThreadMessageLike[] | null>(null);
 
   useEffect(() => {
-    if (stored.length > 0) return;
     let cancelled = false;
-    fetchInitialMessagesFromApi().then((msgs) => {
-      if (!cancelled && msgs.length > 0) setHydrated(msgs);
+    fetchTranscriptFromDesk(projectId).then((deskMsgs) => {
+      if (cancelled) return;
+      if (deskMsgs.length > 0) {
+        // Desk transcript is the primary source. Use it if it has more messages
+        // than what sessionStorage holds (catches messages from other devices).
+        if (deskMsgs.length > stored.length) {
+          setHydrated(deskMsgs);
+        }
+        // If stored already covers everything (same or more), no re-mount needed.
+        return;
+      }
+      // Desk transcript empty (first use / cleared). Fall back to persona greeting.
+      if (stored.length > 0) return; // sessionStorage has content, no need to fetch
+      fetchInitialMessagesFromApi().then((msgs) => {
+        if (!cancelled && msgs.length > 0) setHydrated(msgs);
+      });
+    }).catch(() => {
+      // Desk fetch failed — fall through to persona greeting if no sessionStorage.
+      if (stored.length > 0) return;
+      fetchInitialMessagesFromApi().then((msgs) => {
+        if (!cancelled && msgs.length > 0) setHydrated(msgs);
+      });
     });
     return () => { cancelled = true; };
-  }, [stored]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
-  const initialMessages = stored.length > 0 ? stored : (hydrated ?? []);
-  const remountKey = stored.length > 0 ? 'stored' : (hydrated ? 'hydrated' : 'empty');
+  const initialMessages = hydrated ?? (stored.length > 0 ? stored : []);
+  const remountKey = hydrated ? 'desk-transcript' : (stored.length > 0 ? 'stored' : 'empty');
 
   return (
-    <ChatRuntimeBound key={remountKey} initialMessages={initialMessages}>
+    <ChatRuntimeBound key={remountKey} initialMessages={initialMessages} projectId={projectId}>
       {children}
     </ChatRuntimeBound>
   );
@@ -84,12 +125,14 @@ function ChatRuntimeInner({ children }: { children: ReactNode }) {
 
 function ChatRuntimeBound({
   initialMessages,
+  projectId,
   children,
 }: {
   initialMessages: ThreadMessageLike[];
+  projectId: string | null;
   children: ReactNode;
 }) {
-  const adapter = useMemo(() => makeOwnerAdapter(), []);
+  const adapter = useMemo(() => makeOwnerAdapter({ projectId }), [projectId]);
   const runtime = useLocalRuntime(adapter, { initialMessages });
   return (
     <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>

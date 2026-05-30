@@ -39,5 +39,9 @@ export const Deliverable = z.object({
 
   // Submission target — present only when origin_label == 'submitted'
   submitted_to_connection_id: idOf('conn').optional(),
+
+  /** Phase 1 — optional project tag. null = untagged/default project.
+   *  Existing rows without this field parse as `undefined`, treated as null. */
+  project_id: idOf('proj').nullable().optional(),
 });
 export type Deliverable = z.infer<typeof Deliverable>;

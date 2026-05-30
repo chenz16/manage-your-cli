@@ -10,8 +10,7 @@
  *   - After every successful turn we append the user prompt + final
  *     assistant text to sessionStorage so a page refresh restores the
  *     conversation. sessionStorage scope = single tab; for cross-tab
- *     persistence we'd need a server-side history endpoint backed by
- *     Hermes' session.db (deferred).
+ *     persistence we'd need a server-side history endpoint (deferred).
  */
 
 import type { ChatModelAdapter, ThreadMessageLike } from '@assistant-ui/react';
@@ -57,6 +56,48 @@ export function clearStoredMessages(): void {
 /** Read prior conversation for `useLocalRuntime`'s `initialMessages`. */
 export function loadInitialMessages(): ThreadMessageLike[] {
   return readStored().map((m) => ({ role: m.role, content: m.content }));
+}
+
+/** Resolves the chat thread id for an optional active secretary project.
+ *  No project → legacy 'owner' thread. Project id (sproj_*) → 'project:<id>'
+ *  (matches the desk-side secretaryProjectThreadId in @holon/core). */
+export function deskChatThreadId(projectId: string | null | undefined): string {
+  return projectId ? `project:${projectId}` : 'owner';
+}
+
+/** chat-sync: fetch the shared desk transcript for a thread. Pass projectId
+ *  to read the new secretary-project transcript; null/omitted = legacy
+ *  'owner' single-secretary thread.
+ *  Returns [] on any error so caller can gracefully fall back. Also primes
+ *  sessionStorage with the latest transcript so refreshes remain fast. */
+export async function fetchTranscriptFromDesk(projectId?: string | null): Promise<ThreadMessageLike[]> {
+  if (typeof window === 'undefined') return [];
+  const thread = deskChatThreadId(projectId);
+  try {
+    const res = await fetch(`/api/v1/chat/history?thread=${encodeURIComponent(thread)}`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json() as {
+      messages?: Array<{ role?: unknown; content?: unknown; ts?: unknown }>;
+    };
+    const msgs = Array.isArray(data.messages) ? data.messages : [];
+    const hydrated = msgs
+      .filter((m) =>
+        (m.role === 'user' || m.role === 'assistant') &&
+        typeof m.content === 'string' &&
+        (m.content as string).length > 0,
+      )
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content as string,
+      }));
+    // Prime sessionStorage so page refreshes don't re-fetch from the desk
+    if (hydrated.length > 0) {
+      writeStored(hydrated.map((m) => ({ role: m.role, content: m.content as string })));
+    }
+    return hydrated;
+  } catch {
+    return [];
+  }
 }
 
 /** L-050: hydrate first-load chat from the persona's seeded starter
@@ -119,20 +160,10 @@ interface StreamEvent {
  * `{error: 'budget_exceeded', mtd_mc, cap_mc, hint}` when the staff's
  * monthly_budget_millicents cap is reached.
  *
- * The tool wrapper (packages/hermes-plugin-holon-owner/tools.py
- * `_request`) propagates non-2xx responses as `{error, body}` JSON
- * strings to the LLM. The LLM usually narrates them — but the spec
- * demands deterministic friendly copy, not "let the model figure it
- * out". We solve both by scanning streamed text + Hermes error events
- * for the canonical `budget_exceeded` shape and substituting in the
- * friendly refusal copy. Other 4xx/5xx are surfaced verbatim so we
- * never silently swallow a failure (Engineering Rule #4).
- *
- * Detection is content-based (substring + JSON parse) because the
- * Hermes SSE today does not carry tool-result payloads as discrete
- * events; the tool result is part of the assistant text the LLM
- * synthesizes from the JSON the tool returned. See ChatRuntimeProvider
- * and owner stream route comments for the bigger picture.
+ * Detection is content-based (substring + JSON parse): scan streamed
+ * text + SSE error events for the canonical `budget_exceeded` shape and
+ * substitute in the friendly refusal copy. Other 4xx/5xx are surfaced
+ * verbatim so we never silently swallow a failure (Engineering Rule #4).
  */
 interface BudgetRefusal { mtd_mc: number; cap_mc: number; hint?: string }
 
@@ -204,7 +235,14 @@ const SLASH_COMMANDS: Record<string, string> = {
   '/cli':   'Open a CLI member terminal. Usage: /cli <staff_name_or_id>.',
 };
 
-export function makeOwnerAdapter(): ChatModelAdapter {
+export interface MakeOwnerAdapterOpts {
+  /** Active secretary project id (sproj_*). When set, the adapter posts
+   *  `project_id` so the owner/stream route routes to that project's
+   *  secretary + persists into the per-project thread. Mirrors mobile. */
+  projectId?: string | null;
+}
+
+export function makeOwnerAdapter(opts: MakeOwnerAdapterOpts = {}): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
       const payload = messages
@@ -283,21 +321,22 @@ export function makeOwnerAdapter(): ChatModelAdapter {
       // Owner directive 2026-05-19 19:48: cancel mid-generation.
       // assistant-ui's local runtime passes `abortSignal` here; when the
       // user clicks Stop, that signal aborts AND the fetch RST propagates
-      // server-side (req.signal.aborted on the BFF), which then triggers
-      // bridge.connection.cancel() in hermes-acp-client.ts (already wired).
-      // Hermes ACP DOES support per-session cancel (see ACP SDK; honored
-      // by both promptOwner/promptSession paths), so cancel is end-to-end:
-      // client AbortController → server stream close → Hermes session/cancel
-      // → next turn on the SAME session is reusable. On abort we yield a
-      // final assistant chunk with the cancelled-footer so the partial
-      // bubble keeps its content + shows a clear "I stopped" affordance,
-      // instead of vanishing or rendering as an unmarked truncation.
+      // server-side (req.signal.aborted on the BFF), which cancels the
+      // warm-agent subprocess. Cancel is end-to-end: client AbortController
+      // → server stream close → warm-agent cancel → next turn on the SAME
+      // session is reusable. On abort we yield a final assistant chunk with
+      // the cancelled-footer so the partial bubble keeps its content + shows
+      // a clear "I stopped" affordance, instead of vanishing or rendering as
+      // an unmarked truncation.
       let res: Response;
       try {
         res = await fetch('/api/v1/chat/owner/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: payload }),
+          body: JSON.stringify({
+            messages: payload,
+            ...(opts.projectId ? { project_id: opts.projectId } : {}),
+          }),
           signal: abortSignal,
         });
       } catch (err) {

@@ -4,11 +4,17 @@ import { getStaffMerged, updateStaff, dismissStaffById, retireCliAgentStaff, typ
 interface Context { params: Promise<{ id: string }> }
 
 const PATCHABLE: Array<keyof StaffPatch> = [
-  'name', 'role_label', 'role_name', 'status',
+  'name', 'role_label', 'role_name',
+  // NOTE: 'status' intentionally excluded — status changes must go through DELETE
+  // (retireCliAgentStaff / dismissStaffById) to enforce lifecycle semantics.
   'system_prompt', 'autonomy_level', 'governance_mode',
-  'max_concurrent_jobs',
+  'max_concurrent_jobs', 'avatar_data',
   // Legacy local-AI staff config fields kept for persisted records.
   'denied_skills', 'monthly_budget_millicents', 'proxy_staff_id',
+  // AI-agent config: TTS voice/style/rate + reply language.
+  'tts_voice', 'tts_style', 'reply_language', 'tts_rate',
+  // Free-form labels (e.g. project scoping, task_group).
+  'tags',
 ];
 
 export async function GET(_req: Request, ctx: Context): Promise<NextResponse> {
@@ -39,6 +45,90 @@ export async function PATCH(req: Request, ctx: Context): Promise<NextResponse> {
   }
 
   const raw = body as Record<string, unknown>;
+
+  // --- Field validation ---
+  if ('name' in raw) {
+    const v = raw['name'];
+    if (typeof v !== 'string' || v.trim().length === 0) {
+      return NextResponse.json({ error: 'name must be a non-empty string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.trim().length > 80) {
+      return NextResponse.json({ error: 'name must be at most 80 characters', code: 'invalid_field' }, { status: 400 });
+    }
+    raw['name'] = v.trim();
+  }
+  if ('role_label' in raw) {
+    const v = raw['role_label'];
+    if (typeof v !== 'string') {
+      return NextResponse.json({ error: 'role_label must be a string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.length > 120) {
+      return NextResponse.json({ error: 'role_label must be at most 120 characters', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('role_name' in raw) {
+    const v = raw['role_name'];
+    if (typeof v !== 'string') {
+      return NextResponse.json({ error: 'role_name must be a string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.length > 120) {
+      return NextResponse.json({ error: 'role_name must be at most 120 characters', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('system_prompt' in raw) {
+    const v = raw['system_prompt'];
+    if (typeof v !== 'string') {
+      return NextResponse.json({ error: 'system_prompt must be a string', code: 'invalid_field' }, { status: 400 });
+    }
+    if (v.length > 8000) {
+      return NextResponse.json({ error: 'system_prompt must be at most 8000 characters', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('max_concurrent_jobs' in raw) {
+    const v = raw['max_concurrent_jobs'];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 10) {
+      return NextResponse.json({ error: 'max_concurrent_jobs must be an integer between 1 and 10', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('avatar_data' in raw) {
+    const v = raw['avatar_data'];
+    // Custom avatar is a small client-resized data URL; cap to ~256KB.
+    if (v !== null && (typeof v !== 'string' || (v.length > 0 && !v.startsWith('data:image/')) || v.length > 256_000)) {
+      return NextResponse.json({ error: 'avatar_data must be a data:image/* URL ≤256KB', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tts_voice' in raw) {
+    const v = raw['tts_voice'];
+    if (typeof v !== 'string' || v.length > 64) {
+      return NextResponse.json({ error: 'tts_voice must be a string ≤64 chars', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tts_style' in raw) {
+    const v = raw['tts_style'];
+    if (typeof v !== 'string' || v.length > 64) {
+      return NextResponse.json({ error: 'tts_style must be a string ≤64 chars', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('reply_language' in raw) {
+    const v = raw['reply_language'];
+    if (v !== 'auto' && v !== 'zh-CN' && v !== 'en') {
+      return NextResponse.json({ error: "reply_language must be 'auto', 'zh-CN', or 'en'", code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tts_rate' in raw) {
+    const v = raw['tts_rate'];
+    if (v !== 'inherit' && v !== 'slow' && v !== 'normal' && v !== 'fast') {
+      return NextResponse.json({ error: "tts_rate must be 'inherit', 'slow', 'normal', or 'fast'", code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  if ('tags' in raw) {
+    const v = raw['tags'];
+    if (!Array.isArray(v) || !v.every((t) => typeof t === 'string')) {
+      return NextResponse.json({ error: 'tags must be an array of strings', code: 'invalid_field' }, { status: 400 });
+    }
+  }
+  // --- End field validation ---
+
   const patch: StaffPatch = {};
   for (const k of PATCHABLE) {
     if (k in raw) {

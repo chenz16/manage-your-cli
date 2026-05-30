@@ -14,11 +14,16 @@ export * from './entities/chat-thread.js';
 export * from './entities/recent-event.js';
 export * from './entities/owner-assistant.js';
 export * from './entities/skill.js';
+export * from './entities/project.js';
+export * from './entities/todo.js';
+export * from './entities/room.js';
 
 export * from './endpoints/members.js';
 export * from './endpoints/chat.js';
 export * from './endpoints/today.js';
 export * from './endpoints/deliverables.js';
+export * from './endpoints/projects.js';
 
 export { registry } from './registry.js';
 export * from './manifests/connectors.js';
+export * from './manifests/plugins.js';

@@ -26,7 +26,7 @@
  *
  * Test scope today: exercise the in-app `/members` "+ Hire" dialog, which
  * is the user-facing hiring surface that exists right now (the chat-driven
- * create_agent flow requires Hermes + the create_agent tool, which is
+ * create_agent flow requires the create_agent MCP tool, which is
  * stubbed). Asserts the dialog opens, accepts a sketch, and produces a
  * Generated review state OR surfaces an error path.
  */
@@ -90,10 +90,9 @@ test.describe('Flow 3 — Build the team', () => {
   test.fixme(
     'create_agent via chat populates /members on next render',
     async ({ page }) => {
-      // FIXME (iter-010 Pass #5 — kept): `create_staff` is wired in
-      // packages/hermes-plugin-holon-owner (see owner-adapter.ts roster
-      // mutation broadcast), but this assertion needs the full chat →
-      // Hermes round-trip in CI — same flaky-Hermes caveat as the
+      // FIXME (iter-010 Pass #5 — kept): `create_staff` is wired in the
+      // Holon MCP server, but this assertion needs the full chat →
+      // Secretary CLI round-trip in CI — same flaky caveat as the
       // Flow 2 ambiguity_probe leg. Body is a `goto` stub.
       await page.goto('http://localhost:3000/');
     },

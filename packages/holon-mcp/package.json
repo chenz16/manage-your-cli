@@ -11,6 +11,7 @@
     "start": "tsx src/server.ts",
     "scaffold-secretary": "tsx src/scaffold-secretary.ts",
     "self-test": "tsx src/self-test.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 /**
- * iter-011 Pass #6 — BFF audit-emit proxy for the Hermes Python sidecar.
+ * iter-011 Pass #6 — BFF audit-emit proxy for plugin sidecars.
  *
  *   POST /api/v1/audit/emit
  *     header: X-Holon-Plugin-Secret: <env HOLON_PLUGIN_SHARED_SECRET>
@@ -15,7 +15,7 @@
  * Python sidecar's events land in the same audit collector with the same
  * shape as the BFF's own emits (no second sink, no file-race).
  *
- * Why the indirection: the sidecar can't `import '@holon/core'` (it's a
+ * Why the indirection: a sidecar can't `import '@holon/core'` (e.g. a
  * Python process), and we don't want two divergent audit pipelines. The
  * sidecar POSTs here; this route validates + replays.
  */

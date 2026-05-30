@@ -542,11 +542,16 @@ export function TodayClient({ initial }: { initial: TodayResponse }) {
             </section>
           )}
 
-          <div className="bucket-grid">
-            {initial.buckets.map((b) => (
-              <BucketCard key={b.key} bucket={b} onOpen={setOpenBucket} />
-            ))}
-          </div>
+          {/* Suppress the 6-card "0"-grid on day one — the legend inside
+           * TodayEmptyState already names + describes each bucket, so the
+           * grid is pure noise. Re-appears as soon as any bucket has work. */}
+          {!isPageEmpty && (
+            <div className="bucket-grid">
+              {initial.buckets.map((b) => (
+                <BucketCard key={b.key} bucket={b} onOpen={setOpenBucket} />
+              ))}
+            </div>
+          )}
 
           <JobsSection />
 

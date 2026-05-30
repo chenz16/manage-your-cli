@@ -6,8 +6,8 @@ import { InlineField } from './InlineField';
 import { PersonaPicker } from './PersonaPicker';
 import { FolderPicker } from './FolderPicker';
 import { AuthorizationsSection } from './AuthorizationsSection';
-import { ConnectPhoneSection } from './ConnectPhoneSection';
 import { BugQueue } from './BugQueue';
+import { ProjectsSection } from './ProjectsSection';
 import { LanguageSwitcher } from '../../_components/LanguageSwitcher';
 import { primeOwner } from '../../../lib/hooks/useOwner';
 import { useT } from '../../../lib/i18n/useT';
@@ -180,6 +180,9 @@ export function MeClient({
             })}
           </div>
         </section>
+
+        {/* Phase 1: Projects management */}
+        <ProjectsSection />
 
         {/* Identity */}
         <section className="card" style={{ padding: 20 }}>
@@ -385,8 +388,6 @@ export function MeClient({
          * me.llm_mode.* dict keys from the old placeholder are retained
          * in the dictionary (still used by the ADR / docs) but no
          * longer rendered here. */}
-
-        <ConnectPhoneSection />
 
         {/* Authorizations · 2026-05-20: restored inline after /integrations
          * route was reverted per owner directive 'nav 简单点 后面 mobile 迁移'.

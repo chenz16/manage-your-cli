@@ -77,16 +77,75 @@ function extractWeChatContextBlocks(messages: ChatMessage[]): string[] {
   return blocks.slice(-3);
 }
 
-export function buildOwnerPrompt(userText: string, messages: ChatMessage[]): string {
+export function buildOwnerPrompt(
+  userText: string,
+  messages: ChatMessage[],
+  activeProjectContext?: { name: string; memoryText: string } | null,
+  client?: string | null,
+  language?: 'en' | 'zh-CN' | null,
+): string {
   const wechatContexts = extractWeChatContextBlocks(messages);
-  if (wechatContexts.length === 0) return userText;
+  const isMobile = client === 'mobile';
+  // Default language is zh-CN (product default per ADR; WeChat path always zh-CN).
+  const effectiveLang: 'en' | 'zh-CN' = language === 'en' ? 'en' : 'zh-CN';
 
-  return [
-    'The user may be asking a follow-up about WeChat messages that were read earlier in this chat.',
-    'Use the WeChat context JSON below as already-read source data. Do not say you cannot read WeChat if the answer is present in this context.',
-    '',
-    ...wechatContexts.map((ctx, i) => `WeChat context ${i + 1}:\n${ctx}`),
-    '',
-    `Current user question:\n${userText}`,
-  ].join('\n');
+  const parts: string[] = [];
+
+  // ── Language directive — injected FIRST, forceful, non-negotiable ────────
+  // The Secretary must reply primarily in the owner's chosen language.
+  // Default is zh-CN. Only falls back to English when owner explicitly set 'en'.
+  if (effectiveLang === 'zh-CN') {
+    parts.push(
+      '[语言要求] 必须以中文为主回答。除非用户明确要求用其他语言，否则一律用简体中文回复。不得用英文开口，不得夹杂无必要的英文短语。',
+      '',
+    );
+  } else {
+    parts.push(
+      '[Language] Reply in English. Use English for all responses unless the user explicitly asks for another language.',
+      '',
+    );
+  }
+
+  // Client-awareness directives — injected after language directive.
+  // Mobile: concise, scannable, conclusion-first. Desktop: mild brevity nudge.
+  if (isMobile) {
+    parts.push(
+      '[系统指示] 用户在手机上，请保持回答精简可扫读，控制长度，先给结论再展开。避免不必要的长篇大论。',
+      '',
+    );
+  } else if (effectiveLang === 'zh-CN') {
+    parts.push(
+      '[系统指示] 保持回答聚焦，避免冗长。',
+      '',
+    );
+  } else {
+    parts.push(
+      '[System directive] Keep your answer focused and avoid unnecessarily long responses.',
+      '',
+    );
+  }
+
+  // Phase 1 — active project context injected at the top of the prompt
+  // when the boss has a project selected. One conditional readBossMemory
+  // call (per design doc § 9 item 8). The memory text may be short (just
+  // the stub written at project create time), which is fine — more detail
+  // accumulates as the boss uses writeBossMemory().
+  if (activeProjectContext?.name && activeProjectContext.memoryText.trim()) {
+    parts.push(`## Active project: ${activeProjectContext.name}`, activeProjectContext.memoryText.trim(), '');
+  }
+
+  if (wechatContexts.length > 0) {
+    parts.push(
+      'The user may be asking a follow-up about WeChat messages that were read earlier in this chat.',
+      'Use the WeChat context JSON below as already-read source data. Do not say you cannot read WeChat if the answer is present in this context.',
+      '',
+      ...wechatContexts.map((ctx, i) => `WeChat context ${i + 1}:\n${ctx}`),
+      '',
+      `Current user question:\n${userText}`,
+    );
+    return parts.join('\n');
+  }
+
+  parts.push(userText);
+  return parts.join('\n');
 }

@@ -29,8 +29,9 @@ import { spawnSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, statSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
-import { getStaffMerged } from './staff-management-service.js';
+import { getStaffMerged, listStaffMerged } from './staff-management-service.js';
 import { ensureAgentMemoryFile } from './cli-memory-scaffold.js';
+import { getCliAdapter } from './cli-adapters.js';
 
 const TMUX = 'tmux';
 const FIFO_DIR = join(tmpdir(), 'holon-cli');
@@ -130,6 +131,51 @@ function emit(staffId: string, evt: 'cli.launched' | 'cli.killed' | 'cli.input',
 
 /* ── Public API ────────────────────────────────────────────────────── */
 
+export interface DiscoveredTmuxSession {
+  name: string;
+  cwd: string;
+  command: string;
+  is_holon: boolean; // Holon's own holon-<id> session
+  adopted: boolean;  // already bound to a staff via external_session
+}
+
+/**
+ * List tmux sessions on this machine for the "adopt as employee" flow. One row
+ * per session (first pane's cwd + foreground command). Non-tmux processes are
+ * out of scope by design. Returns [] if no tmux server / no sessions.
+ */
+export function listTmuxSessions(): DiscoveredTmuxSession[] {
+  const r = spawnSync(TMUX,
+    ['list-panes', '-a', '-F', '#{session_name}\t#{pane_current_path}\t#{pane_current_command}'],
+    { encoding: 'utf8' });
+  if (r.status !== 0 || typeof r.stdout !== 'string') return [];
+  const adopted = new Set<string>();
+  for (const s of listStaffMerged()) {
+    // Archived (retired) staff release their session binding — a deleted
+    // adopted employee (retireCliAgentStaff sets status='archived') must not
+    // permanently block re-adopting that tmux session.
+    if (s.status === 'archived') continue;
+    const sub = s.substrate;
+    if (sub?.kind === 'cli_agent' && sub.external_session?.trim()) adopted.add(sub.external_session.trim());
+  }
+  const seen = new Map<string, DiscoveredTmuxSession>();
+  for (const line of r.stdout.split('\n')) {
+    if (!line.trim()) continue;
+    const parts = line.split('\t');
+    const name = parts[0]?.trim();
+    if (!name || seen.has(name)) continue;
+    seen.set(name, {
+      name,
+      cwd: parts[1]?.trim() ?? '',
+      command: parts[2]?.trim() ?? '',
+      is_holon: name.startsWith('holon-'),
+      adopted: adopted.has(name),
+    });
+  }
+  return [...seen.values()];
+}
+
+
 export interface LaunchResult {
   ok: true;
   staff_id: string;
@@ -185,7 +231,7 @@ export function launchCliSession(staffId: string): LaunchResult | LaunchError {
   }
   // Claude stalls on a first-time folder-trust prompt → pre-accept it so the
   // auto-launched agent starts straight into its input and stays alive.
-  if (autoLaunch && binary === 'claude' && cwd) pretrustClaudeFolder(cwd);
+  if (autoLaunch && binary && getCliAdapter(binary).pretrust && cwd) pretrustClaudeFolder(cwd);
   const banner = binary
     ? `echo '[holon] session for ${staff.name} (${binary})${autoLaunch ? '' : ' — type your commands'}.'`
     : `echo '[holon] session for ${staff.name}.'`;
@@ -204,20 +250,67 @@ export function launchCliSession(staffId: string): LaunchResult | LaunchError {
   }
   spawnSync(TMUX, ['set-option', '-t', name, 'window-size', 'manual'], { stdio: 'pipe' });
 
-  // Codex shows a blocking "✨ Update available! … 1. Update now / 2. Skip /
-  // 3. Skip until next version" menu on first launch whenever a newer release
-  // exists, stalling an auto-launched worker. The DEFAULT (bare Enter) is
-  // "Update now", which runs `npm install -g` and then EXITS codex — killing the
-  // worker. So we must pick "Skip" (2), and only when the menu is actually on
-  // screen, never typing into a ready composer. Codex exposes no flag to disable
-  // the check, so this screen-guarded keystroke is the safe option.
+  // First-launch screen-guarded keystrokes. Each branch:
+  //   1. captures the pane on a short delay,
+  //   2. regex-matches a menu fingerprint that's specific to THAT binary's
+  //      blocking screen (never a substring that could appear in normal CLI
+  //      output / a chat composer),
+  //   3. sends the keystroke that selects the safe option (OAuth or Skip).
+  // Never fire keys blind — the cost of a stray '2'+Enter into a ready
+  // composer is corrupting the owner's session, so the guard is the contract.
   if (autoLaunch && binary === 'codex') {
+    // Codex's "✨ Update available! … 1. Update now / 2. Skip / 3. Skip until
+    // next version" menu. Default (bare Enter) is "Update now", which
+    // `npm install -g`s and EXITS codex — killing the worker. Pick "Skip" (2).
+    // Codex exposes no flag to disable the check.
     for (const delayMs of [2500, 5000]) {
       setTimeout(() => {
         const cap = spawnSync(TMUX, ['capture-pane', '-p', '-t', name], { stdio: 'pipe' });
         const screen = cap.stdout?.toString() ?? '';
         if (!/Update available|Skip until next version/i.test(screen)) return;
         spawnSync(TMUX, ['send-keys', '-t', name, '2'], { stdio: 'pipe' });
+        spawnSync(TMUX, ['send-keys', '-t', name, 'Enter'], { stdio: 'pipe' });
+      }, delayMs);
+    }
+  }
+
+  if (autoLaunch && binary === 'qwen') {
+    // Qwen's first-launch auth picker:
+    //   "How would you like to authenticate for this project?"
+    //   ● 1. Qwen OAuth
+    //     2. OpenAI
+    //   (Use Enter to Set Auth)
+    // OAuth (no API key required) is the safe default for a CLI-subscription
+    // desk → cursor is already on option 1, so a bare Enter selects it.
+    // Match on the menu title + the literal "Qwen OAuth" option label so we
+    // never fire on stray UI text.
+    for (const delayMs of [2500, 5000]) {
+      setTimeout(() => {
+        const cap = spawnSync(TMUX, ['capture-pane', '-p', '-t', name], { stdio: 'pipe' });
+        const screen = cap.stdout?.toString() ?? '';
+        if (!/How would you like to authenticate[\s\S]*Qwen OAuth/i.test(screen)) return;
+        spawnSync(TMUX, ['send-keys', '-t', name, 'Enter'], { stdio: 'pipe' });
+      }, delayMs);
+    }
+  }
+
+  if (autoLaunch && binary === 'gemini') {
+    // Gemini's first-launch "Select Auth Method" menu (when GEMINI_API_KEY /
+    // ~/.gemini auth not present). Upstream wording from google-gemini/
+    // gemini-cli auth dialog: "How would you like to authenticate?" with
+    // options including "Login with Google" / "Use Gemini API Key" / "Vertex
+    // AI" / "Cloud Shell". Cursor is on "Login with Google" by default → bare
+    // Enter picks the OAuth-style login that matches a CLI subscription. When
+    // the user is already authenticated (the common case once the desk is
+    // set up) this regex never matches and we no-op.
+    //
+    // TODO: this matches Gemini CLI v0.42–0.44; if upstream renames the menu
+    // title in a future release, fall through to no-op (no stray key fired).
+    for (const delayMs of [2500, 5000]) {
+      setTimeout(() => {
+        const cap = spawnSync(TMUX, ['capture-pane', '-p', '-t', name], { stdio: 'pipe' });
+        const screen = cap.stdout?.toString() ?? '';
+        if (!/(Select Auth Method|How would you like to authenticate)[\s\S]*Login with Google/i.test(screen)) return;
         spawnSync(TMUX, ['send-keys', '-t', name, 'Enter'], { stdio: 'pipe' });
       }, delayMs);
     }
@@ -257,7 +350,7 @@ export function paneCurrentCommand(staffId: string): string {
 }
 
 /** Capture the session's current screen + scrollback (read-only, no input) so
- *  the Sr Manager (Hermes) can read what a worker did and summarise it. */
+ *  the Secretary can read what a worker did and summarise it. */
 export function captureCliOutput(staffId: string, lines = 200): { ok: boolean; output?: string; reason?: string } {
   const name = sessionNameForStaff(staffId);
   if (!tmuxHasSession(name)) return { ok: false, reason: 'no_session' };

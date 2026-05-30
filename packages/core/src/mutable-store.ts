@@ -52,8 +52,10 @@ export type OwnerAssistantPatch = Partial<OwnerAssistant>;
 export type StaffPatch = Partial<Pick<Staff,
   | 'name' | 'role_label' | 'role_name' | 'status'
   | 'system_prompt' | 'autonomy_level' | 'governance_mode'
-  | 'max_concurrent_jobs'
-  | 'denied_skills' | 'monthly_budget_millicents' | 'proxy_staff_id'>>;
+  | 'max_concurrent_jobs' | 'avatar_data'
+  | 'denied_skills' | 'monthly_budget_millicents' | 'proxy_staff_id'
+  | 'tts_voice' | 'tts_style' | 'reply_language' | 'tts_rate'
+  | 'tags'>>;
 
 interface StoreState {
   jobs: Map<string, Job>;
@@ -290,6 +292,11 @@ export function markJobFailed(id: string, error: string): Job | null {
   return j;
 }
 
+/** Hard-delete a job from the in-memory store. Returns true if found + deleted. */
+export function deleteJob(id: string): boolean {
+  return S.jobs.delete(id);
+}
+
 /* ── Worker-produced deliverables ─────────────────────────────────── */
 
 export function createDeliverable(input: Deliverable): Deliverable {
@@ -304,6 +311,21 @@ export function listMutableDeliverables(): Deliverable[] {
 
 export function getMutableDeliverable(id: string): Deliverable | null {
   return S.deliverables.get(id) ?? null;
+}
+
+/** Hard-delete a deliverable from the in-memory mutable store. Returns true if found + deleted. */
+export function deleteMutableDeliverable(id: string): boolean {
+  return S.deliverables.delete(id);
+}
+
+/** Update a deliverable's review status (accept/reject/etc.). Returns the updated
+ *  row, or null if the id isn't in the mutable store (fixture rows are read-only). */
+export function setMutableDeliverableStatus(id: string, status: Deliverable['status']): Deliverable | null {
+  const d = S.deliverables.get(id);
+  if (!d) return null;
+  const updated: Deliverable = { ...d, status };
+  S.deliverables.set(id, updated);
+  return updated;
 }
 
 /* ── Owner-assistant field overrides (for /me inline edit) ────────── */

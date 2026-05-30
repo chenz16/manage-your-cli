@@ -20,7 +20,7 @@
     "role_label": "Owner Assistant",
     "substrate": {
       "kind": "local_ai",
-      "agent_profile_id": "hermes_profile_owner_v1",
+      "agent_profile_id": "local_ai_owner_v1",
       "tool_scope": [
         "list_staff",
         "query_staff",

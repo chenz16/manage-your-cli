@@ -1,0 +1,22 @@
+{
+  "name": "@holon/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless myc CLI for Manage Your CLI desk — query status without the web GUI.",
+  "bin": {
+    "myc": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@holon/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "20.16.5",
+    "tsx": "4.19.1",
+    "typescript": "5.5.4"
+  }
+}

@@ -11,6 +11,35 @@
  * using live tmux (watchable); this is the latency-critical owner path.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
+import { register as regProcess, unregister as unregProcess, touch as touchProcess, markStatus } from './process-registry';
+import { setBusyProbe } from './settle-watch';
+import type { SyntheticMessage } from './synthetic-producers';
+
+// Persist warm session ids per key so when the warm process dies (idle reap /
+// HMR / OS restart), the next spawn can `claude --resume <id>` and pick up
+// the same conversation history — same trick the owner uses to adopt the mgr
+// tmux. Without resume, secretary loses everything on every cold spawn.
+const SESSION_STORE = join(homedir(), '.holon', 'warm-sessions.json');
+function loadSessions(): Record<string, string> {
+  try {
+    if (existsSync(SESSION_STORE)) {
+      return JSON.parse(readFileSync(SESSION_STORE, 'utf8')) as Record<string, string>;
+    }
+  } catch { /* corrupt — start fresh */ }
+  return {};
+}
+function saveSession(key: string, sessionId: string): void {
+  try {
+    const all = loadSessions();
+    if (all[key] === sessionId) return;
+    all[key] = sessionId;
+    mkdirSync(dirname(SESSION_STORE), { recursive: true });
+    writeFileSync(SESSION_STORE, JSON.stringify(all, null, 2));
+  } catch { /* best-effort */ }
+}
 
 interface WarmAgent {
   proc: ChildProcess;
@@ -21,17 +50,60 @@ interface WarmAgent {
   onText: ((full: string) => void) | null;
   onDone: (() => void) | null;
   onError: ((msg: string) => void) | null;
+  sessionId: string | null;
 }
 
 const G = globalThis as unknown as {
   __holonWarmAgents?: Map<string, WarmAgent>;
   __holonWarmKeep?: Map<string, { binary: string; cwd: string | undefined }>;
   __holonWarmHeartbeat?: boolean;
+  /** Per-secretary-key queue of pending synthetic messages. Drained
+   *  (prepended) on the NEXT inbound turn. Non-preemptive: never pushed
+   *  mid-turn. */
+  __holonWarmSynthQueue?: Map<string, SyntheticMessage[]>;
+  __holonWarmBusyProbeWired?: boolean;
 };
 if (!G.__holonWarmAgents) G.__holonWarmAgents = new Map();
 if (!G.__holonWarmKeep) G.__holonWarmKeep = new Map();
+if (!G.__holonWarmSynthQueue) G.__holonWarmSynthQueue = new Map();
 const AGENTS = G.__holonWarmAgents;
 const KEEP = G.__holonWarmKeep; // keys here are kept always-warm: never reaped, respawned if they die
+const SYNTH_QUEUE = G.__holonWarmSynthQueue;
+
+// One-time wiring: tell settle-watch how to ask "is this warm key busy right
+// now?" — it needs that to gate the settle event (don't fire while mid-turn).
+if (!G.__holonWarmBusyProbeWired) {
+  G.__holonWarmBusyProbeWired = true;
+  setBusyProbe((key) => {
+    const a = AGENTS.get(key);
+    return !!a && a.busy;
+  });
+}
+
+/**
+ * Enqueue synthetic messages for a warm-secretary key. The queue drains on
+ * the NEXT inbound owner turn (sendWarmTurn) — NEVER pushed into a mid-turn
+ * stream. That is the explicit ADR §4.3 Path B invariant ("不要打断 就是下
+ * 一次提醒"). Tests verify this in warm-agent-synthetic.test.ts.
+ */
+export function enqueueSyntheticMessages(key: string, messages: SyntheticMessage[]): void {
+  if (messages.length === 0) return;
+  const existing = SYNTH_QUEUE.get(key) ?? [];
+  existing.push(...messages);
+  SYNTH_QUEUE.set(key, existing);
+}
+
+/** Snapshot the queue for a key — does NOT clear (test/inspection use). */
+export function peekSyntheticQueue(key: string): SyntheticMessage[] {
+  return [...(SYNTH_QUEUE.get(key) ?? [])];
+}
+
+/** Drain (read + clear) the queue. Used by sendWarmTurn on next inbound. */
+export function drainSyntheticQueue(key: string): SyntheticMessage[] {
+  const msgs = SYNTH_QUEUE.get(key) ?? [];
+  SYNTH_QUEUE.delete(key);
+  return msgs;
+}
 
 const IDLE_REAP_MS = 5 * 60 * 1000; // kill a warm process after 5 min idle (non-keep agents only)
 
@@ -73,11 +145,38 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
   const args = ['--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
     '--include-partial-messages', '--verbose', '--dangerously-skip-permissions',
     '--model', model, '--effort', effort];
+  // Explicitly load .mcp.json from cwd (stream-json + --print may NOT auto-
+  // discover the project mcp file the way the interactive TUI does). Without
+  // this the secretary spawns with no tools and just bashes work itself
+  // instead of dispatching to employees.
+  if (cwd) {
+    const mcpPath = join(cwd, '.mcp.json');
+    if (existsSync(mcpPath)) {
+      args.push('--mcp-config', mcpPath);
+    }
+  }
+  // Resume the prior session if we have one. Lets the secretary keep memory
+  // across HMR / idle reap / restarts (per owner: "记忆重启 要 resume").
+  const prevSessionId = loadSessions()[key];
+  if (prevSessionId) {
+    args.push('--resume', prevSessionId);
+  }
   const proc = spawn(binary, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
   const a: WarmAgent = {
     proc, buf: '', busy: false, assembled: '', idleTimer: null,
     onText: null, onDone: null, onError: null,
+    sessionId: prevSessionId ?? null,
   };
+  if (proc.pid) {
+    regProcess({
+      key: `warm:${key}`,
+      pid: proc.pid,
+      kind: 'warm-secretary',
+      ...(cwd !== undefined ? { cwd } : {}),
+      ...(prevSessionId ? { sessionId: prevSessionId } : {}),
+      meta: { binary, model },
+    });
+  }
 
   const settleTurn = () => {
     const done = a.onDone;
@@ -96,11 +195,34 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
       if (!line.trim()) continue;
       let ev: {
         type?: string;
-        message?: { content?: Array<{ type: string; text?: string }> };
+        subtype?: string;
+        session_id?: string;
+        message?: {
+          content?: Array<{
+            type: string;
+            text?: string;
+            // tool_use blocks (claude-code Task / Read / Bash / mcp__*)
+            id?: string;
+            name?: string;
+            input?: { description?: string; subagent_type?: string };
+            // tool_result blocks
+            tool_use_id?: string;
+            content?: unknown;
+          }>;
+        };
         event?: { type?: string; delta?: { type?: string; text?: string } };
         result?: unknown;
       };
       try { ev = JSON.parse(line); } catch { continue; }
+      // Init event carries the session_id; persist so a later cold spawn can
+      // --resume this same session and keep the conversation memory.
+      if (ev.type === 'system' && ev.subtype === 'init' && typeof ev.session_id === 'string') {
+        a.sessionId = ev.session_id;
+        saveSession(key, ev.session_id);
+      }
+      // Every stream event = heartbeat — touch the registry so the ticker
+      // doesn't mark this warm process stuck mid-turn.
+      touchProcess(`warm:${key}`);
       if (ev.type === 'stream_event') {
         // Token-by-token deltas (--include-partial-messages) → typewriter feel.
         const d = ev.event?.delta;
@@ -114,6 +236,42 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
           .filter((b) => b.type === 'text' && typeof b.text === 'string')
           .map((b) => b.text as string).join('');
         if (text && text !== a.assembled) { a.assembled = text; a.onText?.(a.assembled); }
+        // Stream-json Task tool tap: register any in-process subagent that
+        // the secretary spawned via the Task tool. These don't appear in
+        // `ps` (they're internal to claude-code) but they're real work
+        // happening on the secretary's behalf and we want them visible in
+        // /api/v1/health for owner ops triage.
+        for (const block of ev.message.content) {
+          if (block.type === 'tool_use' && block.id && block.name) {
+            const isTask = block.name === 'Task';
+            // Track Task subagents + MCP holon dispatches (the high-signal
+            // ones). Skip noise like Read/Bash/Glob — those don't represent
+            // long-running work.
+            const isHolonDispatch = block.name.startsWith('mcp__holon__');
+            if (!isTask && !isHolonDispatch) continue;
+            const subKey = `warm:${key}/tool:${block.id}`;
+            regProcess({
+              key: subKey,
+              pid: proc.pid ?? 0,            // shares parent pid (in-process)
+              kind: 'task-subagent',
+              parentKey: `warm:${key}`,
+              meta: {
+                tool: block.name,
+                description: block.input?.description ?? '',
+                subagent_type: block.input?.subagent_type ?? '',
+              },
+            });
+          }
+        }
+      } else if (ev.type === 'user' && ev.message?.content) {
+        // Tool results land in synthetic 'user' messages — close out any
+        // task-subagent we previously opened on tool_use.
+        for (const block of ev.message.content) {
+          if (block.type === 'tool_result' && block.tool_use_id) {
+            const subKey = `warm:${key}/tool:${block.tool_use_id}`;
+            markStatus(subKey, 'reaped');
+          }
+        }
       } else if (ev.type === 'result') {
         if (typeof ev.result === 'string' && ev.result.trim() && ev.result !== a.assembled) {
           a.assembled = ev.result; a.onText?.(a.assembled);
@@ -124,7 +282,10 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
   });
   proc.stderr?.on('data', () => { /* claude logs to stderr; ignore */ });
   proc.on('error', (err) => { a.onError?.(err.message); settleTurn(); });
-  proc.on('exit', () => { AGENTS.delete(key); });
+  proc.on('exit', () => {
+    AGENTS.delete(key);
+    unregProcess(`warm:${key}`);
+  });
   return a;
 }
 
@@ -182,11 +343,39 @@ export function sendWarmTurn(
     h.signal.addEventListener('abort', onAbort, { once: true });
   }
 
-  const msg = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: prompt }] } });
+  // Drain any synthetic messages queued by producers (HR, event-followup …)
+  // and PREPEND them before the inbound owner turn. This is the §4.3-Path-B
+  // next-turn-nudge channel — non-preemptive, so we only ever consult the
+  // queue at the input boundary (here), never mid-turn.
+  const queued = drainSyntheticQueue(key);
+  const lines: string[] = [];
+  for (const sm of queued) {
+    // stream-json's --input-format only accepts 'user' frames on stdin, so a
+    // producer's 'system' role is wrapped as a user frame with a tag prefix.
+    // HR Path B uses role:'user' and so passes through as-is.
+    const content = sm.role === 'system'
+      ? `[synthetic:${sm.sourceProducer}] ${sm.content}`
+      : sm.content;
+    lines.push(JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text: content }] },
+    }));
+  }
+  lines.push(JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+  }));
   try {
-    a.proc.stdin?.write(msg + '\n');
+    a.proc.stdin?.write(lines.join('\n') + '\n');
   } catch (err) {
     h.onError(err instanceof Error ? err.message : String(err));
     a.busy = false;
   }
+}
+
+/** Test-only: clear the per-key synthetic queue. Module reload via
+ *  vi.resetModules() is the canonical reset, but this helper lets a single
+ *  spec scrub state without a full reload. */
+export function _resetWarmAgentForTest(): void {
+  SYNTH_QUEUE.clear();
 }

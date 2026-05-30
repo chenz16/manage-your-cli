@@ -3,8 +3,8 @@ import { idOf } from '../primitives.js';
 import { ChatMessageRole } from '../enums.js';
 
 /**
- * Chat thread + message — per ADR-013 (chat surface is a Hermes loop
- * instance, not a separate primitive). The mock represents conversations
+ * Chat thread + message — per ADR-013 (chat surface is a Secretary CLI
+ * session, not a separate primitive). The mock represents conversations
  * with owner_assistant, local AI staff, and peer staff.
  */
 

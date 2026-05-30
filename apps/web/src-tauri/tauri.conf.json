@@ -44,7 +44,6 @@
     ],
     "resources": [
       "resources/n/**/*",
-      "resources/hermes-sidecar/**/*",
       "resources/wechat-daemon/**/*"
     ],
     "android": {

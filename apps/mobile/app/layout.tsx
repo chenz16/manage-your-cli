@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './components.css';
-import { BugFab } from './_components/BugFab';
-import { MobileTabBar } from './_components/MobileTabBar';
-import { PhoneStatus } from './_components/PhoneStatus';
 import { ServiceWorkerRegister } from './_components/ServiceWorkerRegister';
+import { NativeKeyboardInit } from './_components/NativeKeyboardInit';
+// MobileTabBar + MobileBootstrap removed — superseded by WeizoApp 4-tab shell
+// rendered directly from page.tsx (single-page SPA pattern).
 
 export const metadata: Metadata = {
   // M-L-042 — Align metadata to manifest.json (Chinese-ified in M-L-024) so the
@@ -39,6 +39,9 @@ export const viewport: Viewport = {
   userScalable: true,
   viewportFit: 'cover',
   themeColor: '#F8F6EF',
+  // M-L-KBD3 — keyboard resize owned by @capacitor/keyboard (resize: Native),
+  // which resizes the native WebView in sync with the keyboard so the composer
+  // stays visible above it. interactiveWidget dropped so the two don't fight.
 };
 
 // M-L-005 — Root layout: app-shell (dark gutter on desktop, paper on
@@ -64,13 +67,11 @@ export default function RootLayout({
       <body>
         <div className="app-shell">
           <div className="phone-shell">
-            <PhoneStatus />
             <main className="main">{children}</main>
-            <MobileTabBar />
-            <BugFab />
           </div>
         </div>
         <ServiceWorkerRegister />
+        <NativeKeyboardInit />
       </body>
     </html>
   );

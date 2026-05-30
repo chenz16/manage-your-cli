@@ -6,8 +6,8 @@
  * request by running the owner's **Codex subscription** via `scripts/codex-agent.sh`
  * (Windows Codex over WSL interop, ChatGPT login — no API key, no token billing).
  *
- * Point Hermes at it to empirically test "can the Codex subscription be Hermes's
- * LLM engine":
+ * Point an OpenAI-compatible client at it to empirically test "can the Codex
+ * subscription be used as an LLM engine":
  *     HOLON_LLM_GATEWAY_URL=http://127.0.0.1:4001  LITELLM_MASTER_KEY=shim
  *
  * CAVEATS (this is a hack, not a shippable integration):

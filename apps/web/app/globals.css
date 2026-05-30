@@ -1622,8 +1622,18 @@ select:focus-visible,
   flex: 1;
   min-height: 440px;
   padding: 8px;
+  /* Prevent wheel events from chaining to the page when the terminal
+   * scrollback hits its top/bottom edge (overscroll containment). */
+  overscroll-behavior: contain;
 }
-.cli-terminal-body .xterm-viewport { background: transparent !important; }
+.cli-terminal-body .xterm-viewport {
+  background: transparent !important;
+  /* The xterm viewport is the actual scrollable element — ensure it
+   * scrolls vertically and contains overscroll so the page never
+   * hijacks wheel events that belong to the terminal. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
 /* ── Bug-report button — renders as a nav-item-style row inside
  * .nav-bug-row so it carries the same visual weight as Members /
@@ -1981,3 +1991,428 @@ select:focus-visible,
   margin-top: 4px;
 }
 .bug-modal-textarea:focus { border-color: var(--ink); }
+
+/* ─── Connectors page (/connectors) ─────────────────────────────────────
+ *
+ * Design-review pass (feat/desk-plugins): the page previously leaned on
+ * undefined classes (.eyebrow / .input / `.btn primary`) and ad-hoc inline
+ * styles, so inputs fell back to raw browser chrome and primary buttons had
+ * no fill. This block gives both the existing Voice/Messaging/A2A sections
+ * and the new 插件/Plugins section ONE cohesive, token-driven component
+ * system that matches the rest of the app (.card, --ink/--line, --radius).
+ */
+
+/* Page column — constrains line length, stacks sections with even rhythm. */
+.conn-page { max-width: 760px; }
+.conn-page .page-header { margin-bottom: 24px; }
+
+/* Eyebrow kicker above section/page titles (small-caps, muted). */
+.conn-eyebrow {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+}
+
+/* Section card — one card per logical group; consistent inner padding +
+ * vertical rhythm between the section heading and its field groups. */
+.conn-card { display: grid; gap: 18px; padding: 22px 24px; }
+.conn-card + .conn-card { margin-top: 16px; }
+.conn-card-head { display: grid; gap: 4px; }
+.conn-card-title { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.conn-card-hint { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-mute); }
+
+/* A labelled field group inside a section. */
+.conn-field { display: grid; gap: 8px; }
+.conn-field-label { font-size: 14px; font-weight: 600; color: var(--ink); }
+.conn-field-hint { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-mute); }
+.conn-field-hint code {
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+
+/* Real input/select styling (replaces the undefined `.input` class). */
+.conn-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.conn-input::placeholder { color: var(--ink-mute); opacity: 0.8; }
+.conn-input:focus-visible {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 82, 0.14);
+}
+select.conn-input { cursor: pointer; }
+
+/* Action row — buttons + inline status, baseline-aligned. */
+.conn-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.conn-status {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  line-height: 1.4;
+}
+
+/* Inline panel (this desk's A2A card, etc.) — quieter than a full card. */
+.conn-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-alt);
+}
+.conn-panel-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.conn-panel-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.conn-panel-meta { font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
+.conn-panel-empty { margin: 0; font-size: 12.5px; color: var(--ink-mute); }
+
+/* Chip row + chips (skills, capabilities). Neutral = read; amber = write. */
+.conn-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.conn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-alt);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.conn-chip.is-read {
+  background: #EEF4F0;
+  border-color: #D5E5DC;
+  color: var(--green);
+}
+.conn-chip.is-write {
+  background: rgba(198, 154, 53, 0.12);
+  border-color: rgba(198, 154, 53, 0.40);
+  color: #8a6712;
+}
+
+/* "Coming soon" disabled row (OAuth-pending channels). */
+.conn-soon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-alt);
+}
+.conn-soon-name { font-size: 14px; font-weight: 600; color: var(--ink-soft); }
+.conn-soon-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* Plugin card — name + write-flag, description, capability chips, config,
+ * and an aligned action row + state. Reads as a peer of the section cards
+ * but nested (lighter border, tighter padding). */
+.conn-plugin {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-alt);
+}
+.conn-plugin-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.conn-plugin-title-wrap { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.conn-plugin-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.conn-plugin-name { font-size: 15px; font-weight: 700; color: var(--ink); }
+.conn-plugin-desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-mute); }
+
+/* Small inline tag (bundled). */
+.conn-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--ink-mute);
+}
+
+/* Plugin state — dot + label, color-keyed to install/enabled state. */
+.conn-plugin-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.conn-plugin-state::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-mute);
+  opacity: 0.55;
+}
+.conn-plugin-state.is-enabled { color: var(--green); }
+.conn-plugin-state.is-enabled::before { background: var(--green); opacity: 1; }
+.conn-plugin-state.is-disabled::before { background: var(--gold); opacity: 1; }
+
+/* Config fields shown before install. */
+.conn-plugin-config {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+/* Tasteful security note — informational, not a scary red block. */
+.conn-note {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 10px;
+  background: rgba(198, 154, 53, 0.06);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.conn-note-icon { flex-shrink: 0; color: var(--gold); font-size: 14px; line-height: 1.4; }
+
+.conn-loading { margin: 0; font-size: 13px; color: var(--ink-mute); }
+.conn-error { margin: 0; font-size: 13px; color: var(--red); }
+
+/* QR paste/drop/upload dropzone */
+.conn-qr-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1.5px dashed var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  outline: none;
+  margin-top: 6px;
+}
+.conn-qr-dropzone:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted, rgba(99,102,241,0.25));
+}
+.conn-qr-dropzone.is-active {
+  border-color: var(--accent);
+  background: var(--accent-muted, rgba(99,102,241,0.07));
+}
+.conn-qr-dropzone-hint {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink-mute);
+  min-width: 0;
+}
+.conn-qr-upload-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, #6366f1);
+  cursor: pointer;
+  padding: 5px 12px;
+  border: 1px solid var(--accent, #6366f1);
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.conn-qr-upload-label:hover {
+  background: var(--accent-muted, rgba(99,102,241,0.1));
+}
+
+@media (max-width: 560px) {
+  .conn-plugin-head { flex-direction: column; }
+  .conn-card { padding: 18px 16px; }
+}
+/* ─── Project switcher dropdown extras (inline create/rename/delete) ── */
+.desk-proj-switcher-divider { height: 1px; background: var(--line, #E2DCC8); margin: 4px 0; }
+.desk-proj-switcher-newrow  { display: flex; gap: 6px; align-items: center; padding: 6px 10px; }
+.desk-proj-switcher-newinput {
+  flex: 1; border: 1px solid var(--line, #E2DCC8); border-radius: 6px;
+  padding: 5px 9px; font-size: 12px; background: #fff; color: var(--ink, #111);
+}
+.desk-proj-switcher-newinput:focus { outline: 2px solid var(--blue, #1F6F9E); outline-offset: -2px; }
+.desk-proj-switcher-newbtn {
+  background: var(--blue, #1F6F9E); color: #fff; border: 0; padding: 5px 10px;
+  border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;
+}
+.desk-proj-switcher-newbtn:disabled { background: var(--ink-mute, #6E6A60); cursor: not-allowed; }
+.desk-proj-switcher-err { color: var(--red, #C0392B); font-size: 11px; padding: 2px 10px 6px; }
+.desk-proj-switcher-name-wrap { flex: 1; min-width: 0; cursor: pointer; }
+.desk-proj-switcher-renameinput {
+  width: 100%; border: 1px solid var(--blue, #1F6F9E); border-radius: 4px;
+  padding: 2px 6px; font-size: 12px; font-weight: 500; background: #fff;
+}
+.desk-proj-switcher-rowactions { display: flex; gap: 2px; flex-shrink: 0; }
+.desk-proj-switcher-rowbtn {
+  background: transparent; border: 0; cursor: pointer;
+  width: 24px; height: 24px; padding: 0; border-radius: 4px;
+  font-size: 12px; opacity: 0; transition: opacity 0.15s;
+}
+.desk-proj-switcher-item:hover .desk-proj-switcher-rowbtn { opacity: 0.7; }
+.desk-proj-switcher-rowbtn:hover { opacity: 1; background: var(--bg-alt, #EFEBDD); }
+.desk-proj-switcher-rowbtn:disabled { opacity: 0; cursor: not-allowed; }
+
+/* ─── Projects page (desk /projects) ──────────────────────────────────── */
+.projects-page { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+.projects-page .page-header h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; color: var(--ink, #111); }
+.projects-page .page-subtitle { color: var(--ink-soft, #4A4A45)); font-size: 13px; margin: 0 0 18px; }
+.projects-create {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 18px;
+  padding: 12px; background: var(--bg-alt, #EFEBDD); border-radius: 10px;
+}
+.projects-create-input {
+  flex: 1; border: 1px solid var(--line, #E2DCC8); border-radius: 8px;
+  padding: 8px 12px; font-size: 14px; background: #fff;
+}
+.projects-create-input:focus { outline: 2px solid var(--blue, #1F6F9E); outline-offset: -2px; }
+.projects-create-btn {
+  background: var(--blue, #1F6F9E); color: #fff; border: 0; padding: 8px 14px;
+  border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.projects-create-btn:disabled { background: var(--ink-mute, #6E6A60); cursor: not-allowed; }
+.projects-create-err { color: var(--red, #C0392B); font-size: 12px; }
+.projects-list { display: flex; flex-direction: column; gap: 8px; }
+.projects-empty { color: var(--ink-soft, #4A4A45)); padding: 32px; text-align: center; font-size: 14px; }
+.projects-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px; border: 1px solid var(--line, #E2DCC8); border-radius: 10px;
+  background: #fff;
+}
+.projects-row.is-active { border-color: var(--blue, #1F6F9E); background: rgba(31,111,158,0.04); }
+.projects-row-mark {
+  background: transparent; border: 0; width: 28px; height: 28px;
+  font-size: 16px; color: var(--ink-soft, #6E6A60); cursor: pointer;
+}
+.projects-row.is-active .projects-row-mark { color: var(--blue, #1F6F9E); }
+.projects-row-body { flex: 1; cursor: pointer; min-width: 0; }
+.projects-row-name { font-weight: 500; font-size: 14px; color: var(--ink, #111); }
+.projects-row-sub  { color: var(--ink-soft, #6E6A60); font-size: 12px; margin-top: 2px; }
+.projects-row-input {
+  width: 100%; border: 1px solid var(--blue, #1F6F9E); border-radius: 6px;
+  padding: 4px 8px; font-size: 14px; font-weight: 500;
+}
+.projects-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.projects-row-btn {
+  background: transparent; border: 1px solid var(--line, #E2DCC8); border-radius: 6px;
+  padding: 6px 10px; font-size: 12px; color: var(--ink, #111); cursor: pointer;
+}
+.projects-row-btn:hover { background: var(--bg-alt, #EFEBDD); }
+.projects-row-btn.is-danger { color: var(--red, #C0392B); border-color: rgba(192,57,43,0.3); }
+.projects-row-btn.is-danger:hover { background: rgba(192,57,43,0.06); }
+.projects-row-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.projects-foot { margin-top: 16px; padding: 10px; color: var(--ink-soft, #4A4A45)); font-size: 12px; }
+
+/* ─── Secretary project switcher (desk top-bar) ───────────────────────── */
+.desk-proj-chip {
+  display: inline-flex; align-items: center; padding: 4px 10px;
+  border-radius: 999px; background: var(--bg-alt, #EFEBDD);
+  color: var(--ink, #111); font-size: 13px; font-weight: 500;
+  margin-right: auto; margin-left: 10px;
+}
+.desk-proj-switcher { position: relative; margin-right: auto; margin-left: 10px; }
+.desk-proj-switcher-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--bg-alt, #EFEBDD); border: 0; cursor: pointer;
+  color: var(--ink, #111); font-size: 13px; font-weight: 500;
+}
+.desk-proj-switcher-btn:hover { background: var(--bg-alt, #EFEBDD); }
+.desk-proj-switcher-backdrop { position: fixed; inset: 0; z-index: 1100; }
+.desk-proj-switcher-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px;
+  background: #fff; border: 1px solid var(--line, #E2DCC8); border-radius: 10px;
+  padding: 4px 0; margin: 0; list-style: none; z-index: 1101;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12); font-size: 13px;
+}
+.desk-proj-switcher-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer; color: var(--ink, #111);
+}
+.desk-proj-switcher-item:hover { background: var(--bg-alt, #EFEBDD); }
+.desk-proj-switcher-item.is-active { background: rgba(31,111,158,0.06); color: var(--blue, #1F6F9E); }
+.desk-proj-switcher-mark { width: 12px; text-align: center; color: var(--ink-soft, #6E6A60); }
+.desk-proj-switcher-item.is-active .desk-proj-switcher-mark { color: var(--blue, #1F6F9E); }
+.desk-proj-switcher-name { flex: 1; }
+
+/* ─── Health dot (desk top-bar) ───────────────────────────────────────── */
+.desk-health-wrap { position: relative; display: inline-flex; align-items: center; margin-right: 4px; }
+.desk-health-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 0; padding: 0; margin: 0; cursor: pointer; box-sizing: content-box;
+  display: inline-block; vertical-align: middle; transition: transform 0.15s ease;
+}
+.desk-health-dot:active { transform: scale(0.85); }
+.desk-health-dot.is-green  { background: var(--green, #2E7D52); box-shadow: 0 0 0 2px rgba(46,125,82,0.18); }
+.desk-health-dot.is-yellow { background: var(--gold, #C69A35); box-shadow: 0 0 0 2px rgba(198,154,53,0.20); }
+.desk-health-dot.is-red    { background: var(--red, #C0392B); box-shadow: 0 0 0 2px rgba(192,57,43,0.22); animation: desk-health-pulse 1.5s ease-in-out infinite; }
+.desk-health-dot.is-gray   { background: var(--ink-mute, #6E6A60); box-shadow: 0 0 0 2px rgba(110,106,96,0.20); }
+@keyframes desk-health-pulse {
+  0%,100% { box-shadow: 0 0 0 2px rgba(192,57,43,0.22); }
+  50%     { box-shadow: 0 0 0 5px rgba(192,57,43,0.10); }
+}
+.desk-health-popover-backdrop { position: fixed; inset: 0; z-index: 1100; background: transparent; }
+.desk-health-popover {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  width: 320px; max-height: 60vh; overflow-y: auto;
+  background: #fff; border: 1px solid var(--line, #E2DCC8); border-radius: 10px;
+  padding: 12px; z-index: 1101;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  font-size: 13px;
+}
+.desk-health-popover-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--ink, #111); }
+.desk-health-popover-empty { color: var(--ink-soft, #4A4A45)); padding: 8px 0; }
+.desk-health-popover-list  { list-style: none; margin: 0; padding: 0; }
+.desk-health-popover-item  { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line, #E2DCC8); }
+.desk-health-popover-item:last-child { border-bottom: 0; }
+.desk-health-popover-item.is-dead  .desk-health-popover-name { color: var(--red, #C0392B); }
+.desk-health-popover-item.is-stuck .desk-health-popover-name { color: var(--gold, #C69A35); }
+.desk-health-popover-name { font-weight: 500; }
+.desk-health-popover-kind { color: var(--ink-soft, #6E6A60); font-size: 11px; }
+.desk-health-popover-foot { color: var(--ink-soft, #6E6A60); font-size: 10px; margin-top: 10px; text-align: right; }
+

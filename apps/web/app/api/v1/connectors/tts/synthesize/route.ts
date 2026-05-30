@@ -3,11 +3,14 @@
  *
  * Text-to-Speech endpoint. Accepts text, calls the configured voice synthesis
  * service, and returns base64 audio plus MIME type.
+ *
+ * Auth: loopback/local-secret/device-token gated, with same-origin desktop UI
+ * allowed so the web chat read-aloud button keeps working.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { synthesizeSpeech } from '@holon/core';
-import { requireLoopback } from '../../../../../../lib/loopback-guard';
+import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 
 function isSameOriginRequest(req: Request): boolean {
   const origin = req.headers.get('origin');
@@ -21,13 +24,10 @@ function isSameOriginRequest(req: Request): boolean {
   }
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  const loop = requireLoopback(req);
-  if (!loop.ok && !isSameOriginRequest(req)) {
-    return NextResponse.json(
-      { error: 'forbidden', message: 'This endpoint requires loopback or same-origin.', reason: loop.reason },
-      { status: 403 },
-    );
+export async function POST(req: NextRequest): Promise<Response> {
+  const auth = requireDeviceTokenForRemote(req);
+  if (!auth.ok && !isSameOriginRequest(req)) {
+    return deviceAuthErrorResponse(auth);
   }
 
   let body: unknown;
