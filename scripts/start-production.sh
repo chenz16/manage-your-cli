@@ -25,7 +25,7 @@ if [ -f "apps/web/.next/standalone/apps/web/server.js" ]; then
   node apps/web/.next/standalone/apps/web/server.js &
   echo "Production standalone server started"
 else
-  echo "No standalone build found. Run: bash scripts/build-all.sh first"
+  echo "No standalone build found. Run: bash scripts/legacy/build-all.sh first"
   exit 1
 fi
 
