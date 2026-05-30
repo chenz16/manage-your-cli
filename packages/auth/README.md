@@ -8,7 +8,8 @@ As of iter-013 Pass #4, third-party OAuth (Google/Gmail today, more providers
 incrementally per ~5 LOC each) is owned by **NextAuth v5 (Auth.js)** in
 `apps/web/auth.ts`. The handler is mounted at `apps/web/app/api/auth/[...nextauth]/route.ts`;
 a sidecar-facing BFF endpoint at `apps/web/app/api/v1/integrations/auth/session/route.ts`
-exposes the decrypted access_token to the Hermes Python plugin.
+exposes the decrypted access_token to the BFF integration consumers (warm
+secretary + future MCP/HTTP integrations).
 
 The iter-011 hand-rolled `oauth/` sub-tree (~600 LOC across `oauth-client.ts`,
 `oauth/types.ts`, `oauth/providers/gmail.ts`, the dynamic `[kind]/{authorize,callback}`
