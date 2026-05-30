@@ -216,13 +216,24 @@ No API keys are ever entered into this app — it drives your existing CLI login
 
 ### 2. Desk (WSL2 / Linux)
 
+Dev mode (recommended, HMR-friendly):
+
 ```bash
 corepack pnpm install
-bash scripts/build-web.sh           # production build (isolated, won't clobber your config)
-HOLON_LAN_ACCESS=1 bash scripts/serve-production-wsl.sh  # bind 0.0.0.0, LAN-accessible
+HOLON_LAN_ACCESS=1 corepack pnpm -F web exec next dev --port 3110 -H 0.0.0.0
 ```
 
-Open `http://localhost:3000`, complete the onboarding wizard, and chat with the Secretary.
+Open `http://localhost:3110/`, complete the onboarding wizard, and chat with the Secretary.
+
+For auto-restart on crash / boot: `bash scripts/install-desk-systemd.sh`
+(see [`INSTALL.md`](INSTALL.md#run-auto-restart-on-boot--crash)).
+
+Advanced (production standalone build, slightly faster nav, no HMR):
+
+```bash
+bash scripts/build-web.sh                                # builds against a throwaway DB
+HOLON_LAN_ACCESS=1 bash scripts/serve-production-wsl.sh  # binds 0.0.0.0:3000
+```
 
 **Key flags:**
 

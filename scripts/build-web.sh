@@ -20,7 +20,12 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-export PATH="$HOME/.nvm/versions/node/v22.19.0/bin:$PATH"
+# If nvm 22.19 is installed (common WSL/Linux dev box layout), prepend it to
+# PATH so a non-interactive shell finds it. Otherwise rely on whatever node
+# the user already has on PATH (apt, fnm, brew, etc.) — their choice wins.
+if [ -d "$HOME/.nvm/versions/node/v22.19.0/bin" ]; then
+  export PATH="$HOME/.nvm/versions/node/v22.19.0/bin:$PATH"
+fi
 SCRATCH="${HOLON_BUILD_DB_PATH:-$(mktemp -t holon-build-db-XXXXXX.sqlite)}"
 export HOLON_DB_PATH="$SCRATCH"
 echo "[build-web] isolated HOLON_DB_PATH=$HOLON_DB_PATH (owner DB untouched)"
