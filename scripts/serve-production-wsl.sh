@@ -23,7 +23,7 @@ mkdir -p "$STANDALONE/.next/static"
 cp -r apps/web/.next/static/* "$STANDALONE/.next/static/" 2>/dev/null || true
 cp -r apps/web/public "$STANDALONE/" 2>/dev/null || true
 
-echo "[3/4] launching Hermes TCP bridge + production standalone on 0.0.0.0:$PORT ..."
+echo "[3/4] launching production standalone on 0.0.0.0:$PORT ..."
 set -a; [ -f .env ] && . ./.env; set +a
 GW="$(ip route show default | awk '{print $3}' | head -1)"
 export WECHAT_READ_URL="${WECHAT_READ_URL:-http://$GW:8766}"
@@ -31,21 +31,10 @@ export WECHAT_READ_URL="${WECHAT_READ_URL:-http://$GW:8766}"
 # throws UntrustedHost on /api/auth/session (500) → the page's session state breaks
 # after any client reload (e.g. the language switcher) → "clicking does nothing".
 export AUTH_TRUST_HOST="${AUTH_TRUST_HOST:-true}"
-HERMES_PORT="${HOLON_HERMES_PORT:-8767}"
 
-# No Tauri here → the prod build's Hermes client (Branch A) needs a TCP socket
-# at 127.0.0.1:HOLON_HERMES_PORT. Provide it via our stdio<->TCP bridge.
-if ! (exec 3<>/dev/tcp/127.0.0.1/"$HERMES_PORT") 2>/dev/null; then
-  HOLON_HERMES_PORT="$HERMES_PORT" nohup node scripts/hermes-tcp-bridge.mjs > /tmp/holon-hermes-bridge.log 2>&1 & disown
-  echo "  hermes bridge pid $! on 127.0.0.1:$HERMES_PORT"
-  sleep 2
-else
-  echo "  hermes bridge already on :$HERMES_PORT"
-fi
-
-export NODE_ENV=production HOSTNAME=0.0.0.0 PORT="$PORT" HOLON_HERMES_PORT="$HERMES_PORT"
+export NODE_ENV=production HOSTNAME=0.0.0.0 PORT="$PORT"
 nohup node "$STANDALONE/server.js" > /tmp/holon-prod.log 2>&1 & disown
-echo "  standalone pid $! · WECHAT_READ_URL=$WECHAT_READ_URL · HOLON_HERMES_PORT=$HERMES_PORT"
+echo "  standalone pid $! · WECHAT_READ_URL=$WECHAT_READ_URL"
 
 echo "[4/4] waiting for :$PORT then prewarming routes ..."
 for i in $(seq 1 40); do

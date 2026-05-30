@@ -14,7 +14,6 @@ export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-$(grep DEEPSEEK_API_KEY .env 2>/dev
 export PORT=3000
 export HOSTNAME=127.0.0.1
 export NODE_ENV=production
-# Don't set HOLON_HERMES_PORT — let the app detect Hermes is absent and fallback gracefully
 
 if [ -f "apps/web/.next/standalone/apps/web/server.js" ]; then
   # Static files must be copied into standalone (Next.js doesn't include them)
@@ -40,14 +39,14 @@ done
 wait
 echo "All pages warmed ✅"
 
-# Warm up Hermes session (6s cold start → subsequent chats ~3s)
-echo "Warming up Hermes session..."
+# Warm up Secretary CLI session (6s cold start → subsequent chats ~3s)
+echo "Warming up Secretary session..."
 curl -s -X POST http://localhost:3000/api/v1/chat/owner/stream \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"."}]}' > /dev/null 2>&1 &
 WARM_PID=$!
 # Don't wait — let it run in background while user opens browser
-echo "Hermes warming in background (PID $WARM_PID)"
+echo "Secretary warming in background (PID $WARM_PID)"
 
 echo ""
 echo "✅ 打开浏览器访问: http://localhost:3000"

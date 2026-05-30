@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# dev-prewarm.sh — pre-compile every nav route + warm the Hermes bridge so the
-# owner never eats Next.js dev's on-demand per-route compile (1-2s first visit).
+# dev-prewarm.sh — pre-compile every nav route so the owner never eats Next.js
+# dev's on-demand per-route compile (1-2s first visit).
 # Run AFTER the dev server answers on :3000. Safe to re-run (idempotent).
 #
 # Why: `next dev` compiles routes lazily on first request. Without this, the
@@ -22,6 +22,6 @@ for p in "${ROUTES[@]}"; do
   printf '  %-14s %ss\n' "$p" "$t"
 done
 
-# Warm the Hermes ACP bridge (first-hello latency) in the background.
-curl -s -o /dev/null --max-time 30 "$BASE/api/v1/chat/warm" 2>/dev/null && echo "[prewarm] hermes bridge warmed" || echo "[prewarm] bridge warm skipped"
+# Warm the Secretary CLI session (first-hello latency) in the background.
+curl -s -o /dev/null --max-time 30 "$BASE/api/v1/chat/warm" 2>/dev/null && echo "[prewarm] secretary session warmed" || echo "[prewarm] secretary warm skipped"
 echo "[prewarm] done — nav should be instant now."

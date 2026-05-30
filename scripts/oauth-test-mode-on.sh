@@ -81,7 +81,7 @@ echo "3. /me (where the Connect Gmail button lives):"
 curl -s -o /dev/null -w "  HTTP %{http_code}\n" http://localhost:3000/me
 
 echo ""
-echo "4. /api/v1/integrations/auth/session (Hermes plugin's new endpoint — should 401 without session cookie):"
+echo "4. /api/v1/integrations/auth/session (BFF integration endpoint — should 401 without session cookie):"
 curl -s -w "  HTTP %{http_code}\n  body: " http://localhost:3000/api/v1/integrations/auth/session -X POST -H "Content-Type: application/json" -d '{"provider":"google"}' --max-time 30
 echo ""
 

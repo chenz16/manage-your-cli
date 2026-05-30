@@ -8,3 +8,6 @@ promote a cleaned copy back to `scripts/` after stripping Hermes refs
 and rebranding the artifact name.
 
 - `build-all.sh` — broken (refs deleted `copy-hermes-sidecar-for-tauri.mjs`)
+- `build-windows-installer-local.ps1` — Holon V1 Personal Edition Windows installer
+- `windows-installer-smoke.ps1` — post-install smoke test for the Holon V1 Windows installer
+- `slice5-smoke.sh` — sister-repo iteration (slice 5) smoke test
