@@ -120,8 +120,11 @@ same target, auto-promote to Path A.
   > 🔴 HR auto-promoted on `<agent>`: "<rule>". Accept / edit / revert.
 
 - Owner can revert; revert deletes the entry AND marks the rule as
-  "promotion-vetoed" so future B-fires don't re-promote it. Veto lives in
-  owner-HR's own memory, not the target's.
+  "promotion-vetoed" so future B-fires don't re-promote it. Veto lives
+  in owner-global System 2 boss-memory
+  (`~/holon-agents/boss/owner/hr-promotion-vetoes.json`), **not** in
+  HR-scoped state and **not** in the target's memory — see §4.9 for
+  rationale and migration.
 - Threshold 3 and window 24h are tunable; start there because:
   - 1× is noise (one bad turn); 2× could be the same turn re-tried; 3× is the
     smallest "this is a pattern" signal.
@@ -197,13 +200,59 @@ editing owner-HR's persona.
   existing per-agent token counter (`project_myc_token_usage`) and set a soft
   budget; if HR exceeds N% of secretary tokens, halve its cadence.
 
-### 4.9 Additional open question (surfaced by this ADR)
+### 4.9 Owner-veto persistence across re-installs
 
-- **Owner-veto persistence across re-installs.** Promotion-veto lives in
-  owner-HR memory; if owner-HR is rebuilt from scratch (re-scaffolded),
-  vetoes are lost and HR will re-promote previously-rejected rules. Either
-  vetoes must live in owner System 2 boss-memory (not just HR's own scratch),
-  or scaffolding must preserve them. Decide before HR ships.
+**Resolved 2026-05-30.**
+
+Original concern (kept for history): promotion-veto previously lived under
+`ownerHrRoot()` at `~/holon-agents/boss/owner/hr/promotion-vetoes.json`. HR
+is an agent and agents can be re-scaffolded from scratch, so vetoes stored
+in HR-scoped memory are lost on rebuild and HR re-promotes
+previously-rejected rules. Either vetoes must live in owner System 2
+boss-memory (not HR's own scratch), or scaffolding must preserve them.
+
+**Decision.** Move vetoes out of `ownerHrRoot()` and into owner-global
+System 2 boss-memory root. Vetoes are **owner-authored decisions**; owner
+decisions live in `~/holon-agents/boss/owner/` by definition (System 2 is
+terminal — there is no layer above the owner). HR-scoped state is for
+HR's own scratch (evaluation logs, rubric prompts) — not for things that
+must survive HR being thrown away.
+
+**New path.**
+
+```
+~/holon-agents/boss/owner/hr-promotion-vetoes.json
+```
+
+Sibling to other owner-global files (`INDEX.md`, `MEMORY/*.md`), **not**
+inside the `hr/` subdir. The `hr-` filename prefix preserves topical
+grouping without re-introducing the HR-scoped directory.
+
+**Format unchanged:**
+
+```json
+{
+  "vetoes": [
+    {
+      "rule_hash": "a3f9c0…",
+      "target_agent": "secretary-acme",
+      "rule_text": "…",
+      "vetoed_at": "2026-05-30T14:22:01.000Z"
+    }
+  ]
+}
+```
+
+**Migration rule.** On first HR boot after this change: if the legacy
+path `~/holon-agents/boss/owner/hr/promotion-vetoes.json` exists, move it
+(atomic rename) to the new path. One-time, idempotent — a second run with
+the file already at the new location is a no-op. No deduplication needed
+since only one file can pre-exist.
+
+**Scope of this ADR amendment.** Spec-only. Implementation lives in a
+future code slice (see Related → Task #19); this PR documents the
+resolution so future scaffold changes don't silently drop the file and so
+the implementation slice has a target spec.
 
 ## Alternatives considered
 
@@ -233,4 +282,7 @@ editing owner-HR's persona.
 - `packages/core/src/cli-memory-scaffold.ts` — per-binary memory matrix
 - commit `44be633` — per-binary memory file naming
 - Task #15 — harvest-on-retire hook (HR trigger)
+- Task #19 — implement §4.9 veto-path migration (move
+  `promotion-vetoes.json` from `ownerHrRoot()` to owner System 2 root +
+  one-shot legacy migration). Spec-only here; code in a later slice.
 - Task #20 — settle-watch → synthetic-message pipeline (Path B transport)

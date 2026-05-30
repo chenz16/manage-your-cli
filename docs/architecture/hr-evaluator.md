@@ -158,18 +158,22 @@ On the 3rd B-fire of the same `(target, rule_hash)`:
   edited text (new rule-hash; old hash effectively orphaned for future
   B-fires of the original text).
 - **Revert** — HR removes the entry from the target's `## HR-Corrections`
-  AND appends to `~/holon-agents/boss/owner/hr/promotion-vetoes.json`
-  (format in [`data-model.md`](data-model.md) § 4.99.3).
+  AND appends to `~/holon-agents/boss/owner/hr-promotion-vetoes.json`
+  (owner-global System 2 root, **not** the HR-scoped subdir; format in
+  [`data-model.md`](data-model.md) § 4.99.3).
 
 Future B-fires whose `(target, rule_hash)` matches a vetoed entry never
 auto-promote again.
 
-### Veto persistence — OPEN (ADR § 4.9)
+### Veto persistence — Resolved (ADR § 4.9, 2026-05-30)
 
-If owner-HR is re-scaffolded, vetoes here are lost. See
-[`memory-update-flow.md`](memory-update-flow.md) § 7 (Edge Cases) for the
-two proposed resolutions. Currently unresolved — flagged so future
-scaffold changes don't silently drop the file.
+Vetoes live at `~/holon-agents/boss/owner/hr-promotion-vetoes.json`
+(owner-global System 2 root). Previously stored under `ownerHrRoot()` at
+`…/owner/hr/promotion-vetoes.json`; moved out so owner-authored decisions
+survive HR re-scaffolding. On first boot after the change, HR migrates
+the legacy file (atomic rename, idempotent). See ADR § 4.9 for full
+rationale; [`memory-update-flow.md`](memory-update-flow.md) § 7 mirrors
+the resolution.
 
 ## 6. Rubric
 
