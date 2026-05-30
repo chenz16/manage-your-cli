@@ -158,8 +158,71 @@ This pattern is "implemented" when:
 3. Is there a way to detect "agent making API calls but no tool calls happening" (model deliberating but no output)? The JSONL file would still grow on each turn even without tool calls. Probably OK.
 4. For VERY long agents (e.g., 1 hour scope), 5 min stall threshold may be too tight if the agent legitimately thinks long between tool calls. Class-specific thresholds (§ 6) address this.
 
+## 11.5 Settle-Watch + Synthetic-Producer Pipeline (Task #20, slice 1)
+
+Heartbeat watches for *stalls*. A second layer, **settle-watch**, watches
+for the opposite signal — when a warm secretary has gone idle + quiet long
+enough to be considered "between turns." That window is the carrier for
+**non-preemptive** message injection (HR Path B, event-followup, etc.) per
+ADR `../adr/hr-evaluator-and-behavior-correction.md` § 4.3 Path B.
+
+### Components
+
+| File | Role |
+|---|---|
+| `apps/web/lib/settle-watch.ts` | Detects settle: status `alive` + not currently busy + `lastHeartbeatAt` older than `SETTLE_MS` (default 180_000 ms; override via `HOLON_SETTLE_MS`). Emits exactly one `settle` event per quiet window (busy→idle cycle re-arms). |
+| `apps/web/lib/synthetic-producers.ts` | Registry + types for **producers** that emit `SyntheticMessage[]` on settle. Producers are stable-named (`hr-path-b`, `event-followup`, …); each emit is tagged with `sourceProducer` for audit + §4.4 promotion bookkeeping. |
+| `apps/web/lib/warm-agent.ts` (prepend-invariant) | Drains the per-key synthetic queue and **prepends** drained messages to the next inbound owner turn (or next dispatch return). Drain happens inside `sendWarmTurn`; the running turn is never interrupted. |
+
+### Pipeline shape
+
+```
+heartbeat tick
+  → settle-watch sees: alive AND idle AND lastHeartbeatAt > now - SETTLE_MS
+  → for each registered producer p: collect p.onSettle(entry) → SyntheticMessage[]
+  → enqueueSynthetic(key, messages)  (warm-agent per-secretary queue)
+  → mark "emitted-for-this-window" so next settle in same window is a no-op
+  → on next observed busy: clear emitted flag (re-arm)
+
+next inbound owner turn or dispatch return arrives
+  → warm-agent.sendWarmTurn drains the queue
+  → drained messages PREPENDED to the inbound (HR Path B uses role:'user')
+  → CLI sees them as a normal prefix; no preemption, no out-of-band channel
+```
+
+### Prepend invariant
+
+The drain-and-prepend step in `warm-agent.ts` is the **single transport**
+for all non-preemptive injection. Producers do not push messages directly
+into a running turn; they emit on settle, and the next inbound is the
+delivery boundary. This matches the ADR's "下一次提醒, 不要打断" rule and is
+the property HR Path B depends on for correctness.
+
+### Producers in flight
+
+| Producer | Source | Emits on settle when… |
+|---|---|---|
+| `hr-path-b` | `packages/core/src/hr-paths.ts` (HR scoring) | The last scored turn unchecked a rubric item and the rule has not yet hit Path A. |
+| `event-followup` | Task #20 (TBD) | A long-running external event (mention, peer ping) finished while the secretary was busy and needs surfacing on the next quiet boundary. |
+
+Tests: `apps/web/lib/settle-watch.test.ts`,
+`apps/web/lib/synthetic-producers.test.ts`,
+`apps/web/lib/warm-agent-synthetic.test.ts`.
+
+### Why this is in the heartbeat doc
+
+Heartbeat + settle-watch share the **same per-secretary process registry**
+(`apps/web/lib/process-registry.ts`) and the **same liveness states**
+(`alive` / `stuck` / `reaped` / `dead`). Settle is layered on top — it's a
+*higher-order* signal that only makes sense on top of liveness. Keeping the
+two side-by-side (separate files but sibling sections in this doc) makes
+the ordering clear: liveness must work before settle is meaningful.
+
 ## 12. Cross-References
 
 - `agents/README.md` § Autonomous Loop Mode — this watchdog is required there
 - `iterations/001a-ui-mock-shell/feedback.md` — the incident that drove this spec
 - ADR-017 — proposed acceptance of this pattern (to be drafted)
+- ADR `../adr/hr-evaluator-and-behavior-correction.md` § 4.3 Path B — the primary consumer of the settle/synthetic pipeline
+- `hr-evaluator.md` — how HR wires into the producer registry
+- `memory-update-flow.md` § "Write-down path" — the broader memory-flow view that includes Path B
