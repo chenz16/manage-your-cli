@@ -161,3 +161,4 @@ scripts/clawbot-qr.png
 .venv-stt/
 .next-dev/
 .env.local
+myc-desk-standalone-*.tar.gz
