@@ -250,6 +250,47 @@ no shell); give employees a **tmux shell** (supervision); reach inherently-remot
 agents over a **gateway** (latency is fine). Don't drop a gateway to "go faster" —
 keep agents warm instead.
 
+## How this fits next to other tools
+
+The space is not empty. Here's an honest comparison against four
+reference points — what we share, where we differ.
+
+| Dimension | **This project** (Manage Your CLI) | **CLI itself** (Claude Code · Codex · Gemini · Qwen) | **Hermes** (NousResearch/hermes-agent) | **OpenClaw / WeChat-ClawBot** | **Obsidian** |
+|---|---|---|---|---|---|
+| **Primary purpose** | Manager layer over your CLI subscriptions | The actual model loop + tool calling | Minimal markdown-only memory for one agent | Multi-tenant WeChat gateway + routing to LLMs | Personal knowledge base (notes) |
+| **Scope** | Multi-CLI, multi-project | One CLI, per-session | One agent, one user | Multi-user routing fabric | One user, manual workflow |
+| **Memory model** | 3-layer System 0/1/2; markdown only | `CLAUDE.md` per repo (system 1-ish); session context (system 0); recent "Memory" feature in claude.ai (system 2-ish, server-side) | Two markdown files: `MEMORY.md` + `USER.md`; char budget; no DB | None of its own — passes through | Markdown vault + `[[wikilinks]]` + YAML frontmatter; manual organization |
+| **Memory curator** | A separate CLI agent (memory-manager) that you can attach + watch | None — model decides each turn what to remember | Optional KG/RAG providers behind a plugin seam | n/a | The user, by hand (no automation) |
+| **Cross-vendor (Claude ↔ Codex etc.)** | ✅ Yes — same secretary can dispatch to any CLI | ❌ Each CLI sees only its own context | ❌ Single-agent | ⚠️ Routes to multiple model APIs but no shared memory | n/a |
+| **Multi-project hierarchy** | ✅ One secretary per project + owner-global memory above | ❌ Each project = a folder in claude.ai (no scoped agents); Claude Code is per-repo | ❌ Single agent, no project concept | ⚠️ Per-tenant routing, but no project layer | ⚠️ Per-vault, manually curated |
+| **Manager → worker pattern** | ✅ Secretary dispatches employees via MCP; `Task` tool fan-out preserved | ✅ Internally — Claude Code's `Task` does sub-agents | ❌ One-shot | ❌ Routing, not orchestration | n/a |
+| **Where memory lives** | Local files (`~/holon-agents/`), owner's disk, git-able | `CLAUDE.md` local (Claude Code); claude.ai Memory on Anthropic's servers | Local files (`~/.hermes/memories/`), owner's disk | Server (the tenant's gateway box) | Local files (vault folder), owner's disk |
+| **Data ownership** | ✅ Full — markdown on your box; vendor-neutral | ⚠️ Server-side context; Memory feature is opaque | ✅ Full — same markdown principle | ⚠️ Tenant trusts gateway operator | ✅ Full |
+| **Open source** | ✅ MIT-direction (license pending) | ⚠️ Mixed: Codex is OSS; Claude Code's binary is closed; Gemini CLI is OSS | ✅ OSS | ✅ OSS (nightsailer/wechat-clawbot) | ❌ Closed; ✅ vault format open |
+| **API keys required** | ❌ Uses your CLI subscription login | ⚠️ Codex: subscription; Claude Code: subscription; rest depends | ⚠️ Yes (BYOK to a model) | ⚠️ Yes (per-tenant BYOK) | n/a |
+| **Mobile thin-client** | ✅ Yes (微作: Android + iOS, thin shell to desk) | ❌ Mostly desktop | ❌ Desktop | ⚠️ Via WeChat itself | ✅ Native iOS/Android (paid Sync) |
+| **What we *borrow* from it** | — | The whole agent loop — we don't rebuild it | Bounded markdown budgets; sleep-time consolidator pattern | Outbound bridge concept (mobile ↔ desk over Tailscale; future cross-Holon) | YAML frontmatter, `[[wikilinks]]`, vault-as-folder shape |
+| **What it *can't* do that we do** | — | Cross-vendor memory federation; secretary↔employee pattern as a product | Multi-CLI; multi-project; mobile thin-client | Local-first owner-owned memory; CLI federation as a primary axis | Active curation (it's a notes UI, not an agent system) |
+
+**The lens for reading this table.** Each column is a friend in a
+different role:
+
+- **The CLI** is the engine. We ride it; we don't replace it.
+- **Hermes** is the closest cousin philosophically — markdown-only
+  memory, no DB — but it's a single-agent system. We adopt its
+  budgeted-scope pattern; we add the team layer above it.
+- **OpenClaw** answers the "how do we reach this from anywhere"
+  question (WeChat bridge, multi-device routing). We borrow the
+  outbound shape; we keep the brain local.
+- **Obsidian** answers the "how do humans organize markdown over years"
+  question. We borrow `[[wikilinks]]` + YAML frontmatter + vault-as-
+  folder; we automate the curation with a memory-manager agent.
+
+Where we are alone is the intersection: **vendor-neutral CLI
+federation + per-project secretary layer + local-owned 0/1/2 memory
+with an agent curator + mobile thin-client**. Any one of those four
+exists somewhere; the **bundle** doesn't.
+
 ## The 6 core pieces
 
 | # | Piece | What it is |
