@@ -108,6 +108,11 @@ export {
   dispatchMemoryConsolidationTask,
 } from './memory-manager-service.js';
 export {
+  writeBossMemoryWithRecovery,
+  setBossMemoryRecoveryDispatcher,
+  type RecoveryDispatcher,
+} from './boss-memory-recovery-service.js';
+export {
   startMemoryConsolidationService,
   type MemoryConsolidationServiceState,
 } from './memory-consolidation-service.js';

@@ -14,7 +14,7 @@ import {
   readBossMemory,
   readBossMemoryLog,
   retireCliAgentStaff,
-  writeBossMemory,
+  writeBossMemoryWithRecovery,
 } from '@holon/core';
 
 export const TOOL_NAMES = [
@@ -194,12 +194,11 @@ export async function readMemory(scope?: string, project_id?: string): Promise<u
 
 export async function writeMemory(scope: string, text: string, project_id?: string): Promise<unknown> {
   try {
-    return writeBossMemory(scope, text, project_id);
+    return await writeBossMemoryWithRecovery(scope, text, project_id);
   } catch (err) {
     return classifyError(err);
   }
 }
-
 export async function consolidateMemory(): Promise<unknown> {
   try {
     return dispatchMemoryConsolidationTask();
