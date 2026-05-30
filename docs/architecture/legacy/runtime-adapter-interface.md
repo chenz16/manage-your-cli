@@ -1,5 +1,17 @@
 # Runtime Adapter Interface
 
+> **Status: Superseded (moved to `legacy/` 2026-05-30).** This doc
+> defines an abstract runtime-adapter contract whose only shipping
+> implementation was the Hermes adapter from the sister repo
+> `holon-engineering`. `manage-your-cli` does not ship a Hermes
+> adapter and does not bundle, link to, or depend on Hermes. The
+> live multi-CLI substrate is a direct adapter per CLI binary
+> (`claude` / `codex` / `gemini` / `qwen`); see
+> [`packages/core/src/cli-adapters.ts`](../../../packages/core/src/cli-adapters.ts),
+> [`packages/core/src/cli-session-service.ts`](../../../packages/core/src/cli-session-service.ts),
+> and [`docs/decisions/040-cli-staff-dual-runtime.md`](../../decisions/040-cli-staff-dual-runtime.md).
+> This doc is retained for design lineage only.
+
 Status: draft v0.1
 Date: 2026-05-15
 Owner: design
