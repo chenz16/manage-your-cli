@@ -44,16 +44,25 @@ import type { Adapter, AdapterAccount } from 'next-auth/adapters';
 import type { Db } from '@/db';
 import { schema } from '@/db/schema';
 
-// HOLON_TOKEN_ENC_KEY guard at module load — mirrors the iter-011 L-030 +
-// L-051 production-guard pattern. In production we refuse to boot without
-// the key (lazy throw on first encrypt would let signed-out routes serve
-// before failing — worse posture). In dev/test we permit the absence so
-// `pnpm -F web typecheck` and unit tests can run; the crypto module itself
-// re-throws on first encrypt() if the key is still missing at that point.
-if (process.env.NODE_ENV === 'production' && !process.env.HOLON_TOKEN_ENC_KEY) {
-  throw new Error(
-    'encrypted-token-storage: HOLON_TOKEN_ENC_KEY is required in production. ' +
-      'Generate via `openssl rand -base64 32` and set in .env.',
+// HOLON_TOKEN_ENC_KEY guard. Previously a throw at module load, which
+// broke `next build` on a fresh checkout that doesn't have the env set
+// yet (Next collects page data by importing every route module). The
+// crypto module itself re-throws on first encrypt() if the key is still
+// missing at runtime, so we keep that latent guard but only LOG here
+// at build/load. Production deployments that actually use the OAuth
+// adapter will fail loudly on first request — the right place.
+if (
+  process.env.NODE_ENV === 'production' &&
+  !process.env.HOLON_TOKEN_ENC_KEY &&
+  // Don't even log during the build phase (Next sets this) — pure noise
+  // in the user's first `pnpm build` after `git clone`.
+  process.env.NEXT_PHASE !== 'phase-production-build'
+) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[encrypted-token-storage] HOLON_TOKEN_ENC_KEY is unset; OAuth ' +
+      'integrations will fail at first token write. Generate via ' +
+      '`openssl rand -base64 32` and set in your .env.',
   );
 }
 

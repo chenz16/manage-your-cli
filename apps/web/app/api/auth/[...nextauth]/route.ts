@@ -9,4 +9,12 @@
 
 import { handlers } from '@/auth';
 
+// Force fully-dynamic so `next build` doesn't statically analyze this
+// route's module graph (auth.ts touches the DB + reads AUTH_SECRET /
+// GOOGLE_CLIENT_ID at import time, none of which are guaranteed at
+// build time — a fresh-checkout `next build` was failing with
+// "Failed to collect page data for /api/auth/[...nextauth]").
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export const { GET, POST } = handlers;
