@@ -204,7 +204,7 @@ function speakViaSpeechSynthesis(text: string, opts: TtsOpts): Promise<void> {
 // Desk endpoint (/api/v1/connectors/voice/tts) and mobile speak()
 // still share THIS file → no drift. Owner asked twice ("再试一遍优化方案") —
 // see packages/core/src/sanitize-for-tts.ts for the full spec.
-import { sanitizeForTts } from '@holon/core/src/sanitize-for-tts';
+import { sanitizeForTts } from '@holon/core/sanitize-for-tts';
 
 export async function speak(text: string, opts: TtsOpts = {}): Promise<void> {
   text = sanitizeForTts(text);
