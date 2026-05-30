@@ -5,6 +5,8 @@
  * + the vanilla HTML topbar pattern reused across all pages.
  */
 
+import { HealthDot } from './HealthDot';
+
 export function Topbar() {
   return (
     <header className="topbar">
@@ -12,6 +14,7 @@ export function Topbar() {
         <img src="/assets/holon-logo.svg" alt="" />
       </a>
       <div className="topbar-actions">
+        <HealthDot />
         <button className="topbar-icon-btn" data-inert="search" aria-label="Search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="7" />
