@@ -539,6 +539,33 @@ done. Device token stored for all future requests.
 For the full guide including all env flags, pairing flow, plugins, voice input,
 projects, and WeChat connector: **[`docs/INSTALL.md`](docs/INSTALL.md)**.
 
+## Glossary
+
+The product is **Manage Your CLI (MYC)**. "Holon" is the original internal
+codename and the name of a sister repo (`holon-engineering`) where the older
+**Hermes** runtime lives. MYC does **not** ship Hermes — intelligence here
+comes entirely from the user's CLI subscriptions. Holon references still
+appear in package names (`@holon/core`, `packages/holon-mcp`), filesystem
+paths (`~/holon-agents/`), and some legacy docs; these are historical and
+not renamed because the cost exceeds the readability benefit. Treat any
+"Holon" reference as a synonym for MYC, **except** inside
+`docs/architecture/legacy/` or a `Lineage` callout where it refers to the
+sister repo's runtime.
+
+| Term | Meaning |
+|---|---|
+| **Manage Your CLI / MYC** | Product name. This repo. |
+| **Holon** | Internal codename. Synonym for MYC except in `legacy/` / `Lineage` contexts. |
+| **Sister repo / holon-engineering** | Separate older codebase where the Hermes runtime lives. Not used here. |
+| **System 0 / 1 / 2** | Memory hierarchy: session / project / owner-identity. See [System 0/1/2 §](#system-0--system-1--system-2--the-memory-hierarchy) above. |
+| **Secretary** | Warm CLI process the owner chats with (one per project). |
+| **Employee** | Worker CLI spawned by the secretary in its own tmux. |
+| **Owner** | The human user; terminal node (no layer above). |
+| **7×24 manager** | Operating mode — orchestrate work, don't do it. See agent-role ADR (`docs/adr/role-templates-and-persona-composition.md`). |
+| **Path A / Path B** | HR correction modes — persistent memory patch (A) vs in-conversation synthetic nudge (B). See `docs/adr/hr-evaluator-and-behavior-correction.md`. |
+| **CLI Adapter** | Runtime layer that plugs each CLI (claude/codex/gemini/qwen) behind one interface: `packages/core/src/cli-adapters.ts`. |
+| **Boss-memory** | On-disk markdown memory store at `~/holon-agents/boss/`. Layout in `docs/architecture/data-model.md`. |
+
 ## Status
 
 Early. Branches: **`dev`** (work) → **`main`** (stable). Subscription-only, local-first.
