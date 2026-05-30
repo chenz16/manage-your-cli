@@ -464,10 +464,10 @@ exact distro-specific install command for each missing one.
 - **pnpm 9.10.0**: `corepack prepare pnpm@9.10.0 --activate`
 - **tmux** + **git**
 - **At least one CLI subscription** logged in on your machine:
-  - Claude Code: `npm install -g @anthropic-ai/claude-code` then `claude` (OAuth)
-  - Codex: `npm install -g @openai/codex` then `codex` (OAuth)
-  - Gemini: `npm install -g @google/gemini-cli` then `gemini` (OAuth)
-  - Qwen: per Alibaba Cloud docs, then `qwen login`
+  - **Claude Code** ([install docs](https://docs.claude.com/en/docs/claude-code/setup) · [GitHub](https://github.com/anthropics/claude-code)) — `npm install -g @anthropic-ai/claude-code` then `claude` (OAuth, Pro/Max plan or API key)
+  - **Codex** ([install docs](https://developers.openai.com/codex/cli) · [GitHub](https://github.com/openai/codex)) — `npm install -g @openai/codex` then `codex` (ChatGPT Plus/Pro OAuth or API key)
+  - **Gemini CLI** ([install docs](https://github.com/google-gemini/gemini-cli#quickstart) · [GitHub](https://github.com/google-gemini/gemini-cli)) — `npm install -g @google/gemini-cli` then `gemini` (Google OAuth, free tier available)
+  - **Qwen Code** ([install docs](https://github.com/QwenLM/qwen-code#quick-start) · [GitHub](https://github.com/QwenLM/qwen-code)) — `npm install -g @qwen-code/qwen-code` then `qwen` (OAuth, Alibaba Cloud / DashScope)
 
 No API keys are ever entered into this app — it drives your existing CLI login.
 

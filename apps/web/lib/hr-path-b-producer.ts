@@ -38,14 +38,15 @@
  * heuristic notes above and will tighten when a log channel exists.
  * TODO(hr-log): add warm-agent persistent log → tighten scoring.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
-import {
-  hrStateFilePath,
-  maybePromoteToA,
-  stableRuleHash,
-  type HrCounter,
-} from '@holon/core';
+// eval('require') keeps Node's CommonJS require in scope; bare module names
+// (no node: prefix) keep webpack's loader happy. Same pattern as heartbeat.ts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const nodeRequire = eval('require') as (id: string) => any;
+const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeRequire('fs') as typeof import('fs');
+const { dirname } = nodeRequire('path') as typeof import('path');
+import { stableRuleHash } from '@holon/core/hr-path-a';
+import { hrStateFilePath } from '@holon/core/hr-paths';
+import { maybePromoteToA, type HrCounter } from '@holon/core/hr-promotion';
 import type { SyntheticMessage, SyntheticProducer } from './synthetic-producers';
 import type { ProcessEntry } from './process-registry';
 

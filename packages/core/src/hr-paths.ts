@@ -9,9 +9,11 @@
  * Path A / Path B writers live in sibling modules (hr-path-a, hr-promotion)
  * and in `apps/web/lib/hr-path-b-producer.ts`.
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const nodeRequire = eval('require') as (id: string) => any;
+const { existsSync, mkdirSync, writeFileSync } = nodeRequire('fs') as typeof import('fs');
+const { homedir } = nodeRequire('os') as typeof import('os');
+const { join } = nodeRequire('path') as typeof import('path');
 
 /** Root of the owner-HR agent's on-disk presence. Env override is the only
  *  knob — tests set HOLON_HR_ROOT to a tmpdir; production lets it default. */

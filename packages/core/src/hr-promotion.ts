@@ -9,8 +9,10 @@
  *   { vetoes: [{ ruleHash, ruleText, vetoedAt }] }
  * A ruleHash in this list blocks future promotions for that rule.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const nodeRequire = eval('require') as (id: string) => any;
+const { appendFileSync, existsSync, mkdirSync, readFileSync } = nodeRequire('fs') as typeof import('fs');
+const { dirname } = nodeRequire('path') as typeof import('path');
 import { hrPromotionLogPath, hrVetoPath } from './hr-paths.js';
 import { writeHrCorrection, type HrCorrectionRule } from './hr-path-a.js';
 

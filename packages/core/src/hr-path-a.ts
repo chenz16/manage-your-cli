@@ -10,9 +10,11 @@
  * it AND refuse to clobber a hand-written `## HR-Corrections` heading that
  * the owner created without the sentinel.
  */
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const nodeRequire = eval('require') as (id: string) => any;
+const { createHash } = nodeRequire('crypto') as typeof import('crypto');
+const { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } = nodeRequire('fs') as typeof import('fs');
+const { dirname } = nodeRequire('path') as typeof import('path');
 
 export interface HrCorrectionRule {
   text: string;
