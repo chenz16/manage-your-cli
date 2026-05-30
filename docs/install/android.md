@@ -32,13 +32,12 @@ around the same mobile UI that ships as the iPhone PWA.
 
 You need **all four** of these:
 
-1. **Your PC is running Holon.** The desk server must be live on your
-   PC — that's where your AI staff actually run. (Windows install
-   guide: see `docs/install/windows.md` once published; until then,
-   follow the repo `README.md` "How to get started" section to bring
-   up `pnpm dev` on port 3000, then `scripts/iphone-pwa-bridge.bat` to
-   open the LAN bridge on port 3003 — the Android app uses the same
-   bridge as iPhone PWA.)
+1. **Your desk is running `manage-your-cli`.** The desk server must be
+   live on your WSL/Linux desk — that's where your AI staff actually run.
+   Follow the repo `README.md` "How to get started" section to bring up
+   `pnpm dev` on port 3000, then open the LAN bridge for mobile (the
+   Android app uses the same bridge as the iPhone PWA). `manage-your-cli`
+   has no Windows installer; the desk runs on WSL/Linux.
 2. **Your Android phone is on the same Wi-Fi as the PC.** APK install
    needs LAN reachability — there's no cloud bridge in V1.
 3. **Android 5.1 (API 22) or newer.** Capacitor 6.x `minSdkVersion` is

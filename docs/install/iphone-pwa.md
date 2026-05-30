@@ -26,11 +26,11 @@ TestFlight invite needed.
 
 You need **all four** of these:
 
-1. **Your PC is running Holon.** The desk server must be live on your
-   PC — that's where your AI staff actually run. (Windows install guide:
-   see `docs/install/windows.md` once published; until then, follow the
-   repo `README.md` "How to get started" section to bring up `pnpm dev`
-   on port 3000.)
+1. **Your desk is running `manage-your-cli`.** The desk server must be
+   live on your WSL/Linux desk — that's where your AI staff actually run.
+   Follow the repo `README.md` "How to get started" section to bring up
+   `pnpm dev` on port 3000. `manage-your-cli` has no Windows installer;
+   the desk runs on WSL/Linux.
 2. **Your iPhone is on the same Wi-Fi as the PC.** PWA install needs LAN
    reachability — there's no cloud bridge in V1.
 3. **You use Safari on iPhone.** **Not Chrome.** Chrome on iOS cannot
