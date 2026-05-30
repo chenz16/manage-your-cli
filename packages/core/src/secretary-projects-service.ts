@@ -397,6 +397,13 @@ export function deleteSecretaryProject(id: string): { ok: boolean; reason?: stri
       project_id: id,
       ts: new Date().toISOString(),
     }));
+
+    // Harvest-on-retire (System 1 → System 2): distill project boss-memory
+    // into owner scope, then archive the project memory dir. Fire-and-
+    // forget — see boss-memory-harvest-service.ts JSDoc. Errors here MUST
+    // NOT block the delete operation owner just requested.
+    triggerProjectHarvest(id, existing.name);
+
     return { ok: true };
   } catch (err) {
     console.error(JSON.stringify({
@@ -407,6 +414,30 @@ export function deleteSecretaryProject(id: string): { ok: boolean; reason?: stri
     }));
     return { ok: false, reason: 'db_error' };
   }
+}
+
+/**
+ * Fire-and-forget kick of the project-retire harvest. Dynamic-imports
+ * the harvest service to avoid an import cycle.
+ *
+ * Owner (System 2) is the harvester by default; HOLON_SUPER_AGENT_STAFF_ID
+ * overrides that to a user-spawned super-agent (see harvest service JSDoc).
+ */
+function triggerProjectHarvest(projectId: string, projectName?: string | undefined): void {
+  void import('./boss-memory-harvest-service.js').then(({ harvestProjectRetire }) => {
+    const input = projectName !== undefined
+      ? { project_id: projectId, project_name: projectName }
+      : { project_id: projectId };
+    return harvestProjectRetire(input);
+  }).catch((err) => {
+    console.error(JSON.stringify({
+      audit: 'boss.harvest_failed',
+      kind: 'project',
+      project_id: projectId,
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
+  });
 }
 
 /** Chat thread key for a secretary project. */
