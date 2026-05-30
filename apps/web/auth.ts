@@ -4,7 +4,7 @@
 // wire the encrypted-column drizzle adapter (preserves L-030 token-
 // encryption-at-rest invariant) + database session strategy + session
 // callback that surfaces `access_token` on the typed Session object.
-// Pass #3 rewires the /me UI + Hermes plugin endpoint.
+// Pass #3 rewires the /me UI + the BFF plugin/integration endpoint.
 //
 // iter-013 post-Pass-#3 (HOLON_OAUTH_TEST_MODE short-circuit): when the env
 // var is true (and NODE_ENV !== production), REPLACE the Google OIDC
@@ -57,8 +57,9 @@ const TEST_MODE = process.env.HOLON_OAUTH_TEST_MODE === 'true';
 
 // Canned identity returned by the `test-google` Credentials provider. Kept
 // in sync with the /api/v1/integrations/auth/session endpoint's TEST_MODE
-// branch so the /me UI ("Connected as test@example.com") + the Hermes
-// plugin (canned `test-mode-google-at` token) stay coherent end-to-end.
+// branch so the /me UI ("Connected as test@example.com") + the BFF
+// integration surface (canned `test-mode-google-at` token) stay coherent
+// end-to-end.
 const TEST_USER = {
   id: 'test-user',
   email: 'test@example.com',
@@ -156,7 +157,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     /**
      * Surface the Google access_token on `session.accessToken` for the
-     * Pass #3 Hermes plugin BFF endpoint (which calls `auth()` server-side
+     * Pass #3 BFF integration endpoint (which calls `auth()` server-side
      * and returns `session.accessToken` over the localhost-shared-secret
      * channel).
      *
@@ -201,7 +202,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (row?.access_token) {
           // Pass #3 (ADR-024 step 3): surface accessToken + the auxiliary
           // fields the /api/v1/integrations/auth/session BFF endpoint hands
-          // to the Hermes plugin. expires_at is unix-seconds per the
+          // to the integration consumer. expires_at is unix-seconds per the
           // NextAuth account-table convention; scope is the space-joined
           // Google scope string. Both pass through unchanged from the
           // account row (no transform → no encryption invariant impact;
