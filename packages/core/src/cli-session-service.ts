@@ -250,20 +250,67 @@ export function launchCliSession(staffId: string): LaunchResult | LaunchError {
   }
   spawnSync(TMUX, ['set-option', '-t', name, 'window-size', 'manual'], { stdio: 'pipe' });
 
-  // Codex shows a blocking "✨ Update available! … 1. Update now / 2. Skip /
-  // 3. Skip until next version" menu on first launch whenever a newer release
-  // exists, stalling an auto-launched worker. The DEFAULT (bare Enter) is
-  // "Update now", which runs `npm install -g` and then EXITS codex — killing the
-  // worker. So we must pick "Skip" (2), and only when the menu is actually on
-  // screen, never typing into a ready composer. Codex exposes no flag to disable
-  // the check, so this screen-guarded keystroke is the safe option.
+  // First-launch screen-guarded keystrokes. Each branch:
+  //   1. captures the pane on a short delay,
+  //   2. regex-matches a menu fingerprint that's specific to THAT binary's
+  //      blocking screen (never a substring that could appear in normal CLI
+  //      output / a chat composer),
+  //   3. sends the keystroke that selects the safe option (OAuth or Skip).
+  // Never fire keys blind — the cost of a stray '2'+Enter into a ready
+  // composer is corrupting the owner's session, so the guard is the contract.
   if (autoLaunch && binary === 'codex') {
+    // Codex's "✨ Update available! … 1. Update now / 2. Skip / 3. Skip until
+    // next version" menu. Default (bare Enter) is "Update now", which
+    // `npm install -g`s and EXITS codex — killing the worker. Pick "Skip" (2).
+    // Codex exposes no flag to disable the check.
     for (const delayMs of [2500, 5000]) {
       setTimeout(() => {
         const cap = spawnSync(TMUX, ['capture-pane', '-p', '-t', name], { stdio: 'pipe' });
         const screen = cap.stdout?.toString() ?? '';
         if (!/Update available|Skip until next version/i.test(screen)) return;
         spawnSync(TMUX, ['send-keys', '-t', name, '2'], { stdio: 'pipe' });
+        spawnSync(TMUX, ['send-keys', '-t', name, 'Enter'], { stdio: 'pipe' });
+      }, delayMs);
+    }
+  }
+
+  if (autoLaunch && binary === 'qwen') {
+    // Qwen's first-launch auth picker:
+    //   "How would you like to authenticate for this project?"
+    //   ● 1. Qwen OAuth
+    //     2. OpenAI
+    //   (Use Enter to Set Auth)
+    // OAuth (no API key required) is the safe default for a CLI-subscription
+    // desk → cursor is already on option 1, so a bare Enter selects it.
+    // Match on the menu title + the literal "Qwen OAuth" option label so we
+    // never fire on stray UI text.
+    for (const delayMs of [2500, 5000]) {
+      setTimeout(() => {
+        const cap = spawnSync(TMUX, ['capture-pane', '-p', '-t', name], { stdio: 'pipe' });
+        const screen = cap.stdout?.toString() ?? '';
+        if (!/How would you like to authenticate[\s\S]*Qwen OAuth/i.test(screen)) return;
+        spawnSync(TMUX, ['send-keys', '-t', name, 'Enter'], { stdio: 'pipe' });
+      }, delayMs);
+    }
+  }
+
+  if (autoLaunch && binary === 'gemini') {
+    // Gemini's first-launch "Select Auth Method" menu (when GEMINI_API_KEY /
+    // ~/.gemini auth not present). Upstream wording from google-gemini/
+    // gemini-cli auth dialog: "How would you like to authenticate?" with
+    // options including "Login with Google" / "Use Gemini API Key" / "Vertex
+    // AI" / "Cloud Shell". Cursor is on "Login with Google" by default → bare
+    // Enter picks the OAuth-style login that matches a CLI subscription. When
+    // the user is already authenticated (the common case once the desk is
+    // set up) this regex never matches and we no-op.
+    //
+    // TODO: this matches Gemini CLI v0.42–0.44; if upstream renames the menu
+    // title in a future release, fall through to no-op (no stray key fired).
+    for (const delayMs of [2500, 5000]) {
+      setTimeout(() => {
+        const cap = spawnSync(TMUX, ['capture-pane', '-p', '-t', name], { stdio: 'pipe' });
+        const screen = cap.stdout?.toString() ?? '';
+        if (!/(Select Auth Method|How would you like to authenticate)[\s\S]*Login with Google/i.test(screen)) return;
         spawnSync(TMUX, ['send-keys', '-t', name, 'Enter'], { stdio: 'pipe' });
       }, delayMs);
     }
