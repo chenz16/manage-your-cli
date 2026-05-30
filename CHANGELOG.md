@@ -10,6 +10,14 @@ Post-0.2 prep — release-shape hygiene and follow-ups.
 
 ### Added (post-Hermes-decouple)
 
+- **Pre-built desk standalone tarball** (`scripts/package-desk-standalone.sh`)
+  — stages the Next.js standalone output + `.next/static` + `public/` into a
+  drop-in `myc-desk-standalone-${VERSION}.tar.gz` with `run.sh` and a
+  recipient-facing README. Attached to GitHub Releases (`gh release upload
+  v0.3.0 ... --clobber`) so a non-developer can extract, run one command,
+  and reach the desk at `http://localhost:3110` without cloning the repo or
+  running `pnpm build`. Script strips Next's trace-leaked `.ts`/`.tsx` files
+  and patches the standalone tracer's missing `@next/env` symlink.
 - **Role-templates library + composition spec** ([ADR](docs/adr/role-templates-and-persona-composition.md))
   — agents have a *nominal* role + composition of *actual* roles
   merged at create-time. Nominal wins identity/voice; behaviors/
