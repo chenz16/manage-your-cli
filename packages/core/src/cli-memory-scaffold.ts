@@ -38,8 +38,25 @@ function mkdirIfNeeded(path: string): void {
   }
 }
 
+/**
+ * Per-binary authoritative memory file name. Each CLI loads only its own:
+ *   claude  → CLAUDE.md
+ *   codex   → AGENTS.md
+ *   gemini  → GEMINI.md
+ *   qwen    → QWEN.md
+ *
+ * A staff with no recorded binary (legacy / hand-attached) gets a belt-and-
+ * braces pair: AGENTS.md (broadest read-target — claude reads it too) plus
+ * CLAUDE.md as the fallback name older tooling expects.
+ */
 function agentMemoryFileName(binary: string): string {
-  return binary === 'codex' ? 'AGENTS.md' : 'CLAUDE.md';
+  switch (binary) {
+    case 'codex':  return 'AGENTS.md';
+    case 'gemini': return 'GEMINI.md';
+    case 'qwen':   return 'QWEN.md';
+    case 'claude':
+    default:       return 'CLAUDE.md';
+  }
 }
 
 function agentRemit(staff: Staff): string {
@@ -47,7 +64,7 @@ function agentRemit(staff: Staff): string {
   return maybePersona || staff.system_prompt?.trim() || staff.role_name?.trim() || '(set by the owner)';
 }
 
-function agentMemoryTemplate(staff: Staff): string {
+export function agentMemoryTemplate(staff: Staff): string {
   const role = staff.role_name?.trim() || 'CLI staff';
   return `# ${staff.name} — ${role}
 
@@ -59,14 +76,38 @@ You are ${staff.name}, working on the owner's (CEO's) Holon desk. This file is Y
 ## Your remit
 ${agentRemit(staff)}
 
+${STT_CORRECTION_PROTOCOL}
+
 ## Working notes
 <!-- Append durable facts, decisions, and context here as you work. -->
 `;
 }
 
+/**
+ * Scaffold the per-binary memory file in `cwd`. The AUTHORITATIVE filename is
+ * binary-specific (claude→CLAUDE.md, codex→AGENTS.md, gemini→GEMINI.md,
+ * qwen→QWEN.md). When `binary` is missing/unknown we write BOTH AGENTS.md and
+ * CLAUDE.md so claude (CLAUDE.md/AGENTS.md fallback) and any of the others
+ * (AGENTS.md as a generic) still pick something up. Pre-existing files are
+ * never overwritten (writeFileIfAbsent semantics).
+ */
 export function ensureAgentMemoryFile(cwd: string, staff: Staff, binary: string): void {
   mkdirIfNeeded(cwd);
-  writeFileIfAbsent(join(cwd, agentMemoryFileName(binary)), agentMemoryTemplate(staff));
+  const content = agentMemoryTemplate(staff);
+  const known = binary === 'claude' || binary === 'codex' || binary === 'gemini' || binary === 'qwen';
+  if (known) {
+    writeFileIfAbsent(join(cwd, agentMemoryFileName(binary)), content);
+    // Keep CLAUDE.md as a fallback name so a per-cwd CLAUDE.md still gets
+    // picked up by older tooling — but the AUTHORITATIVE file is the per-
+    // binary one above. Skip when the authoritative file IS CLAUDE.md.
+    if (binary !== 'claude') {
+      writeFileIfAbsent(join(cwd, 'CLAUDE.md'), content);
+    }
+  } else {
+    // Legacy / hand-attached staff with no binary recorded: belt-and-braces.
+    writeFileIfAbsent(join(cwd, 'AGENTS.md'), content);
+    writeFileIfAbsent(join(cwd, 'CLAUDE.md'), content);
+  }
   ensureMcpJson(join(cwd, '.mcp.json'), findRepoRoot());
 }
 
@@ -227,21 +268,14 @@ function ensureMcpJson(path: string, repoRoot: string): void {
   writeFileBestEffort(path, `${JSON.stringify({ mcpServers }, null, 2)}\n`);
 }
 
-const SECRETARY_PERSONA = `# Secretary
-
-You are the CEO's secretary. Stay extremely concise.
-
-Do light work yourself: answer, triage, summarize.
-
-For heavy work, use Holon MCP: create_agent, dispatch, read_agent_output, then summarize back.
-
-Default new employees to short-term. Use long-term only when the owner says so.
-
-All memory is the boss's: read_memory for context, write_memory for training and decisions.
-
-Never do an employee's heavy job yourself.
-
-## Voice input correction
+/**
+ * STT correction protocol — shared between the Secretary persona and every
+ * employee's per-binary memory file. Employees on the receive end of a
+ * dispatched voice task see the same markers and need the same rules to
+ * decide when to emit `[STT_CORRECTION: 原文→纠正文]`. Owner-approved wording
+ * 2026-05-30 — do not change verbatim. Lift point: A2.
+ */
+export const STT_CORRECTION_PROTOCOL = `## Voice input correction
 
 When the owner's message contains any voice marker, treat the rest as
 raw STT output that may have misrecognitions. Markers, by source:
@@ -269,7 +303,23 @@ correction. Before answering:
    referenced; "Cris CLI" → "Codex CLI" when codex is the active topic).
    When unsure, answer the literal text and ask one sharp question.
 5. When no \`[语音输入]\` marker is present, treat the text as
-   authoritative — do not invent corrections.
+   authoritative — do not invent corrections.`;
+
+const SECRETARY_PERSONA = `# Secretary
+
+You are the CEO's secretary. Stay extremely concise.
+
+Do light work yourself: answer, triage, summarize.
+
+For heavy work, use Holon MCP: create_agent, dispatch, read_agent_output, then summarize back.
+
+Default new employees to short-term. Use long-term only when the owner says so.
+
+All memory is the boss's: read_memory for context, write_memory for training and decisions.
+
+Never do an employee's heavy job yourself.
+
+${STT_CORRECTION_PROTOCOL}
 `;
 
 export function ensureSecretaryWorkspace(): string {
