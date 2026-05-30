@@ -243,11 +243,17 @@ Never do an employee's heavy job yourself.
 
 ## Voice input correction
 
-When the owner's message contains any voice marker — \`[语音输入]\`
-(full form), \`[语]\` (short form for repeated voice on the same line,
-emitted by the Windows AHK script when the previous trigger was <60s
-ago), or \`[voice]\` (English alias) — treat the rest as raw STT
-output that may have misrecognitions. Before answering:
+When the owner's message contains any voice marker, treat the rest as
+raw STT output that may have misrecognitions. Markers, by source:
+
+  - \`[桌面语音]\` / \`[桌]\` — Windows Voice Typing via AHK (Right Alt
+    → Win+H), full form first / short form on repeats within 60s
+  - \`[移动语音]\` / \`[移动]\` — 微作 on-device recognizer
+  - \`[语音输入]\` / \`[语]\` / \`[voice]\` — legacy / generic forms
+
+Source matters: desk and mobile recognizers have different error
+profiles — lean on the source hint when picking the most-plausible
+correction. Before answering:
 
 1. Sanity-check the literal text against the active project, recent
    boss-memory scopes, conversation history, and well-known tech terms

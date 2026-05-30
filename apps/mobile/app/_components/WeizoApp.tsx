@@ -519,6 +519,10 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   const stopPendingRef = useRef(false);
   // Track whether native STT is in flight so stop() can cancel it.
   const nativeSttActiveRef = useRef(false);
+  // ms timestamp of the last voice transcription delivered to the composer
+  // (used to switch [移动语音] → [移动] within a 60s burst window so
+  // repeated dictations don't drown the line).
+  const lastVoiceTagAtRef = useRef(0);
 
   function showHint(message: string) {
     setHint(message);
@@ -526,13 +530,20 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   }
 
   function deliverTranscript(text: string) {
-    // Tag voice-recognized text with [语音输入] so the secretary's STT
-    // correction protocol kicks in (it does a context-sanity check on the
-    // literal text and emits [STT_CORRECTION: 原文→纠正文] then answers,
-    // mirroring what employees already do for dispatched voice tasks).
-    // Owner asked: "秘书这里 也要有语音自动修复功能 … 让大模型自动看是否纠正
-    // 再回答问题".
-    const tagged = `[语音输入] ${text}`;
+    // Tag voice-recognized text with [移动语音] / [移动] so the secretary's
+    // STT correction protocol kicks in (it does a context-sanity check on
+    // the literal text and emits [STT_CORRECTION: 原文→纠正文] then
+    // answers, mirroring what employees already do for dispatched voice
+    // tasks). Owner: "在桌面这边叫桌面语音 在移动那边 叫移动语音 区分下" —
+    // desktop AHK tags with [桌面语音]/[桌]; mobile tags with [移动语音]/[移动]
+    // so the CLI can lean on the source hint when picking corrections.
+    const now = Date.now();
+    const SHORT_WINDOW_MS = 60_000;
+    const lastTs = lastVoiceTagAtRef.current;
+    const useShort = lastTs > 0 && now - lastTs < SHORT_WINDOW_MS;
+    lastVoiceTagAtRef.current = now;
+    const tag = useShort ? '[移动]' : '[移动语音]';
+    const tagged = `${tag} ${text}`;
     if (onTranscript) onTranscript(tagged);
     else insertTranscriptIntoComposer(tagged, getVoiceAutoSend()); // 语音→直接发送 or 先填入可编辑
   }
