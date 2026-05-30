@@ -92,8 +92,12 @@ export {
   readBossMemory,
   readBossMemoryLog,
   writeBossMemory,
+  parseFrontmatter,
+  DEFAULT_SCOPE_BUDGET,
   type BossMemoryRead,
   type BossMemoryWrite,
+  type BossMemoryFrontmatter,
+  type BossMemoryBudgetExceeded,
 } from './boss-memory-service.js';
 export {
   getOrCreateSecretaryStaff,
