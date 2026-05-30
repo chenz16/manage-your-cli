@@ -197,11 +197,14 @@ function speakViaSpeechSynthesis(text: string, opts: TtsOpts): Promise<void> {
  * @throws Error if all paths fail.
  */
 // Shared TTS preprocessor (covers markdown, urls, emojis, file paths,
-// symbol blocks, etc.). Lives in @holon/core so the desk endpoint
-// (/api/v1/connectors/voice/tts) and the mobile speak() path filter
-// identically and never drift. Owner asked twice ("再试一遍优化方案") —
+// symbol blocks, etc.). Mobile imports the file directly (not via the
+// @holon/core index) because the index transitively pulls in
+// staff-management-service which has `node:os` — fine on the desk
+// (Node runtime), fatal on the Capacitor static-export bundle.
+// Desk endpoint (/api/v1/connectors/voice/tts) and mobile speak()
+// still share THIS file → no drift. Owner asked twice ("再试一遍优化方案") —
 // see packages/core/src/sanitize-for-tts.ts for the full spec.
-import { sanitizeForTts } from '@holon/core';
+import { sanitizeForTts } from '@holon/core/src/sanitize-for-tts';
 
 export async function speak(text: string, opts: TtsOpts = {}): Promise<void> {
   text = sanitizeForTts(text);
