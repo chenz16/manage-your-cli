@@ -3,7 +3,7 @@
 export PATH=/opt/homebrew/bin:$PATH
 cd ~/holon-mobile-build/apps/mobile || exit 1
 echo "[next build] $(date +%H:%M:%S)"
-NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN=http://10.0.0.195:3110 pnpm exec next build 2>&1 | tail -3 || { echo FAIL-next; exit 1; }
+NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN=${NEXT_PUBLIC_DESK_ORIGIN:?required}:3110 pnpm exec next build 2>&1 | tail -3 || { echo FAIL-next; exit 1; }
 echo "[cap copy] $(date +%H:%M:%S)"
 npx --yes @capacitor/cli@6 copy ios 2>&1 | tail -2 || { echo FAIL-copy; exit 1; }
 SIM=$(xcrun simctl list devices booted | grep iPhone | head -1 | grep -oE '[A-F0-9-]{36}')

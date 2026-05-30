@@ -2,7 +2,7 @@
 # mobile-ios-gate.sh — optional iOS build gate for mobile-promote.sh.
 #
 # Runs on the WSL2 dev box, but executes the iOS-side work over SSH on
-# the user's Mac (10.0.0.123). Designed to be invoked from mobile-promote.sh
+# the user's Mac (${MAC_SSH_HOST_IP:-host}). Designed to be invoked from mobile-promote.sh
 # right after Android gates pass:
 #
 #   bash "$MOBILE/scripts/mobile-ios-gate.sh"
@@ -18,7 +18,7 @@
 #   78 = SSH to Mac unreachable / Xcode missing — skip, NOT a failure
 #   1  = build or smoke FAIL (real failure; file as M-L-NNN)
 #
-# Hard requirements on the Mac (zuolinliu@10.0.0.123):
+# Hard requirements on the Mac (${MAC_SSH_HOST:-user@host}):
 #   - Remote Login enabled, this WSL2 box's pubkey in ~/.ssh/authorized_keys
 #   - Xcode 16+ installed (`xcrun --version` works)
 #   - At least one iOS Simulator runtime installed
@@ -28,7 +28,7 @@
 # Mac's mobile sync dir.
 
 set -u
-MAC_HOST="zuolinliu@10.0.0.123"
+MAC_HOST="${MAC_SSH_HOST:-user@host}"
 MAC_MOBILE_DIR="~/holon-mobile-build"
 SSH_TIMEOUT=8
 LOG=/tmp/holon-mobile-ios-gate.log
@@ -69,7 +69,7 @@ rsync_out=$(rsync -az --delete \
   --exclude 'node_modules' --exclude '.next' --exclude 'out' \
   --exclude 'ios/Pods' --exclude 'ios/build' --exclude 'android' \
   -e "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5" \
-  /home/chenz/project/holon-engineering-mobile/apps/mobile/ \
+  ${MOBILE_REPO:?MOBILE_REPO required}/apps/mobile/ \
   "${MAC_HOST}:${MAC_MOBILE_DIR}/apps/mobile/" 2>&1)
 rsync_rc=$?
 if [ $rsync_rc -ne 0 ]; then
@@ -80,17 +80,17 @@ fi
 rsync -az --delete \
   --exclude 'node_modules' --exclude 'dist' \
   -e "ssh -o BatchMode=yes -o ConnectTimeout=5" \
-  /home/chenz/project/holon-engineering-mobile/packages/api-contract/ \
+  ${MOBILE_REPO:?MOBILE_REPO required}/packages/api-contract/ \
   "${MAC_HOST}:${MAC_MOBILE_DIR}/packages/api-contract/" >/dev/null 2>&1
 rsync -az --delete \
   --exclude 'node_modules' --exclude 'dist' \
   -e "ssh -o BatchMode=yes -o ConnectTimeout=5" \
-  /home/chenz/project/holon-engineering-mobile/packages/core/ \
+  ${MOBILE_REPO:?MOBILE_REPO required}/packages/core/ \
   "${MAC_HOST}:${MAC_MOBILE_DIR}/packages/core/" >/dev/null 2>&1
 # Sync minimal root metadata for pnpm workspace resolution
-scp -q /home/chenz/project/holon-engineering-mobile/pnpm-workspace.yaml \
-  /home/chenz/project/holon-engineering-mobile/package.json \
-  /home/chenz/project/holon-engineering-mobile/tsconfig.json \
+scp -q ${MOBILE_REPO:?MOBILE_REPO required}/pnpm-workspace.yaml \
+  ${MOBILE_REPO:?MOBILE_REPO required}/package.json \
+  ${MOBILE_REPO:?MOBILE_REPO required}/tsconfig.json \
   "${MAC_HOST}:${MAC_MOBILE_DIR}/" 2>/dev/null
 
 # 4. Run iOS build + smoke on Mac

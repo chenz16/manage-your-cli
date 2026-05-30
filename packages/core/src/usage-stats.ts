@@ -105,7 +105,7 @@ let _agentCacheAt = 0;
  *
  * Claude Code derives the project dir by replacing every `/` and `_` in the
  * absolute path with `-`.  E.g.
- *   /home/chenz/holon-agents/staff_ABC → -home-chenz-holon-agents-staff-ABC
+ *   $HOME/holon-agents/staff_ABC → -home-USER-holon-agents-staff-ABC
  */
 function cwdToProjectDirName(cwd: string): string {
   return cwd.replace(/[/_]/g, '-');

@@ -15,8 +15,8 @@
 #     → downgraded to ^5.1.0 (Cap 6 compat, iOS deployment target 13.0).
 #     Platform stays at 13.0 (Capacitor default).
 set -u
-SRC=/home/chenz/project/myc-mobile
-MAC="zuolinliu@10.0.0.123"
+SRC="$(cd "$(dirname "$0")/../.." && pwd)"
+MAC="${MAC_SSH_HOST:?MAC_SSH_HOST required}"
 MD="~/holon-mobile-build"
 SSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8"
 ts() { date -u +%H:%M:%SZ; }

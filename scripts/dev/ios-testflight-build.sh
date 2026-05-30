@@ -2,15 +2,21 @@
 # ios-testflight-build.sh — full build #N + TestFlight upload pipeline.
 # Runs FROM WSL: rsyncs to Mac, then drives xcodebuild+altool over SSH.
 #
-# Requires: SSH key already authed to zuolinliu@10.0.0.123, app-specific
-# password configured in keychain or env. App-specific pwd: wamt-drzr-lnve-pcvx.
+# Required env (developer-only — never commit values to this file):
+#   MAC_SSH_HOST              user@host of the Mac with Xcode + signing keys
+#   APPLE_ID                  your Apple Developer Apple ID email
+#   APPLE_APP_SPECIFIC_PWD    app-specific password from appleid.apple.com
+#                             (NOT your normal password — generate one at
+#                             https://account.apple.com/account/manage)
+#   APPLE_TEAM_ID             your Apple Developer team id (10-char)
+#   MAC_BUILD_DIR             remote dir on the Mac (default: ~/holon-mobile-build)
 set -u
-SRC=/home/chenz/project/myc-mobile
-MAC="zuolinliu@10.0.0.123"
-MD="~/holon-mobile-build"
-APPLE_ID="chen.zhang6@gmail.com"
-APP_PWD="wamt-drzr-lnve-pcvx"
-TEAM="R78Y6F9R6K"
+SRC="${SRC:-$(cd "$(dirname "$0")/../.." && pwd)}"
+MAC="${MAC_SSH_HOST:?MAC_SSH_HOST is required}"
+MD="${MAC_BUILD_DIR:-~/holon-mobile-build}"
+APPLE_ID="${APPLE_ID:?APPLE_ID is required}"
+APP_PWD="${APPLE_APP_SPECIFIC_PWD:?APPLE_APP_SPECIFIC_PWD is required}"
+TEAM="${APPLE_TEAM_ID:?APPLE_TEAM_ID is required}"
 SSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8"
 ts() { date -u +%H:%M:%SZ; }
 log() { echo "[ios-tf $(ts)] $*"; }

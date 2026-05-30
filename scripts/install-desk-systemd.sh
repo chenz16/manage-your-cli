@@ -9,7 +9,7 @@
 #
 # Idempotent: re-run any time to refresh the unit file.
 set -euo pipefail
-REPO=/home/chenz/project/myc-mobile
+REPO=$(cd "$(dirname "$0")/.." && pwd)
 UNIT_DIR="$HOME/.config/systemd/user"
 UNIT="$UNIT_DIR/holon-desk.service"
 

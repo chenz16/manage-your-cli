@@ -177,7 +177,7 @@ except Exception:
 # ── token resolution ────────────────────────────────────────────────────────
 TOKEN="${HOLON_DEVICE_TOKEN:-}"
 if [ -z "$TOKEN" ]; then
-  TOKEN_FILE="/home/chenz/.holon/device-tokens.json"
+  TOKEN_FILE="${HOME}/.holon/device-tokens.json"
   if [ -f "$TOKEN_FILE" ] && [ -n "$JQ_BIN" ]; then
     TOKEN=$($JQ_BIN -r 'if type=="object" then (.tokens//.[]) | if type=="array" then .[0] else . end elif type=="array" then .[0] else "" end' "$TOKEN_FILE" 2>/dev/null || true)
   fi
@@ -322,7 +322,7 @@ fi
 # ── Check 5: No Hermes / API key in post-startup log ────────────────────────
 echo ""
 echo "=== Check 5: No Hermes/API-key calls post-startup ==="
-LOG_FILE="/home/chenz/desk-3110.log"
+LOG_FILE="${HOME}/desk-3110.log"
 if [ ! -f "$LOG_FILE" ]; then
   mark_fail "log file not found: $LOG_FILE"
 else

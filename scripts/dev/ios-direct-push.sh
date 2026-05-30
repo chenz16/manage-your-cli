@@ -7,19 +7,29 @@
 #   1. rsync apps/mobile + packages to Mac (excludes ios/, android/ which only
 #      live on Mac — Capacitor regenerates ios/ if missing).
 #   2. pnpm install + next build + cap sync ios on Mac.
-#   3. xcodebuild archive (Release, automatic signing, team R78Y6F9R6K).
+#   3. xcodebuild archive (Release, automatic signing, team $APPLE_TEAM_ID).
 #   4. exportArchive method=development (so .ipa is dev-signed, not app-store).
 #   5. devicectl install over Tailscale LAN.
 #
 # Why the keychain unlocks: headless SSH sessions can't pop a GUI prompt for
 # the login keychain, and codesign + devicectl both need it unlocked.
 set -u
-SRC=/home/chenz/project/myc-mobile
-MAC="zuolinliu@10.0.0.123"
-MD="~/holon-mobile-build"
-TEAM="R78Y6F9R6K"
-IPHONE="01DC4D0C-2CF9-53C6-B5EA-5A978ED3F69E"
-MAC_PWD="123456"
+# Required env (developer-only — never commit values to this file):
+#   MAC_SSH_HOST            user@host of the Mac that owns Xcode + signing keys
+#   APPLE_TEAM_ID           your Apple Developer team id (10-char)
+#   IPHONE_DEVICE_UUID      target device's CoreDevice identifier
+#   MAC_KEYCHAIN_PWD        login-keychain pwd so xcodebuild can codesign over SSH
+#   MAC_BUILD_DIR           remote dir on the Mac for sync'd source
+#                           (default: ~/holon-mobile-build)
+#   NEXT_PUBLIC_DESK_ORIGIN URL the iPhone bundle should call (your desk's
+#                           tailnet/LAN/public origin). Default fallback in
+#                           the build step below requires you to set this.
+SRC="${SRC:-$(cd "$(dirname "$0")/../.." && pwd)}"
+MAC="${MAC_SSH_HOST:?MAC_SSH_HOST is required (e.g. user@10.0.0.x)}"
+MD="${MAC_BUILD_DIR:-~/holon-mobile-build}"
+TEAM="${APPLE_TEAM_ID:?APPLE_TEAM_ID is required}"
+IPHONE="${IPHONE_DEVICE_UUID:?IPHONE_DEVICE_UUID is required}"
+MAC_PWD="${MAC_KEYCHAIN_PWD:?MAC_KEYCHAIN_PWD is required}"
 SSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8"
 ts() { date -u +%H:%M:%SZ; }
 log() { echo "[ios-push $(ts)] $*"; }
@@ -50,7 +60,7 @@ rsync -az -e "$SSH" "$SRC/package.json" "$SRC/pnpm-workspace.yaml" "$SRC/pnpm-lo
 # silently looks "one build behind". Owner-visible symptom: iPhone shows old
 # project / staff list while Android (which bakes the right URL) is correct.
 # Use desk's Tailscale IP so the iPhone reaches it over the tailnet.
-DESK_ORIGIN="${NEXT_PUBLIC_DESK_ORIGIN:-http://100.105.92.4:3110}"
+DESK_ORIGIN="${NEXT_PUBLIC_DESK_ORIGIN:?NEXT_PUBLIC_DESK_ORIGIN is required (e.g. http://your-desk-tailscale-ip:3110)}"
 log "[2/5] pnpm install + next build (DESK_ORIGIN=$DESK_ORIGIN) + cap sync"
 $SSH "$MAC" "cd $MD && pnpm install --config.manage-package-manager-versions=false 2>&1 | tail -5 && \
   cd apps/mobile && NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN=$DESK_ORIGIN pnpm exec next build 2>&1 | tail -3 && \

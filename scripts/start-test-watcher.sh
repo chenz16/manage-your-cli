@@ -22,7 +22,7 @@
 # the watcher prompt pre-loaded — no copy-paste needed.
 #
 # Usage (from a fresh terminal):
-#   cd /home/chenz/project/holon-engineering
+#   cd /path/to/repo
 #   ./scripts/start-test-watcher.sh
 #
 # Stop the watcher with Ctrl-C (or by typing exit / quit in the Claude window).

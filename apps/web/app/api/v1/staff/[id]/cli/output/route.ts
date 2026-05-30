@@ -30,17 +30,19 @@ function fastHash(s: string): string {
  */
 /**
  * stripLongPaths — drop the noisy absolute-path prefix so the visible part of
- * a status line is the meaningful tail. /home/chenz/project/myc-mobile/foo/bar.ts
+ * a status line is the meaningful tail. /path/to/repo/foo/bar.ts
  * → foo/bar.ts. ~ for home. Owner: "前面的路径删掉,多看有效信息"。
  */
 function stripLongPaths(s: string): string {
-  return s
-    // repo-root absolute → relative
-    .replace(/\/home\/chenz\/project\/myc-mobile\//g, '')
-    .replace(/\/Users\/zuolinliu\/holon-mobile-build\//g, '')
-    // user home → ~
-    .replace(/\/home\/chenz\//g, '~/')
-    .replace(/\/Users\/[a-z]+\//g, '~/');
+  // Generic scrubbing: replace any "$HOME/anything" with "~/...". Drops the
+  // long absolute-path prefix from CLI output regardless of the OS user or
+  // repo location, so the panel stays readable for any installation.
+  let out = s;
+  // Linux/WSL user homes
+  out = out.replace(/\/home\/[a-z0-9_.-]+\//gi, '~/');
+  // macOS user homes
+  out = out.replace(/\/Users\/[a-z0-9_.-]+\//gi, '~/');
+  return out;
 }
 
 function condenseToolBlocks(text: string): string {

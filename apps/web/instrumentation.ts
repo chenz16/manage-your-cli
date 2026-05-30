@@ -217,7 +217,7 @@ export async function register(): Promise<void> {
           process.stderr.write(JSON.stringify({ audit: 'tts.already_running', port: 8770 }) + '\n');
           return;
         }
-        const repoRoot = process.env.HOLON_REPO_ROOT || '/home/chenz/project/myc-mobile';
+        const repoRoot = process.env.HOLON_REPO_ROOT || 'process.cwd()';
         const venvPython = path.join(repoRoot, '.venv-tts', 'bin', 'python');
         const serverScript = path.join(repoRoot, 'scripts', 'cosyvoice-server.py');
         if (!fs.existsSync(venvPython) || !fs.existsSync(serverScript)) {
