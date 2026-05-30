@@ -205,7 +205,8 @@ Validated by `CHECK` constraint (Postgres) or application layer (SQLite):
 // One of these three shapes (ADR-015: myself substrate removed):
 
 { "kind": "local_ai",
-  "agent_profile_id": "hermes_profile_xyz",
+  "cli_binary": "claude",
+  "agent_profile_id": "generic_v1",
   "tool_scope": ["read_file", "web_search"],
   "budget": { "max_tokens": 50000, "max_cost_millicents": 1000 },
   "mentors": [
@@ -636,7 +637,7 @@ CREATE TABLE runtime_jobs (
   desk_id                  TEXT NOT NULL REFERENCES desks(id),
   assignment_id            TEXT NOT NULL REFERENCES assignments(id),
   staff_id                 TEXT NOT NULL REFERENCES staff(id),
-  adapter_id               TEXT NOT NULL,              -- 'hermes' | 'dummy' | ...
+  adapter_id               TEXT NOT NULL,              -- 'cli:claude' | 'cli:codex' | 'cli:gemini' | 'cli:qwen' | 'dummy'
   status                   TEXT NOT NULL DEFAULT 'queued',  -- per runtime-adapter-interface.md JobStatus
   config                   JSONB NOT NULL,             -- the RuntimeJobConfig
   started_at               TEXT,
@@ -746,6 +747,123 @@ In V1 the singleton lives in a file-backed store (one JSON document per desk, ke
 - ADR-017 — defines the extended shape above.
 - ADR-018 — PII-free defaults for the fields above.
 - `local-agent-management.md` § 4.2 — `owner_assistant` standard role.
+
+## 4.99 Filesystem-Backed State (Boss Memory, HR, Skills)
+
+The relational schema above covers structured work objects. **Memory state
+lives on the filesystem**, by deliberate choice — per `CLAUDE.md` § North
+Star ("memory = files at the boss"; no vector DB; markdown only) and per
+the System 0/1/2 hierarchy from the README. The boss-memory tree is part of
+the canonical data model even though it is not in SQL.
+
+### 4.99.1 Boss-memory tree
+
+```
+~/holon-agents/boss/
+├── owner/                              # System 2 — owner-global
+│   ├── INDEX.md
+│   ├── MEMORY/                         # detail files; recall reads INDEX first
+│   │   └── *.md
+│   └── hr/                             # owner-HR (per ADR hr-evaluator)
+│       ├── persona.md                  # owner-HR's role + rubric
+│       ├── evaluations/<sproj_id>/
+│       │   └── YYYY-MM-DD.md           # markdown checklist rubric, one row per scored turn
+│       └── promotion-vetoes.json       # owner-rejected B→A promotions (rule-hash keyed)
+├── projects/
+│   └── <sproj_id>/                     # System 1 — per project
+│       ├── INDEX.md
+│       ├── MEMORY/
+│       │   └── *.md
+│       └── secretary/
+│           ├── CLAUDE.md               # secretary's per-binary memory file
+│           │   └── ## HR-Corrections   # managed section (HR Path A)
+│           └── ...
+└── _archived/<sproj_id>/               # retired projects (curator preserves; not active)
+```
+
+Per-employee memory files live at the employee's cwd (not centralized), and
+their filename depends on the CLI binary backing the employee:
+
+| Employee CLI | Memory file |
+|---|---|
+| `claude` | `CLAUDE.md` |
+| `codex` | `AGENTS.md` |
+| `gemini` | `GEMINI.md` |
+| `qwen` | `QWEN.md` |
+
+Materialization is owned by `packages/core/src/cli-memory-scaffold.ts`. See
+`local-agent-management.md` § 14.7.
+
+### 4.99.2 `## HR-Corrections` managed section
+
+A managed markdown section in every per-CLI memory file, written by HR Path
+A (`packages/core/src/hr-path-a.ts`). Format per the ADR § 4.3:
+
+```markdown
+## HR-Corrections
+<!-- managed by owner-HR — do not hand-edit; owner can revert via the 🔴 line -->
+
+- (2026-05-30) Always dispatch heavy work; do not execute it yourself.
+- (2026-05-29) Use [[wikilinks]] for cross-references in memory files.
+```
+
+Properties:
+
+- **Idempotent.** Keyed by a stable rule-hash (normalized text → SHA-256
+  prefix). Re-runs of the same rule replace the dated entry in place, never
+  append duplicates.
+- **Sentinel-bracketed.** The HTML comment is detected by the writer to
+  avoid clobbering a hand-written `## HR-Corrections` heading the owner
+  created without the sentinel.
+- **Per-binary.** Same rule, different file depending on which CLI the
+  target runs (the HR-author and the HR-target may run on different CLIs;
+  the file picked depends on the target's binary).
+
+### 4.99.3 Promotion-veto JSON
+
+`~/holon-agents/boss/owner/hr/promotion-vetoes.json` records owner-rejected
+B→A auto-promotions per ADR § 4.4. Shape:
+
+```json
+{
+  "vetoes": [
+    {
+      "rule_hash": "a3f9c0…",
+      "target_agent": "secretary-acme",
+      "rule_text": "Always dispatch heavy work; do not execute it yourself.",
+      "vetoed_at": "2026-05-30T14:22:01.000Z"
+    }
+  ]
+}
+```
+
+Future B-fires whose normalized rule-hash matches a vetoed entry never
+re-promote (the entry stays in B-only or is suppressed entirely per
+`hr-evaluator.md` § Promotion).
+
+**Open question (ADR § 4.9):** if owner-HR is rebuilt from scratch
+(re-scaffolded), vetoes here are lost. Either this file must live in owner
+System 2 boss-memory proper (not just HR's own scratch), or scaffolding
+must preserve it. Decide before HR ships at scale.
+
+### 4.99.4 Why filesystem, not SQL
+
+Three reasons consistent with `CLAUDE.md` § North Star:
+
+1. **The owner can grep, edit, version, back up everything as plain text.**
+   No DB dump, no migration, no opaque blob. Memory is portable across
+   machines by `tar`.
+2. **CLI-native.** Each CLI already reads its own `CLAUDE.md` / `AGENTS.md`
+   / `GEMINI.md` / `QWEN.md` as part of its boot loop. Putting memory in
+   SQL would require a tool call on every turn to fetch what the CLI would
+   otherwise read for free.
+3. **No vector DB temptation.** Forcing memory to be markdown forces us to
+   keep it small and curated. Progressive disclosure (INDEX → 2–3 detail
+   files, ~8k char budget) is enforced by the recall Skill
+   (`holon-memory-recall` / `holon-owner-recall`).
+
+See `memory-update-flow.md` for the read / harvest / HR flows that act on
+this tree.
 
 ## 5. Relationship Map (Visual)
 

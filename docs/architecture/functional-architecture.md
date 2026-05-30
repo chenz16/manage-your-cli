@@ -97,7 +97,20 @@ The router is small and policy-driven. It does not "plan" — the owner has alre
 
 ### 3.4 Runtime Adapter *(Core 1)*
 
-Converts an assignment targeted at local AI staff into an executable job in the underlying runtime (Hermes for V1; abstract interface allows other adapters later). Returns an event stream and a deliverable draft.
+Converts an assignment targeted at local AI staff into an executable job in
+the underlying runtime. In the current shipped product the "runtime" is an
+**official CLI binary** (Claude Code, Codex, Gemini CLI, Qwen Code) driven via
+the multi-CLI adapter (`packages/core/src/cli-adapters.ts`); the secretary
+runs as a warm `claude --print --input-format stream-json` process and
+employees run inside tmux. The abstract `RuntimeAdapter` interface is
+preserved so other adapters can plug in later. Returns an event stream and a
+deliverable draft.
+
+> Historical note. Earlier drafts of this doc named "Hermes" as the V1
+> runtime. The codebase no longer carries a Hermes adapter — intelligence
+> comes entirely from the user's CLI subscription, per `CLAUDE.md` § North
+> Star and the README's "How it works" section. Treat "Hermes" in older
+> sub-docs as a stand-in for "the CLI adapter" until those docs are refreshed.
 
 Detailed: `runtime-adapter-interface.md`.
 
@@ -241,7 +254,7 @@ Owner
   ↓ creates assignment (target: local AI staff)
 Router
   ↓ runtime job
-Runtime Adapter (Hermes)
+Runtime Adapter (CLI: claude / codex / gemini / qwen)
   ↓ event stream + deliverable draft
 Deliverable Store ← attribution & parent assignment ←
 Owner sees deliverable on Today view.
@@ -309,6 +322,38 @@ The protocol surfaces multi-hop visibility through:
 - the `parentHandoffId` field linking child handoffs to their parent
 - audit events that let the sender of the outermost handoff query "where is my work right now?" all the way down the chain (within the limits of what each intermediate desk's policy reveals)
 
+### 5.6 Memory Flows (System 0 / 1 / 2)
+
+A fifth class of canonical flow, orthogonal to 5.1–5.5: memory movement
+between the three layers (System 0 = session, System 1 = per-project, System
+2 = owner). The README's "Memory update flow" diagram is the canonical
+one-screen view; the spec lives in `memory-update-flow.md`. Three flows:
+
+1. **Read-on-demand (lateral / downward read).** Secretaries and the owner-CLI
+   pull from boss-memory by triggering a Claude Code **Skill**
+   (`holon-memory-recall` on secretaries, `holon-owner-recall` on the
+   owner-CLI). The Skill reads `INDEX.md` first, opens 2–3 detail files, caps
+   at ~8k chars. No RAG, no vector DB. See ADR
+   `../adr/memory-as-skill.md`.
+2. **Write-up (harvest-on-retire).** When an employee retires, its owning
+   secretary distills the per-CLI memory file into project boss-memory and
+   discards the original. When a project retires, the owner distills project
+   memory into owner-global. Implementation:
+   `packages/core/src/boss-memory-harvest-service.ts`. Knowledge bubbles up,
+   dross goes away.
+3. **Write-down (HR correction).** HR (owner-HR or secretary-HR) emits either
+   a Path-A persistent rule into the target's `## HR-Corrections` managed
+   section (`packages/core/src/hr-path-a.ts`) or a Path-B non-preemptive
+   synthetic message via the settle-watch + synthetic-producers pipeline
+   (`apps/web/lib/settle-watch.ts` + `apps/web/lib/synthetic-producers.ts`).
+   Repeated B-fires auto-promote to A with owner accept/edit/revert. See
+   ADR `../adr/hr-evaluator-and-behavior-correction.md` and
+   `hr-evaluator.md`.
+
+These flows do not cross Core 1 / Core 2 — memory is a Core 1 concern. Cross-
+desk handoffs carry their own context-pack (per `context-pack.md`) and do
+not read another desk's boss-memory.
+
 ## 6. State Machines
 
 These have not changed from prior versions. Reproduced here for completeness.
@@ -368,7 +413,7 @@ V1 has exactly two work object types: missions (inbound from another desk) and a
 
 ### 7.6 No agent self-modification of authority
 
-A runtime adapter — including Hermes — cannot change the authority scope or handoff form mid-job. The form was set when the handoff was constructed; the runtime is bound by it. Tools the runtime calls run within the form's authority; if a tool would exceed it, the adapter returns `PERMISSION_DENIED` per `runtime-adapter-interface.md` § Error Model.
+A runtime adapter — including any CLI adapter — cannot change the authority scope or handoff form mid-job. The form was set when the handoff was constructed; the runtime is bound by it. Tools the runtime calls run within the form's authority; if a tool would exceed it, the adapter returns `PERMISSION_DENIED` per `runtime-adapter-interface.md` § Error Model.
 
 ### 7.7 Handoff form is enforced, not advisory
 
@@ -381,7 +426,10 @@ Where the details live for each topic introduced here.
 | Topic | Doc |
 |---|---|
 | Local agent management deep dive (flat roster, autonomy slider, role-based dispatch, owner cultivation, mibusy carry-forward) | `local-agent-management.md` *(to be written — next-after-comms)* |
-| Runtime adapter contract, RuntimeEvent types, lifecycle, latency budget, Hermes mapping | `runtime-adapter-interface.md` ✅ |
+| Runtime adapter contract, RuntimeEvent types, lifecycle, latency budget, CLI-adapter mapping | `runtime-adapter-interface.md` ✅ |
+| System 0/1/2 memory hierarchy + the three memory flows (read / harvest / HR correct) | `memory-update-flow.md` ✅ (+ README "Memory update flow") |
+| HR evaluator + Path A / Path B correction (wire-up) | `hr-evaluator.md` ✅ (+ ADR `../adr/hr-evaluator-and-behavior-correction.md`) |
+| Memory recall lifted to Claude Code Skills | ADR `../adr/memory-as-skill.md` |
 | Handoff lifecycle, packet format, context pack, authority scope | `handoff-design.md` ✅ |
 | Handoff form taxonomy, axes, composition, revocation rules per form, UI consent flows | `handoff-taxonomy.md` ✅ |
 | Wire format, transport, identity, idempotency, retries, multi-device routing | `peer-communication-architecture.md` *(next)* |
