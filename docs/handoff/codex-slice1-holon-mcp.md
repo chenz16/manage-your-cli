@@ -1,5 +1,16 @@
 # CODEX SPEC — Slice 1: Holon MCP + lean Secretary + boss-side memory skeleton
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 Parent (authoritative design): `docs/handoff/cli-only-architecture-v2.md`. Read it.
 Branch: `feat/cli-only-minimal`. Worktree (yours): `C:\dev\holon-cli-rewrite` —
 **repoint to the branch first**: `git fetch origin feat/cli-only-minimal &&

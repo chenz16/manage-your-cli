@@ -23,7 +23,7 @@ The interfaces (handoff packet, wire protocol, runtime adapter contract, data mo
 ### Scope
 
 - One person owns one or more desks.
-- Each desk: local AI staff via Hermes, optional manual work routed to the owner (`myself` substrate), CLI executors, proxy identities for paired peers.
+- Each desk: local AI staff via the direct multi-CLI adapter (`packages/core/src/cli-adapters.ts` — claude / codex / gemini / qwen on the user's CLI subscription), optional manual work routed to the owner (`myself` substrate), CLI executors, proxy identities for paired peers. *Sister-repo lineage: earlier framing said "via Hermes"; `manage-your-cli` has no Hermes runtime — see ADR-040.*
 - Cross-desk handoffs through a Holon-hosted cloud relay.
 - Pair desks one-to-one via personal codes.
 - The 13 named handoff forms work, but UI defaults to the simpler ones (Direct Order, Direct Takeover, Approval Chain, Watch Brief). Advanced forms (Dual Authorization, Negotiated, Conditional Engagement) work but UI is minimal.
@@ -49,7 +49,7 @@ The interfaces (handoff packet, wire protocol, runtime adapter contract, data mo
 | Direct peer WebRTC / TURN | V1 ships HTTPS LAN direct-peer; WebRTC for full NAT traversal is V2 (ADR-008) |
 | Negotiated handoff full UI | Form supported in protocol; UX comes later |
 | E2E encryption | TLS + trusted relay good enough; V2 hardens |
-| Custom runtime adapters | Hermes-only V1; abstraction layer reserved for later |
+| Custom runtime adapters | Multi-CLI adapter only in V1; abstraction layer reserved for later (sister-repo lineage said Hermes-only — N/A here) |
 | Conversation / session primitive | Task-only model is V1 invariant; V2 evaluates based on user research (ADR-009) |
 | Payment processing | V1 is free + BYOK; V2 evaluates monetization (ADR-011) |
 
@@ -224,7 +224,7 @@ These are deliberate exclusions across the roadmap:
 | Holon as a marketplace from day one | Marketplaces require trust and reputation infrastructure that's V4+. V1 needs to nail one-to-one trust first. |
 | Anonymous open inbox | "Anyone can send Alice a mission" is a spam attractor. Pairing is always two-sided. |
 | Hierarchical agent management | Per `local-agent-management.md` § 2: flat-roster invariant forever. Even at enterprise scale, owners manage flat teams. |
-| Replacing Hermes with our own runtime in V1 | We use Hermes; we don't compete with it. Adapter contract reserves the option for V3+ if a strategic need emerges. |
+| Building our own LLM/agent-loop runtime in V1 | We use the user's CLI subscriptions (claude / codex / gemini / qwen); we don't compete with them. Adapter contract reserves the option for V3+ if a strategic need emerges. *Sister-repo lineage row read "Replacing Hermes with our own runtime in V1"; `manage-your-cli` has no Hermes runtime to replace.* |
 
 ## 8. The "V1 Choices That Enable V2/V3" Audit
 
@@ -239,7 +239,7 @@ Every V1 architectural decision has been double-checked for forward-compatibilit
 | `desk_id` on every row | Multi-tenant (V2) is "turn on RLS" not "redesign schema" | Refactor every query — very large |
 | Forms as 6+2 axes (now 8) | New forms + sandbox modes (V2) just add enum values | None; expansion is built in |
 | JWT issuer = "holon-relay" string | SSO (V3) just swaps the string | None; trivial |
-| Runtime adapter as abstract interface | Custom adapters (V3) plug in | Lock-in to Hermes — very large |
+| Runtime adapter as abstract interface | Custom adapters (V3) plug in | Lock-in to a single runtime (the sister-repo lineage feared Hermes lock-in; `manage-your-cli` mitigates by per-binary CLI adapters) — very large |
 | Person → Desks routing on relay | Multi-device (V1.x), org membership (V2) build on this | Re-architect identity — very large |
 | Cultivation profile separate from base staff | Owner cultivation portable across desks (V1.x) | None |
 

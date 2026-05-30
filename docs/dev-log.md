@@ -1,5 +1,16 @@
 # Holon Dev Log
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 ## 2026-05-20 · fix/persona-secretary-not-boss · structural identity bug (3× owner report "你是秘书，不是老板"): (1) plugin `_render_snapshot()` — strengthened identity block to explicitly name the secretary/assistant role + bilingual secretary directive; reframed owner profile injection as "About your owner (context — this describes your BOSS, not you)" with explicit framing note so first-person owner text can never be mistaken as the AI's identity; added Block 3 framing note warning the model even if owner wrote "我是…老板" it describes the boss, not the AI; (2) `/me` MeClient.tsx — section heading changed to "AI 秘书工作风格 / AI Secretary Working Style"; field label changed to "AI 秘书指示 / AI Secretary Instructions"; polish hint updated to warn against writing owner self-descriptions; owner_intro label updated to "关于我（老板简介）/ About me (owner profile)" so the distinction is unambiguous on screen; (3) persona-catalog `system_prompt` values already correctly framed as "You are chief of staff to…" — deferred any further catalog edits; (4) onboarding auto-gen deferred — Step2 only captures `owner_intro` + `owner_name` (no system_prompt generation in onboarding path); default `system_prompt` comes from persona preset which is already correctly written as assistant-persona; no risky change needed. Typecheck: api-contract PASS · core PASS · web PASS. Runtime live-chat verification ("你是谁?" → "我是您的助理/秘书") pending LLM key access.
 
 ## 2026-05-20 · fix/v011-batch3 · 5-bug batch (192uzra5, wylvzigc, jmrmk42l, 19a7nnlw, zlyyvcda): (1) garbled ✏️ emoji in onboarding Step1Welcome — literal `✏️` string replaced with actual char; (2) /me settings — added App Version row + "检查更新 / Check for updates" link to github releases; (3) persona framing — zh-CN greeting comma fix + PersonaPicker label changed from "Persona" to "老板角色" + Desk AI section heading clarified as "working style" (not owner's persona); (4) triaged: /me field auto-fill needs me_config_generation skill spec; (5) triaged: inline /me auto-gen quality — propose dedicated skill-backed generation. Typecheck: api-contract PASS · core PASS · web PASS.

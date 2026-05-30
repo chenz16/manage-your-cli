@@ -7,12 +7,12 @@ User-mandated, 2026-05-18T02:23Z.
 ## Principle 1 — Mobile = thin client over desk-as-server
 
 **Desk** (`apps/web/` on port 3000) is the **full Holon engine**:
-- Runs the agent loop (Hermes runtime + skill execution + DeepSeek calls)
+- Runs the agent loops (warm CLI Secretary + per-employee CLI tmux sessions + skill execution + LLM provider calls via the user's CLI subscription)
 - Owns all production state (audit, jobs, deliverables, fixtures)
 - Surfaces the **complete UI** for the owner at their workstation: chat + today + deliverables + members + skills + templates + references + connections + inbound + me + meetings + settings + admin debug
 
 **Mobile** (`apps/mobile/` on port 3002, eventually Capacitor APK / iOS app) is a **thin shell**:
-- **Does NOT run** any agent loop. No Hermes. No skill execution. No DeepSeek calls from the mobile process.
+- **Does NOT run** any agent loop. No CLI processes. No skill execution. No LLM provider calls from the mobile process.
 - **Does NOT** have its own BFF state. All `/api/*` calls proxy to desk's `:3000` (already wired in `apps/mobile/next.config.ts`).
 - **Shows a subset** of desk surfaces — only the ones a single owner needs on the go.
 - Logs in to desk; the desk does the work; mobile renders the result.

@@ -361,7 +361,7 @@ Set at the time the deliverable returns up the chain:
 
 | Level | What sender shows downstream |
 |---|---|
-| `full` | Complete nested attribution: "delivered by Wang's desk, executed by Wang's AI Researcher (Hermes profile X), reviewed by Wang himself" |
+| `full` | Complete nested attribution: "delivered by Wang's desk, executed by Wang's AI Researcher (CLI binary `claude`, role profile X), reviewed by Wang himself" |
 | `summary` | Top-level only: "delivered by Wang's desk" — internal substrate hidden |
 | `anonymous` | "delivered by your contracted partner" — even desk identity hidden, only the connection is named |
 

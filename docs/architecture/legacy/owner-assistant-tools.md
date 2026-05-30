@@ -1,5 +1,18 @@
 # Owner Assistant Runtime & Tool Surface
 
+> **Status: Superseded (moved to `legacy/` 2026-05-30).** This doc
+> describes the Hermes-runtime owner-assistant design used in the
+> sister repo `holon-engineering`. `manage-your-cli` replaced the
+> Hermes runtime with a direct multi-CLI adapter; the live owner-facing
+> Secretary is implemented as a warm CLI process — see
+> [`docs/architecture/README.md`](../README.md),
+> [`apps/web/lib/warm-agent.ts`](../../../apps/web/lib/warm-agent.ts),
+> and [`packages/holon-mcp`](../../../packages/holon-mcp). For the
+> live tool surface, see the Holon MCP server (`list_live_agents`,
+> `dispatch`, `read_agent_output`, `create_agent`, `retire_agent`,
+> `read_memory`, `write_memory`). This doc is retained for design
+> lineage only.
+
 Status: draft (iter-007 in progress)
 Date: 2026-05-16
 Author: Requirements Agent

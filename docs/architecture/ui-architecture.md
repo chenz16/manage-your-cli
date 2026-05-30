@@ -293,7 +293,7 @@ Per `deliverable-spec.md`. Three columns reflecting origin types.
 
 ### 5.6 Chat Surface (per ADR-013)
 
-Chat is not a new architectural primitive — it is the UI exposure of Hermes's natural conversational form. Every chat session is one Hermes `AIAgent` loop instance. See ADR-013 for the full design rationale and `docs/implementation/hermes-v2-implementation-goal.md` § "AIAgent is the main conversation loop" in the mibusy repo for the architectural basis.
+Chat is not a new architectural primitive — it is the UI exposure of the AI's natural conversational form. In `manage-your-cli` every chat session is one warm CLI process (see `apps/web/lib/warm-agent.ts`); the sister-repo lineage realized this as a Hermes `AIAgent` loop instance (see [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md)). See ADR-013 for the full design rationale.
 
 #### Entry points (A + B hybrid)
 
@@ -331,12 +331,12 @@ Both entry points open the same panel. Which tab is selected on open is the only
 Panel layout: 480px wide right-side overlay (matches existing detail-drawer width per § 10.1); slides in over the main content; does not replace the nav.
 
 **Per-member chat tab:**
-- Hermes agent: that member's profile, tool scope, and cultivation profile + global desk context (read-only)
+- CLI agent (member's chosen binary — `claude` / `codex` / `gemini` / `qwen`): that member's profile, tool scope, and cultivation profile + global desk context (read-only)
 - Conversation is multi-turn; history persists in-memory per session (V1). If the app restarts, session history is lost. Dev Agent implements `member.chat_log[]` array — no new database table.
 - Citation chips appear when the agent references desk context items.
 
 **Myself tab (owner assistant):**
-- Hermes agent: `owner_assistant` profile with orchestration tools (`create_assignment`, `list_missions`, `get_member_status`, `ping_peer`, `view_deliverable`, etc.)
+- Warm CLI Secretary (`owner_assistant` profile): exposes orchestration tools via the Holon MCP server in `packages/holon-mcp` — `list_live_agents`, `dispatch`, `read_agent_output`, `create_agent`, `retire_agent`, `read_memory`, `write_memory`.
 - Global context: full read access to desk members, missions, connections, and recent deliverables.
 - Typical queries: "Show me all blocked missions," "Draft a mission for Sally," "What did Wang return last week?"
 
@@ -711,8 +711,8 @@ Iteration 001 covers: app shell + 5 primary screens + form composer (4 of 14 for
 - AI controller indicator: `auth-and-identity.md` § 8
 - Audit event subscription: `reliability-and-testing.md` § 5.4
 - Brand tokens canonical source: the marketing page at <https://chenz16.github.io/Holon/>
-- Chat surface design + rationale: ADR-013 (`docs/decisions/013-chat-surface-as-hermes-loop.md`)
-- Chat architectural basis: mibusy `docs/implementation/hermes-v2-implementation-goal.md` § "AIAgent is the main conversation loop"
+- Chat surface design + rationale: ADR-013 (`docs/decisions/013-chat-surface-as-hermes-loop.md`) — sister-repo lineage; in `manage-your-cli` realized as the warm-CLI Secretary, not a Hermes loop.
+- Chat architectural basis (sister-repo lineage): mibusy `docs/implementation/hermes-v2-implementation-goal.md` § "AIAgent is the main conversation loop". Not applicable to `manage-your-cli`.
 - Chat per-member agent: `local-agent-management.md` § 4.2 (`owner_assistant` role), § 7 (cultivation profile injected as chat context)
 
 ## 14. Open Decisions

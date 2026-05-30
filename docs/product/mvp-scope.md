@@ -11,14 +11,14 @@ Build the smallest commercial-grade Holon app that proves the core loop:
 local team → handoff → remote human/team → returned deliverable
 ```
 
-The MVP is the V1 personal release per `roadmap-mvp-to-enterprise.md` § 2. It serves a single user with one or more desks, paired to other users' desks via the cloud relay, with Hermes as the only production runtime adapter.
+The MVP is the V1 personal release per `roadmap-mvp-to-enterprise.md` § 2. It serves a single user with one or more desks, paired to other users' desks via the cloud relay, with the **direct multi-CLI adapter** (`packages/core/src/cli-adapters.ts`) as the only production runtime adapter — claude / codex / gemini / qwen, on the user's own CLI subscription. *Sister-repo lineage: earlier drafts named "Hermes" as the V1 runtime; `manage-your-cli` has no Hermes adapter — see ADR-040.*
 
 ## 2. MVP Boundary — What's In, What's Out
 
 ### In scope
 
 - **One person, one or more desks.** A person owns one+ desks (V1.x adds polished multi-device UX; V1 supports it minimally).
-- **Local AI staff via Hermes.** The runtime adapter abstraction exists (per `docs/architecture/runtime-adapter-interface.md`) but only Hermes ships in V1.
+- **Local AI staff via the multi-CLI adapter.** The runtime adapter abstraction exists (per [`docs/architecture/legacy/runtime-adapter-interface.md`](../architecture/legacy/runtime-adapter-interface.md), sister-repo lineage); in `manage-your-cli` the only shipping adapter is the direct CLI adapter (claude / codex / gemini / qwen).
 - **Myself substrate.** The desk owner doing work manually. Tasks routed to `myself` land in the owner's queue (Today screen). One desk = one owner; for V2 multi-person workspace, see ADR-010.
 - **CLI executor substrate.** Wrapped CLI tools as flat staff members.
 - **Peer identities.** Local mirrors of Core 2 connections (via the `peer` substrate per ADR-003).
@@ -86,7 +86,7 @@ The MVP is acceptable for general release when:
 9. ✓ Stripe-pattern retry schedule visibly drives a temporarily-offline peer's queued mission to delivery on reconnection.
 10. ✓ The owner can see an audit timeline reconstructing any entity's lifecycle.
 11. ✓ `holon_invariant_violations_total = 0` over a 7-day staging soak.
-12. ✓ Conformance suites pass against the dummy and Hermes runtime adapters.
+12. ✓ Conformance suites pass against the dummy and live CLI runtime adapters.
 13. ✓ Wire protocol conformance suite passes (per `docs/architecture/peer-communication-architecture.md` § 16).
 14. ✓ A two-desk demo can be reproduced from a clean checkout in under 5 minutes.
 15. ✓ The 5 primary screens render with realistic fixture data on web at 375px and 1280px widths.
@@ -100,7 +100,7 @@ The MVP is implementation of the spec set. Per `docs/architecture/implementation
 | `docs/product/holon-product-definition.md` | Full vision; 5 primary screens; success metrics tracked |
 | `docs/architecture/functional-architecture.md` | Two Cores; all 4 seam crossings; all 7 invariants enforced |
 | `docs/architecture/local-agent-management.md` | Flat-roster invariant + 4 substrates + 6 autonomy levels + cultivation skeleton |
-| `docs/architecture/runtime-adapter-interface.md` | Full contract; Hermes + dummy adapters; conformance suite |
+| [`docs/architecture/legacy/runtime-adapter-interface.md`](../architecture/legacy/runtime-adapter-interface.md) (sister-repo lineage) | Full contract; live CLI adapter + dummy adapter; conformance suite |
 | `docs/architecture/handoff-design.md` | Full lifecycle, packet, context-pack overview |
 | `docs/architecture/handoff-taxonomy.md` | All 14 forms supported in protocol; UI for 4 most common |
 | `docs/architecture/peer-communication-architecture.md` | All 13 RPC methods; relay deployed; SSE inbound push; idempotency |

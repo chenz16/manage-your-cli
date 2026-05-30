@@ -10,8 +10,8 @@ Build the Holon MVP as a coherent app that:
 
 - exposes both Cores cleanly (Core 1 = local agent management; Core 2 = hybrid employment interconnect, per `functional-architecture.md` § 2)
 - ships the **multi-CLI adapter** as the production runtime (per
-  `runtime-adapter-interface.md` and `packages/core/src/cli-adapters.ts` —
-  claude / codex / gemini / qwen; no Hermes; intelligence comes from the
+  [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md) (sister-repo lineage) and `packages/core/src/cli-adapters.ts` —
+  claude / codex / gemini / qwen; no Hermes runtime; intelligence comes from the
   user's CLI subscription)
 - carries forward the working pieces of the mibusy V3 prototype (peer routing, facade pattern, explicit subagent creation)
 - enforces the seven invariants from `functional-architecture.md` § 7 (especially flat-roster and no-silent-failure) at the code level
@@ -354,7 +354,7 @@ intelligence is the CLI's; we add only context + memory + orchestration.
 - No model client library, no API-key surface in this app — every CLI handles
   its own auth (user's OAuth/subscription).
 - The `runtime-dummy` package (test/dev double) is preserved for conformance
-  testing per `runtime-adapter-interface.md` § "Test/Dummy Adapter".
+  testing per [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md) § "Test/Dummy Adapter" (sister-repo lineage).
 
 **Why this shape**
 

@@ -1,5 +1,16 @@
 # Holon — Operator Handoff (7×24 role + running state)
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 **For:** the next Claude operator (picking up on **native Windows**).
 **From:** the WSL session (2026-05-21). **Owner:** the CEO (chen.zhang6@gmail.com) — you are the engineering manager; owner is in owner-mode at all times.
 **Read this top-to-bottom, then run the cutover checklist.**

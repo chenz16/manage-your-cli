@@ -1,5 +1,16 @@
 # Holon Product / UX / Test Review
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 Date: 2026-05-17
 Reviewer role: picky product engineer + test engineer
 Target: `http://localhost:3000/`
@@ -266,4 +277,3 @@ The next version should be judged against this concrete demo script:
 8. On mobile 390px, all five primary destinations are reachable without clipped labels.
 9. Chinese task/job/deliverable text renders as readable Chinese, not square boxes.
 10. `pnpm -F @holon/web typecheck` and `pnpm -F @holon/core test` pass.
-

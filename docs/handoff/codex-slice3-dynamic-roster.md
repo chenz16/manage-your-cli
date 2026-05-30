@@ -1,5 +1,16 @@
 # CODEX SPEC — Slice 3: dynamic employees + live roster UI + employees fetch boss-memory
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 Parent (authoritative): `docs/handoff/cli-only-architecture-v2.md` (read §0 North Star,
 §4 dynamic employees, §5 memory). Branch: `feat/cli-only-minimal`. Worktree:
 `C:\dev\holon-cli` (fetch + reset --hard origin/feat/cli-only-minimal, then

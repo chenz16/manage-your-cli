@@ -1,5 +1,17 @@
 # Worker Dispatcher & Mutable Job Store
 
+> **Status: Superseded (moved to `legacy/` 2026-05-30).** This doc
+> describes a worker-dispatch design that spawns Hermes one-shot
+> processes (`uv run hermes -z -t hermes-acp`), an architecture that
+> belongs to the sister repo `holon-engineering`.
+> `manage-your-cli` replaced this with a direct CLI dispatch model:
+> each employee is an official CLI binary in its own persistent
+> tmux session, created/driven via
+> [`packages/core/src/cli-session-service.ts`](../../../packages/core/src/cli-session-service.ts)
+> and the Holon MCP `dispatch` tool. See
+> [`docs/decisions/040-cli-staff-dual-runtime.md`](../../decisions/040-cli-staff-dual-runtime.md)
+> for the rationale. This doc is retained for design lineage only.
+
 Status: draft (iter-007 step 5 implementation status)
 Date: 2026-05-16
 Author: Requirements Agent

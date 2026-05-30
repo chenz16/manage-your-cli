@@ -52,26 +52,31 @@ just code comments:
 | Method | Behaviour |
 |--------|-----------|
 | `GET`  | Inspect-only. Returns `{ bridge, dispatcher, persisted_artifacts }`. Safe to call from anywhere. |
-| `POST` | Destructive. Kills the Hermes ACP subprocess and clears the mutable store. Returns `{ ok, bridge: { killed, previous_session_id }, store: { jobs_cleared, deliverables_cleared } }`. |
+| `POST` | Destructive. Clears the in-memory mutable store, terminates all live CLI tmux sessions, and wipes the project store. Returns `{ ok, store, cli_sessions, projects_cleared, note }`. |
 
-What `POST` actually does:
+What `POST` actually does (see `apps/web/app/api/v1/admin/reset/route.ts`):
 
-1. `closeBridge()` from `apps/web/lib/hermes-acp-client.ts` —
-   SIGTERM the Hermes subprocess, SIGKILL after 800 ms, null out
-   `globalThis.__holonHermes.bridge`. Next chat turn spawns a fresh
-   ACP session with a new `session_id` and zero conversation
-   history.
-2. `clearMutableStore()` from `@holon/core` — empties the in-memory
+1. `clearMutableStore()` from `@holon/core` — empties the in-memory
    Maps holding jobs and worker deliverables.
-3. Leaves the dispatcher running — it just has nothing to poll. Cost
-   of next-job startup is saved.
+2. `clearAllCliSessions()` from `@holon/core` — terminates every
+   live CLI employee tmux session. Next dispatch spawns a fresh
+   session.
+3. `clearProjectStore()` from `@holon/core` — wipes the project
+   registry. The warm Secretary process (see `apps/web/lib/warm-agent.ts`)
+   is independent and is not killed by reset.
 
 What it does NOT touch:
 
 - `src/ui-mock/_shared/fixtures.snapshot.json` — read-only baseline.
-- `~/.hermes/state.db` — Hermes-owned session metadata; orphaned
-  rows there are harmless and Hermes GCs them.
 - `bugs/` directory — bug reports persist across resets.
+- The boss memory store at `~/holon-agents/boss/` — markdown
+  memory survives resets by design (owner-managed state).
+
+> **Lineage.** An earlier sister-repo (`holon-engineering`) version
+> of this endpoint also killed a Hermes ACP subprocess via
+> `closeBridge()` from `apps/web/lib/hermes-acp-client.ts`.
+> `manage-your-cli` has no Hermes runtime and no such bridge; the
+> CLI-session cleanup above replaces it.
 
 **Driver:** `apps/web/app/me/_components/DebugControls.tsx` — two
 buttons on `/me`: "Wipe chat + jobs + worker deliverables" and
@@ -247,8 +252,11 @@ user complains that "polish" is rewriting more than they expected,
 a tooltip ("generates draft" vs "polishes draft") is the cheap
 next step. Flagged as Open Q 5 below.
 
-Goes through DeepSeek's `chat/completions` endpoint **directly**, not
-through Hermes. Rationale:
+Goes through the provider's `chat/completions` endpoint **directly**,
+not through any agent-loop runtime (this point originally distinguished
+the path from the sister-repo's Hermes runtime; `manage-your-cli` has
+no Hermes runtime, so the distinction collapses to "no agent loop").
+Rationale:
 
 - No agent loop, no tools, no streaming needed.
 - Token budget is bounded (`max(300, text.length * 2)`).
@@ -409,8 +417,8 @@ hardcoded developer identifier); all five now resolve at runtime:
 
 | # | File | Leak class | Fix |
 |---|---|---|---|
-| 1 | `apps/web/lib/hermes-acp-client.ts` | Spawn cwd hardcoded to developer's path | `process.cwd()` |
-| 2 | `packages/core/src/worker-dispatcher.ts` | Same — worker spawn cwd | `process.cwd()` |
+| 1 | `apps/web/lib/hermes-acp-client.ts` (sister-repo lineage; not present in `manage-your-cli`) | Spawn cwd hardcoded to developer's path | `process.cwd()` |
+| 2 | `packages/core/src/worker-dispatcher.ts` (sister-repo lineage; not present in `manage-your-cli`) | Same — worker spawn cwd | `process.cwd()` |
 | 3 | `apps/web/app/api/v1/admin/polish/route.ts` | `.env` resolution path hardcoded | `process.cwd()` |
 | 4 | `apps/web/app/api/v1/admin/bugs/route.ts` | Bug folder root + leaked `path` in response | `process.cwd()` + response field renamed to `location: "bugs/<bug_id>"` |
 | 5 | `apps/web/public/_shared/shell.css` + `src/ui-mock/_shared/shell.css` | CSS comment referenced developer's repo path | comment scrubbed |

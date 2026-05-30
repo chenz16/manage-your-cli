@@ -106,13 +106,17 @@ employees run inside tmux. The abstract `RuntimeAdapter` interface is
 preserved so other adapters can plug in later. Returns an event stream and a
 deliverable draft.
 
-> Historical note. Earlier drafts of this doc named "Hermes" as the V1
-> runtime. The codebase no longer carries a Hermes adapter — intelligence
-> comes entirely from the user's CLI subscription, per `CLAUDE.md` § North
-> Star and the README's "How it works" section. Treat "Hermes" in older
-> sub-docs as a stand-in for "the CLI adapter" until those docs are refreshed.
+> **Lineage.** Earlier drafts (and the sister repo
+> [`holon-engineering`](https://github.com/chenz16/holon-engineering))
+> named the V1 runtime "Hermes". `manage-your-cli` does not bundle,
+> link to, or depend on Hermes — intelligence comes entirely from
+> the user's CLI subscription, per `CLAUDE.md` § North Star and the
+> README's "How it works" section. Treat "Hermes" in any older
+> sub-doc as a stand-in for "the CLI adapter". See
+> [`docs/decisions/040-cli-staff-dual-runtime.md`](../decisions/040-cli-staff-dual-runtime.md)
+> for the explicit decoupling decision.
 
-Detailed: `runtime-adapter-interface.md`.
+Detailed: [`legacy/runtime-adapter-interface.md`](legacy/runtime-adapter-interface.md) (historical, sister-repo lineage).
 
 ### 3.5 Handoff Layer *(Core 2)*
 
