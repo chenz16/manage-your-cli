@@ -1,15 +1,11 @@
-# 两种运行模式
+# 两种运行模式 (Superseded — sister-repo dev / Tauri modes)
 
-> **Status: Historical record.** This document captures a point-in-time
-> snapshot. References to **Hermes** / `hermes-acp` /
-> `hermes_profile_generic_v1` describe the runtime used by the sister
-> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
-> at the time of writing. `manage-your-cli` does not bundle, link to, or
-> depend on Hermes — its live substrate is a direct multi-CLI adapter
-> (`claude` / `codex` / `gemini` / `qwen`) under
-> [`packages/core/src/cli-adapters.ts`](../packages/core/src/cli-adapters.ts)
-> and [`apps/web/lib/warm-agent.ts`](../apps/web/lib/warm-agent.ts).
-> The body below is preserved unedited for history.
+> **Status: Superseded / legacy.** Documents the V1 Tauri+NSIS exe vs
+> WSL dev-server modes for [`holon-engineering`](https://github.com/chenz16/holon-engineering).
+> Both modes shelled out to the bundled Hermes sidecar.
+> `manage-your-cli` has no Tauri build and no Hermes sidecar — it runs
+> from `pnpm dev` (or the standalone build) on WSL/Linux and the
+> "two-mode conflict" rules below do not apply.
 
 ## Web Only（日常开发/测试）
 

@@ -1,15 +1,11 @@
-# Dev Questions (repo-level)
+# Dev Questions (Superseded — sister-repo open questions)
 
-> **Status: Historical record.** This document captures a point-in-time
-> snapshot. References to **Hermes** / `hermes-acp` /
-> `hermes_profile_generic_v1` describe the runtime used by the sister
-> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
-> at the time of writing. `manage-your-cli` does not bundle, link to, or
-> depend on Hermes — its live substrate is a direct multi-CLI adapter
-> (`claude` / `codex` / `gemini` / `qwen`) under
-> [`packages/core/src/cli-adapters.ts`](../packages/core/src/cli-adapters.ts)
-> and [`apps/web/lib/warm-agent.ts`](../apps/web/lib/warm-agent.ts).
-> The body below is preserved unedited for history.
+> **Status: Superseded / legacy.** Originally a repo-level ship-blocker
+> question log for [`holon-engineering`](https://github.com/chenz16/holon-engineering).
+> The single question (Q-001, the bundled Hermes sidecar spawn bug) is
+> entirely about that repo's V1 installer and does not apply to
+> `manage-your-cli` (no Hermes runtime, no Tauri installer). Preserved
+> here for historical context only.
 
 Cross-iteration, ship-blocker questions live here. Per-iteration questions go
 in `iterations/NNN-{slug}/dev-questions.md`. Questions here block a SHIP, not

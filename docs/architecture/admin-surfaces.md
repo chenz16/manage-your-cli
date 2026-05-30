@@ -72,11 +72,10 @@ What it does NOT touch:
 - The boss memory store at `~/holon-agents/boss/` — markdown
   memory survives resets by design (owner-managed state).
 
-> **Lineage.** An earlier sister-repo (`holon-engineering`) version
-> of this endpoint also killed a Hermes ACP subprocess via
-> `closeBridge()` from `apps/web/lib/hermes-acp-client.ts`.
-> `manage-your-cli` has no Hermes runtime and no such bridge; the
-> CLI-session cleanup above replaces it.
+> **Lineage.** In `holon-engineering`, this endpoint also tore down a
+> Hermes ACP subprocess. `manage-your-cli` has no Hermes runtime — the
+> three `clear*()` calls above (mutable store + tmux sessions + project
+> registry) are the complete cleanup path.
 
 **Driver:** `apps/web/app/me/_components/DebugControls.tsx` — two
 buttons on `/me`: "Wipe chat + jobs + worker deliverables" and

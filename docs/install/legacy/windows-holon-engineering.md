@@ -1,15 +1,20 @@
-# Install Holon on Windows
+# Install Holon on Windows (Superseded — sister-repo V1 installer)
 
-> **Status: Historical record.** This document captures a point-in-time
-> snapshot. References to **Hermes** / `hermes-acp` /
-> `hermes_profile_generic_v1` describe the runtime used by the sister
-> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
-> at the time of writing. `manage-your-cli` does not bundle, link to, or
-> depend on Hermes — its live substrate is a direct multi-CLI adapter
-> (`claude` / `codex` / `gemini` / `qwen`) under
-> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
-> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
-> The body below is preserved unedited for history.
+> **Status: Superseded / legacy.** This document is the V1 Windows installer
+> guide for the sister repo
+> [`holon-engineering`](https://github.com/chenz16/holon-engineering) —
+> a Tauri 2.x desktop app that bundled the **Hermes** runtime
+> (`hermes-acp` / `hermes_profile_generic_v1`).
+>
+> **`manage-your-cli` (this repo) has no Windows installer.** The desk runs on
+> WSL/Linux from CLI subscriptions (`claude` / `codex` / `gemini` / `qwen`)
+> via the multi-CLI adapter under
+> [`packages/core/src/cli-adapters.ts`](../../../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../../../apps/web/lib/warm-agent.ts);
+> mobile clients are Android/iOS PWAs that connect to the desk.
+>
+> The body below is preserved unedited for history. Do not follow these
+> instructions to install `manage-your-cli`.
 
 Holon Personal Edition V1 ships as a Windows desktop application built with Tauri 2.x. This page walks through downloading the installer, first-run setup, where your data lives, and uninstalling.
 
