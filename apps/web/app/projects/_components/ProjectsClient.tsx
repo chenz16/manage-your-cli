@@ -38,14 +38,14 @@ export function ProjectsClient() {
     <div className="page projects-page">
       <header className="page-header">
         <h1>Projects</h1>
-        <p className="page-subtitle">每个项目独立的秘书 + 员工 scope。</p>
+        <p className="page-subtitle">Each project has its own secretary and staff scope.</p>
       </header>
 
       <section className="projects-create">
         <input
           type="text"
           className="projects-create-input"
-          placeholder="新项目名称…"
+          placeholder="New project name…"
           value={newName}
           maxLength={50}
           onChange={(e) => { setNewName(e.target.value); setError(null); }}
@@ -58,16 +58,16 @@ export function ProjectsClient() {
           onClick={onCreate}
           disabled={creating || newName.trim().length === 0}
         >
-          {creating ? '创建中…' : '创建项目'}
+          {creating ? 'Creating…' : 'Create project'}
         </button>
         {error && <span className="projects-create-err">{error}</span>}
       </section>
 
       <section className="projects-list">
         {loading ? (
-          <div className="projects-empty">加载中…</div>
+          <div className="projects-empty">Loading…</div>
         ) : projects.length === 0 ? (
-          <div className="projects-empty">还没有项目。创建上面的项目就有了。</div>
+          <div className="projects-empty">No projects yet. Create one above.</div>
         ) : (
           projects.map((p) => (
             <ProjectRow
@@ -84,9 +84,9 @@ export function ProjectsClient() {
 
       {active && (
         <footer className="projects-foot">
-          当前项目: <strong>{active.name}</strong>
+          Active: <strong>{active.name}</strong>
           {' · '}
-          秘书: {active.secretary_staff?.name ?? active.secretary_staff_id}
+          Secretary: {active.secretary_staff?.name ?? active.secretary_staff_id}
         </footer>
       )}
     </div>
@@ -128,7 +128,7 @@ function ProjectRow({
 
   const onDelete = async () => {
     if (isOnlyOne) return;
-    if (!confirm(`删除项目「${project.name}」?\n该项目的秘书和聊天会被一并删除。`)) return;
+    if (!confirm(`Delete project "${project.name}"?\nThe project's secretary and chat will be removed.`)) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/v1/secretary-projects/${project.id}`, { method: 'DELETE' });
@@ -177,16 +177,16 @@ function ProjectRow({
           onClick={() => setEditing(true)}
           disabled={busy || editing}
         >
-          重命名
+          Rename
         </button>
         <button
           type="button"
           className="projects-row-btn is-danger"
           onClick={() => void onDelete()}
           disabled={busy || isOnlyOne}
-          title={isOnlyOne ? '至少保留一个项目' : ''}
+          title={isOnlyOne ? 'Keep at least one project' : ''}
         >
-          删除
+          Delete
         </button>
       </div>
     </div>

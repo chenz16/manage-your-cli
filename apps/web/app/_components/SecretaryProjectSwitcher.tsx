@@ -37,7 +37,7 @@ export function SecretaryProjectSwitcher() {
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span>{active?.name ?? '选择项目'}</span>
+        <span>{active?.name ?? 'Select project'}</span>
         <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
           <path d="M0 0l5 6 5-6z" fill="currentColor" />
         </svg>

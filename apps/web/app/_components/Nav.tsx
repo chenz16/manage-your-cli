@@ -101,7 +101,7 @@ const primaryItems: NavItem[] = [
     key: 'projects',
     href: '/projects',
     label: 'Projects',
-    labelZh: '项目',
+    labelZh: 'Projects',
     activeWhen: (p) => p.startsWith('/projects'),
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

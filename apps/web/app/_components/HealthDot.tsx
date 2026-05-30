@@ -31,14 +31,14 @@ interface HealthSnapshot {
   ts: string | null;
 }
 
-const EMPTY: HealthSnapshot = { level: 'gray', reason: '空 registry', entries: [], ts: null };
+const EMPTY: HealthSnapshot = { level: 'gray', reason: 'Empty registry', entries: [], ts: null };
 
 function deriveLevel(entries: HealthEntry[]): { level: HealthLevel; reason: string } {
-  if (entries.length === 0) return { level: 'gray', reason: '空 registry' };
+  if (entries.length === 0) return { level: 'gray', reason: 'Empty registry' };
   const dead = entries.filter((e) => e.status === 'dead' || !e.pidAlive);
-  if (dead.length > 0) return { level: 'red', reason: `${dead.length} 个 agent 挂了` };
+  if (dead.length > 0) return { level: 'red', reason: `${dead.length} agent${dead.length > 1 ? 's' : ''} dead` };
   const stuck = entries.filter((e) => e.status === 'stuck');
-  if (stuck.length > 0) return { level: 'yellow', reason: `${stuck.length} 个 agent 卡了` };
+  if (stuck.length > 0) return { level: 'yellow', reason: `${stuck.length} agent${stuck.length > 1 ? 's' : ''} stuck` };
   return { level: 'green', reason: 'All healthy' };
 }
 
@@ -84,6 +84,7 @@ export function HealthDot() {
           <div className="desk-health-popover-backdrop" onClick={() => setOpen(false)} />
           <div className="desk-health-popover" role="dialog" aria-label="System status">
             <div className="desk-health-popover-title">System · {snap.reason}</div>
+          {/* (title uses derived reason from deriveLevel, kept English) */}
             {snap.entries.length === 0 ? (
               <div className="desk-health-popover-empty">No tracked processes.</div>
             ) : unhealthy.length === 0 ? (
