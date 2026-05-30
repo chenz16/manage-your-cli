@@ -463,7 +463,7 @@ function NewSkillModal({
               disabled={submitting || !name.trim() || !descText.trim()}
               style={{
                 marginTop: 8, padding: '8px 16px',
-                background: 'var(--accent, #2a6)', color: '#fff', border: 'none', borderRadius: 4,
+                background: 'var(--green)', color: '#fff', border: 'none', borderRadius: 4,
                 cursor: submitting ? 'not-allowed' : 'pointer', fontSize: 13,
                 opacity: (submitting || !name.trim() || !descText.trim()) ? 0.6 : 1,
                 alignSelf: 'flex-start',
@@ -541,10 +541,10 @@ function TriageSkillCard({ s, onToggled }: {
   return (
     <article
       style={{
-        border: `1px solid ${s.enabled ? 'var(--accent, #2a6)' : 'var(--rule, #444)'}`,
+        border: `1px solid ${s.enabled ? 'var(--green)' : 'var(--line)'}`,
         borderRadius: 6,
         padding: '10px 12px',
-        background: s.enabled ? 'rgba(34,170,102,0.04)' : 'var(--bg-alt, rgba(255,255,255,0.03))',
+        background: s.enabled ? 'rgba(46,125,82,0.06)' : 'var(--bg-alt)',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
@@ -584,7 +584,7 @@ function TriageSkillCard({ s, onToggled }: {
           style={{
             padding: '3px 10px', fontSize: 12, cursor: toggling ? 'not-allowed' : 'pointer',
             border: 'none', borderRadius: 4,
-            background: s.enabled ? 'var(--accent, #2a6)' : 'var(--rule, #555)',
+            background: s.enabled ? 'var(--green)' : 'var(--ink-mute)',
             color: '#fff', fontWeight: 600, opacity: toggling ? 0.6 : 1,
             transition: 'background 0.15s',
             minWidth: 56,
@@ -886,13 +886,9 @@ export function SkillsClient({ skills }: { skills: SkillDescriptor[] }) {
         <div style={{ flex: 1 }} />
         <button
           type="button"
+          className="btn btn-primary"
           onClick={() => setShowModal(true)}
-          style={{
-            padding: '4px 10px', fontSize: 12,
-            background: 'var(--accent, #2a6)', color: '#fff',
-            border: 'none', borderRadius: 4, cursor: 'pointer',
-            marginRight: 12,
-          }}
+          style={{ marginRight: 12 }}
         >
           {t('skills.new_button')}
         </button>
