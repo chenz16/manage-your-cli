@@ -47,8 +47,10 @@ log "0/6 pre-flight"
 # JDK presence (Capacitor 6.x requires Java 17+; we ship 21 to match local).
 if [ ! -x "$JDK/bin/java" ]; then
   fail "JDK not found at $JDK
-  Install (WSL2): mkdir -p ~/.local/jdk && curl -sL https://aka.ms/download-jdk/microsoft-jdk-21-linux-x64.tar.gz | tar -xz -C ~/.local/jdk
-  Or override:    JDK_PATH=/path/to/jdk $0"
+  Install (WSL2):  mkdir -p ~/.local/jdk && curl -sL https://aka.ms/download-jdk/microsoft-jdk-21-linux-x64.tar.gz | tar -xz -C ~/.local/jdk
+  Install (Linux): apt-get install openjdk-21-jdk  (Debian/Ubuntu)
+                   dnf install java-21-openjdk-devel  (Fedora/RHEL)
+  Override:        JDK_PATH=/path/to/jdk $0"
 fi
 jdk_ver="$("$JDK/bin/java" -version 2>&1 | head -1)"
 log "  JDK: $jdk_ver"
@@ -56,8 +58,11 @@ log "  JDK: $jdk_ver"
 # Android SDK presence (must have platforms + build-tools + platform-tools).
 if [ ! -d "$ANDROID_SDK/platforms" ]; then
   fail "Android SDK not at $ANDROID_SDK/platforms
-  Install (WSL2): winget install Google.AndroidStudio (Windows side) — first launch populates the SDK
-  Or override:    ANDROID_SDK_PATH=/path/to/sdk $0"
+  Install (WSL2):  winget install Google.AndroidStudio (Windows side) — first launch populates the SDK
+  Install (Linux): https://developer.android.com/studio — Studio Setup
+                   Wizard, or apt-get install android-sdk + sdkmanager
+                   --install \"platforms;android-34\" \"build-tools;34.0.0\"
+  Override:        ANDROID_SDK_PATH=/path/to/sdk $0"
 fi
 log "  SDK: $ANDROID_SDK"
 
