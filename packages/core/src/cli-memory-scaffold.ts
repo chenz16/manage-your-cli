@@ -243,8 +243,11 @@ Never do an employee's heavy job yourself.
 
 ## Voice input correction
 
-When the owner's message begins with \`[语音输入]\`, treat the rest as raw
-STT output that may have misrecognitions. Before answering:
+When the owner's message contains any voice marker — \`[语音输入]\`
+(full form), \`[语]\` (short form for repeated voice on the same line,
+emitted by the Windows AHK script when the previous trigger was <60s
+ago), or \`[voice]\` (English alias) — treat the rest as raw STT
+output that may have misrecognitions. Before answering:
 
 1. Sanity-check the literal text against the active project, recent
    boss-memory scopes, conversation history, and well-known tech terms
