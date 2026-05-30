@@ -228,6 +228,72 @@ recoverable" quality biological memory has.
 > edition stays file-only on purpose: zero ops, zero lock-in, owner can grep / version
 > / back up everything as plain files.
 
+### Memory update flow
+
+Three ways memory changes, all flowing through the System 0/1/2 layers:
+**(1) read-on-demand** via a Skill, **(2) write-up** on retirement
+(harvest), **(3) write-down** by HR correction.
+
+```
+                  ┌──────────────────────────────────────────┐
+   ┌── distill ──►│  System 2 — owner-global memory          │
+   │  (project    │  ~/holon-agents/boss/owner/{INDEX,...}   │
+   │   retires)   │  • identity / preferences / decisions    │
+   │              │  • owner-HR persona + evaluation logs    │
+   │              └────┬─────────────────────────────────────┘
+   │                   │  read on demand
+   │                   │  SKILL: holon-owner-recall
+   │                   ▼  (installed on owner-CLI)
+   │              ┌──────────────────────────────────────────┐
+   │  ┌─ distill ►│  System 1 — per-project boss-memory      │
+   │  │ (employee │  ~/holon-agents/boss/projects/<id>/      │
+   │  │  retires) │  • project decisions / architecture      │
+   │  │           │  • secretary CLAUDE.md                   │
+   │  │           │    └── ## HR-Corrections  (managed)      │
+   │  │           └────┬─────────────────────────────────────┘
+   │  │                │  read on demand
+   │  │                │  SKILL: holon-memory-recall
+   │  │                ▼  (installed on secretary)
+   │  │           ┌──────────────────────────────────────────┐
+   │  │           │  System 0 — per-employee turn memory     │
+   │  │           │  CLAUDE.md / AGENTS.md / GEMINI.md / ... │
+   │  │           │  • employee role memory                  │
+   │  │           │  • turn-scoped working memory            │
+   │  │           │    └── ## HR-Corrections  (managed)      │
+   │  │           └──────────────────────────────────────────┘
+   │  │                ▲                          ▲
+   │  │                │                          │
+   │  │   Path A: write rule to                   │
+   │  │   ## HR-Corrections section               │
+   │  │   (persistent, rule-hash idempotent)      │
+   │  │                                           │
+   │  │   Path B: enqueue synthetic message ──────┘
+   │  │   non-preemptive, prepended on next inbound
+   │  │
+   │  │   ≥3 × in 24h ─► auto-promote B → A ─► 🔴 owner accept/edit/revert
+   │  │
+   │  └── secretary-HR (inline loop step) scores employee dispatches
+   │
+   └────── owner-HR (cron ~30 min + settle-watch) scores secretaries
+```
+
+**Read path (Skill).** When a secretary or owner-CLI needs prior context,
+the recall Skill triggers, reads `INDEX.md` first, then opens at most
+2–3 detail files. Budget capped (~8k chars). Markdown only — no RAG, no
+vector DB.
+
+**Write-up path (harvest-on-retire).** When an employee retires, the
+owning secretary distills its memory file into the project boss-memory
+and discards the original. When a project retires, the owner distills
+project memory into owner-global and discards. Knowledge bubbles up,
+dross goes away — like a human life, like an org.
+
+**Write-down path (HR correction).** HR watches behavior, scores against
+a rubric, and corrects two ways: persistent rules go to Path A (managed
+`## HR-Corrections` section in the target's per-CLI memory file); single
+deviations go to Path B (next-turn synthetic message, non-preemptive).
+Repeated Path-B fires auto-promote to Path A with owner accept/edit/revert.
+
 ### HR evaluator + two-path behavior correction
 
 Secretaries drift. The 7×24 manager pattern says "dispatch, don't do" — but
