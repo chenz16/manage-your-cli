@@ -223,7 +223,7 @@ When you're on the same LAN as the host (office / home), devices connect directl
 - Confirm the connector card status badge is **Connected** (green), not `connecting` or `error`.
 - For Telegram: send a fresh message to `@YourBot` and wait up to 5 seconds for the poll cycle.
 - For WeChat: verify the daemon terminal shows "binding active" (or equivalent); send a WeChat message to yourself from another account. Wait up to 40 seconds for the long-poll cycle to return.
-- Check that Triage (iter-020) is running on the host — if the Hermes sidecar is stopped, Missions are queued but not triaged.
+- Check that Triage is running on the host — if the warm-CLI Secretary (`apps/web/lib/warm-agent.ts`) or the triage CLI employee is stopped, Missions are queued but not triaged.
 
 ### How to disconnect a channel
 
