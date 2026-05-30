@@ -122,6 +122,79 @@ flowchart LR
 **internet of agents**. The Secretary is the hub: it coordinates your local team and
 is the single gateway out to other people's agents (over the **A2A** standard).
 
+### System 0 / System 1 / System 2 — the memory hierarchy
+
+Daniel Kahneman partitioned the human mind into a **fast** intuitive
+**System 1** and a **slow** deliberate **System 2**. Recent
+vision-language-action (VLA) robotics architectures (NVIDIA Helix,
+Figure 02) adopt the same split as a fast policy + slow planner.
+
+**We apply this directly to agent memory** — and extend it downward
+with a **System 0** that Kahneman didn't model:
+
+| Layer | Name | What it holds | Speed |
+|---|---|---|---|
+| **System 0** | 会话 — session / reflexive | The current dispatch turn's working memory inside a warm CLI process. Ephemeral. *(below Kahneman — he didn't model it)* | ~1 second |
+| **System 1** | 项目 — project | The project secretary's accumulated state + dispatch intent + active jobs + project-scoped boss-memory. One instance per project. *(Kahneman's "fast, automatic, intuitive")* | Hours → weeks |
+| **System 2** | owner — identity | Owner's long-term needs, preferences, accumulated background knowledge across all projects. One instance per owner, shared by every project secretary. *(Kahneman's "deliberate, effortful, slow")* | Months → years |
+
+```mermaid
+flowchart TB
+  subgraph S2["System 2 — owner (slow, invisible)<br/>~/holon-agents/boss/owner/"]
+    O[("owner-global<br/>identity · preferences · background")]
+    MM["🧠 memory-manager CLI<br/>(curator, runs in background)"]
+  end
+
+  subgraph S1A["System 1 — project A (fast)"]
+    SA["🧑‍💼 Secretary A"]
+    PA[("project A boss-memory<br/>~/holon-agents/boss/projects/A/")]
+    EA1["🤖 Employee"]
+    EA2["🤖 Employee"]
+  end
+
+  subgraph S1B["System 1 — project B (fast)"]
+    SB["🧑‍💼 Secretary B"]
+    PB[("project B boss-memory<br/>~/holon-agents/boss/projects/B/")]
+    EB1["🤖 Employee"]
+  end
+
+  Owner["👤 owner"] --> SA & SB
+  SA --> EA1 & EA2
+  SB --> EB1
+  SA -.reads.-> O
+  SB -.reads.-> O
+  SA --- PA
+  SB --- PB
+  MM -.curates.-> O & PA & PB
+
+  classDef sys0 fill:#FFF5E0,stroke:#C69A35;
+  classDef sys1 fill:#E5F0E8,stroke:#2E7D52;
+  classDef sys2 fill:#E5EEF5,stroke:#1F6F9E;
+  class S1A,S1B sys1
+  class S2 sys2
+```
+
+**System 0 lives inside each colored box** — every CLI's warm process
+holds its own session memory; we don't draw it as a separate node
+because it's per-turn and ephemeral.
+
+**Harvest-on-retire**: memory bubbles **up** the hierarchy when a
+container is destroyed.
+
+| Container destroyed | Who harvests | Memory bubbles |
+|---|---|---|
+| CLI employee retired | The owning secretary | Employee `CLAUDE.md` → project boss-memory (System 1) |
+| Project retired | Owner (or an optional super-agent if the owner spawns one) | Project boss-memory → owner boss-memory (System 2) |
+| Owner | — | Terminal — no layer above |
+
+> **Why this matters as differentiation.** No agent framework we've
+> found applies Kahneman's System 1 / System 2 to agent memory; most
+> (Letta, Mem0, Zep, Cognee, AutoGen, CrewAI) treat memory as a single
+> service. We get the 3-layer split for free by being a **thin shell**:
+> System 0 is the CLI's own loop, System 1 is the secretary's warm
+> process, System 2 is the curator agent. No DB, no framework — just
+> markdown files and CLIs arranged in a recursion of the same pattern.
+
 > **Personal edition (this repo): single-machine, no database.** Everything lives in
 > local files — boss memory is markdown, owner state is a single SQLite file used as
 > a key-value store for personal preferences, and the CLI agents themselves keep state
