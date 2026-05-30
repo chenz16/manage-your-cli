@@ -59,6 +59,80 @@ function agentMemoryFileName(binary: string): string {
   }
 }
 
+/**
+ * Predicate: which recall-skill (if any) does this staff get at boot?
+ *
+ * Per `docs/adr/memory-as-skill.md`:
+ *  - Secretary → `holon-memory-recall` (System 2 owner + System 1 project scope)
+ *  - Owner-CLI → `holon-owner-recall` (System 2 only)
+ *  - Employees → none (their boss injects the relevant memory slice at dispatch
+ *    time; recall-on-demand would re-fetch context the boss already paid for)
+ *
+ * Staff schema has no `kind === 'secretary'` discriminator — the secretary is
+ * identified by `role_name === 'secretary'` (see `secretary-service.ts`
+ * SECRETARY_ROLE_NAME, `secretary-projects-service.ts`, `rooms-service.ts`).
+ * The owner-CLI uses the OwnerAssistant role_name `'owner_assistant'` (the
+ * `owner` alias is accepted for hand-rolled rows). Per ADR-015 the owner is
+ * NOT normally a Staff record, but if a downstream caller wraps it as one to
+ * scaffold its workspace, this predicate covers it without a schema change.
+ *
+ * If neither matches, returns `null` (employee → skip).
+ */
+function recallSkillFor(staff: Staff): 'holon-memory-recall' | 'holon-owner-recall' | null {
+  const role = staff.role_name?.trim();
+  if (role === 'secretary') return 'holon-memory-recall';
+  if (role === 'owner_assistant' || role === 'owner') return 'holon-owner-recall';
+  return null;
+}
+
+/**
+ * Mirror the relevant canonical `SKILL.md` from `<repoRoot>/skills/<name>/`
+ * into the agent's per-project Claude Code skills dir at
+ * `<staff.cwd>/.claude/skills/<name>/SKILL.md`.
+ *
+ * Per-project (NOT `~/.claude/skills/`) install: keeps the install scoped to
+ * the cwd this agent runs in, no global pollution; matches the per-cwd
+ * memory-file model.
+ *
+ * Semantics: `writeFileIfAbsent` — owner can hand-edit the installed copy,
+ * re-scaffold will not overwrite. Source SKILL.md edits don't hot-reload;
+ * delete the per-cwd copy to pick up upstream changes (documented in ADR).
+ *
+ * `binary` is currently used only by callers' routing logic — kept on the
+ * signature so future per-CLI variations (e.g. Codex/Gemini skill formats)
+ * can branch here without a call-site change.
+ *
+ * Returns the absolute path of the installed file, or `null` if no skill
+ * applies to this staff (employee → skip).
+ */
+export function installRecallSkill(
+  cwd: string,
+  staff: Staff,
+  binary: string,
+  repoRoot: string = findRepoRoot(),
+): string | null {
+  void binary; // reserved for per-CLI skill format branching, see JSDoc
+  const skillName = recallSkillFor(staff);
+  if (!skillName) return null;
+  const sourcePath = join(repoRoot, 'skills', skillName, 'SKILL.md');
+  if (!existsSync(sourcePath)) {
+    warnMemoryScaffold(`installRecallSkill source missing ${sourcePath}`, new Error('ENOENT'));
+    return null;
+  }
+  let content: string;
+  try {
+    content = readFileSync(sourcePath, 'utf8');
+  } catch (err) {
+    warnMemoryScaffold(`read ${sourcePath}`, err);
+    return null;
+  }
+  const targetDir = join(cwd, '.claude', 'skills', skillName);
+  mkdirIfNeeded(targetDir);
+  const targetPath = join(targetDir, 'SKILL.md');
+  writeFileIfAbsent(targetPath, content);
+  return targetPath;
+}
+
 function agentRemit(staff: Staff): string {
   const maybePersona = (staff as Staff & { persona?: string }).persona?.trim();
   return maybePersona || staff.system_prompt?.trim() || staff.role_name?.trim() || '(set by the owner)';
@@ -108,7 +182,13 @@ export function ensureAgentMemoryFile(cwd: string, staff: Staff, binary: string)
     writeFileIfAbsent(join(cwd, 'AGENTS.md'), content);
     writeFileIfAbsent(join(cwd, 'CLAUDE.md'), content);
   }
-  ensureMcpJson(join(cwd, '.mcp.json'), findRepoRoot());
+  const repoRoot = findRepoRoot();
+  ensureMcpJson(join(cwd, '.mcp.json'), repoRoot);
+  // Per ADR `docs/adr/memory-as-skill.md`: secretary + owner-CLI get a recall
+  // SKILL.md mirrored next to their memory file; employees skip (predicate in
+  // recallSkillFor()). Safe to call unconditionally — no-op for non-matching
+  // staff, idempotent for the matching ones (writeFileIfAbsent).
+  installRecallSkill(cwd, staff, binary, repoRoot);
 }
 
 export function ensureManagerWorkspace(): string {

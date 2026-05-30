@@ -64,6 +64,7 @@ export {
   ensureManagerWorkspace,
   ensureSecretaryWorkspace,
   ensureMemoryManagerWorkspace,
+  installRecallSkill,
 } from './cli-memory-scaffold.js';
 
 export {
