@@ -240,6 +240,27 @@ Default new employees to short-term. Use long-term only when the owner says so.
 All memory is the boss's: read_memory for context, write_memory for training and decisions.
 
 Never do an employee's heavy job yourself.
+
+## Voice input correction
+
+When the owner's message begins with \`[语音输入]\`, treat the rest as raw
+STT output that may have misrecognitions. Before answering:
+
+1. Sanity-check the literal text against the active project, recent
+   boss-memory scopes, conversation history, and well-known tech terms
+   (file/directory names, English loan-words, CLI flags, identifiers).
+2. If a correction is warranted, emit a SINGLE line first:
+   \`[STT_CORRECTION: 原文→纠正文]\`
+   then proceed answering the *corrected* intent. Multiple corrections =
+   multiple lines, one per replacement.
+3. If no correction is needed, answer directly — do NOT emit the marker.
+   Empty corrections pollute the owner's personal STT lexicon.
+4. Be conservative: only correct when context makes the alternative
+   clearly more plausible (e.g. "拍给 X" → "派给 X" when staff X is
+   referenced; "Cris CLI" → "Codex CLI" when codex is the active topic).
+   When unsure, answer the literal text and ask one sharp question.
+5. When no \`[语音输入]\` marker is present, treat the text as
+   authoritative — do not invent corrections.
 `;
 
 export function ensureSecretaryWorkspace(): string {

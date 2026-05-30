@@ -526,8 +526,15 @@ function MobileVoiceRecorderButton({ onTranscript }: { onTranscript?: (text: str
   }
 
   function deliverTranscript(text: string) {
-    if (onTranscript) onTranscript(text);
-    else insertTranscriptIntoComposer(text, getVoiceAutoSend()); // 语音→直接发送 or 先填入可编辑
+    // Tag voice-recognized text with [语音输入] so the secretary's STT
+    // correction protocol kicks in (it does a context-sanity check on the
+    // literal text and emits [STT_CORRECTION: 原文→纠正文] then answers,
+    // mirroring what employees already do for dispatched voice tasks).
+    // Owner asked: "秘书这里 也要有语音自动修复功能 … 让大模型自动看是否纠正
+    // 再回答问题".
+    const tagged = `[语音输入] ${text}`;
+    if (onTranscript) onTranscript(tagged);
+    else insertTranscriptIntoComposer(tagged, getVoiceAutoSend()); // 语音→直接发送 or 先填入可编辑
   }
 
   // ── PRIMARY: native on-device STT ─────────────────────────────────────────
