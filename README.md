@@ -4,10 +4,19 @@
 team of agents.** A lean **Secretary** you chat with creates and dispatches
 **employee** agents to do the heavy work — all running on *your own* CLI logins.
 
+- **Stable working relationships.** Team members are persistent, not ephemeral
+  one-shots. The secretary you chat with on Monday remembers what you decided
+  last Friday; the employee you named "auditor" is still the same auditor next
+  week, with the same accumulated context.
+- **Hierarchical memory recovery.** When an employee retires, the secretary
+  distills its memory into the project's boss-memory. When a project retires,
+  the owner distills it into owner-global memory. Knowledge bubbles up the
+  hierarchy and the dross gets discarded — like a human life, like an org.
 - **No API keys.** It drives the official CLI you're already logged into. Your
   subscription, your machine, your auth — we never touch tokens.
-- **Thin shell.** All the intelligence is the CLI's. We add only **context, memory,
-  orchestration, and a clean UI**. No RAG, no vector DB, no bespoke "AI" layer.
+- **Thin shell, no wheel reinvention.** All the intelligence is the CLI's. We
+  add only **context, memory, orchestration, and a clean UI**. No RAG, no
+  vector DB, no bespoke "AI" layer.
 - **Gets better for free.** Every model/CLI upgrade upgrades the whole product.
 - **You keep direct control.** Create a CLI agent from the app — *or* attach one you
   already launched yourself. Either way it's your own `tmux` session: `attach` and drive
