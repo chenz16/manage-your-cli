@@ -272,6 +272,13 @@ export function retireCliAgentStaff(id: string): { ok: boolean; lifecycle?: 'sho
     return { ok: false, reason: `substrate_not_cli_agent (${s.substrate.kind})` };
   }
   const lifecycle = s.substrate.kind === 'cli_agent' ? s.substrate.lifecycle ?? 'short' : 'short';
+
+  // Harvest-on-retire (System 0/1/2 bubble-up): the owning secretary
+  // distills the employee's role memory into project boss-memory (System 1)
+  // or owner boss-memory (System 2) before the container is gone.
+  // Fire-and-forget — see boss-memory-harvest-service.ts JSDoc.
+  triggerEmployeeHarvest(s);
+
   if (lifecycle === 'short') {
     patchStaffOverride(id, { status: 'archived' });
     markDismissed(id);
@@ -292,4 +299,31 @@ export function retireCliAgentStaff(id: string): { ok: boolean; lifecycle?: 'sho
     ts: new Date().toISOString(),
   }));
   return { ok: true, lifecycle, staff: updated ?? s };
+}
+
+/**
+ * Fire-and-forget kick of the employee-retire harvest. Resolves first
+ * project_id from the staff's project_ids list (System 1); if none →
+ * cross-project employee → harvest to owner scope (System 2).
+ *
+ * Errors are swallowed and audited as `boss.harvest_failed`; retire MUST
+ * NOT fail because the harvester dispatch failed.
+ */
+function triggerEmployeeHarvest(staff: Staff): void {
+  const projectId: string | null = Array.isArray(staff.project_ids) && staff.project_ids.length > 0
+    ? (staff.project_ids[0] ?? null)
+    : null;
+  // Defer the import to avoid an import cycle: harvest-service imports
+  // listStaffMerged from this file.
+  void import('./boss-memory-harvest-service.js').then(({ harvestEmployeeRetire }) =>
+    harvestEmployeeRetire({ staff_id: staff.id, project_id: projectId, staff }),
+  ).catch((err) => {
+    console.error(JSON.stringify({
+      audit: 'boss.harvest_failed',
+      kind: 'employee',
+      employee_staff_id: staff.id,
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
+  });
 }

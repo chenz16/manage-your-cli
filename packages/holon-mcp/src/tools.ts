@@ -50,14 +50,40 @@ export const retireAgentSchema = {
 
 export const readMemorySchema = {
   scope: z.string().min(1).optional().describe('Optional boss-memory scope. Omit to read INDEX.md only. Use "__log" for the raw append-log snapshot.'),
-  project_id: z.string().min(1).optional().describe('Secretary project ID to scope memory. Omit for global (legacy) memory.'),
+  project_id: z.string().min(1).nullable().optional().describe('Secretary project ID. Pass null to force System 2 (owner层) access; omit to default to this MCP server\'s injected project (or owner if none).'),
 };
 
 export const writeMemorySchema = {
-  scope: z.string().min(1).describe('Boss-memory scope such as decisions, roster, or project/foo.'),
+  scope: z.string().min(1).describe('Boss-memory scope such as decisions, roster, or architecture.'),
   text: z.string().min(1).describe('Memory note to append.'),
-  project_id: z.string().min(1).optional().describe('Secretary project ID to scope memory. Omit for global (legacy) memory.'),
+  project_id: z.string().min(1).nullable().optional().describe('Secretary project ID. Pass null to force System 2 (owner层) access; omit to default to this MCP server\'s injected project (or owner if none).'),
 };
+
+/**
+ * System 0/1/2 project-id auto-inject:
+ *
+ * When this MCP server is launched on behalf of a project secretary, the
+ * launcher sets `HOLON_PROJECT_ID=<sproj_id>`. The read/write memory tools
+ * then default to that project's scope (System 1) without the calling LLM
+ * needing to remember its own project_id.
+ *
+ * Owner scope (System 2) access stays EXPLICIT:
+ *   - pass `project_id: null` to force owner-scope reads/writes
+ *   - or unset HOLON_PROJECT_ID at the secretary launch level (owner secretary)
+ *
+ * Distinguishing "absent" vs "null" matters: absent → fall through to env
+ * default; null → explicit owner override.
+ */
+function defaultProjectId(): string | undefined {
+  const env = process.env.HOLON_PROJECT_ID?.trim();
+  return env && env.length > 0 ? env : undefined;
+}
+
+function resolveProjectId(passed: string | null | undefined): string | undefined {
+  if (passed === null) return undefined;          // explicit owner override
+  if (typeof passed === 'string' && passed.trim().length > 0) return passed.trim();
+  return defaultProjectId();                       // env default (or undefined for owner)
+}
 
 interface ToolError {
   ok: false;
@@ -183,18 +209,20 @@ export async function retireAgent(agent: string): Promise<unknown> {
   }
 }
 
-export async function readMemory(scope?: string, project_id?: string): Promise<unknown> {
+export async function readMemory(scope?: string, project_id?: string | null): Promise<unknown> {
   try {
-    if (scope?.trim() === '__log') return readBossMemoryLog(project_id);
-    return readBossMemory(scope, project_id);
+    const resolved = resolveProjectId(project_id);
+    if (scope?.trim() === '__log') return readBossMemoryLog(resolved);
+    return readBossMemory(scope, resolved);
   } catch (err) {
     return classifyError(err);
   }
 }
 
-export async function writeMemory(scope: string, text: string, project_id?: string): Promise<unknown> {
+export async function writeMemory(scope: string, text: string, project_id?: string | null): Promise<unknown> {
   try {
-    return await writeBossMemoryWithRecovery(scope, text, project_id);
+    const resolved = resolveProjectId(project_id);
+    return await writeBossMemoryWithRecovery(scope, text, resolved);
   } catch (err) {
     return classifyError(err);
   }

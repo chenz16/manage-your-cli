@@ -80,14 +80,28 @@ export function bossMemoryRoot(): string {
 }
 
 /**
- * Per-project memory root: <boss>/projects/<project_id>/
- * Falls back to legacy <boss>/ when project_id is not supplied.
- * If project_id is 'default' the legacy path is also used (back-compat alias).
+ * System 2 (owner层) memory root: <boss>/owner/
+ *
+ * Owner-global identity, preferences, and accumulated background that
+ * persists across all projects. Used whenever a caller does NOT pass
+ * project_id (or passes 'default' for back-compat).
+ */
+export function ownerMemoryRoot(): string {
+  return join(bossMemoryRoot(), 'owner');
+}
+
+/**
+ * Resolve the scope root for a given project_id.
+ *
+ *   project_id absent / null / 'default'  → System 2 (owner层): <boss>/owner/
+ *   project_id is a real id               → System 1 (项目层): <boss>/projects/<id>/
+ *
+ * The legacy flat layout (<boss>/INDEX.md + <boss>/MEMORY/) is migrated into
+ * <boss>/owner/ on first access — see ensureBossStore.
  */
 export function projectMemoryRoot(project_id?: string | null): string {
-  const base = bossMemoryRoot();
-  if (!project_id || project_id === 'default') return base;
-  return join(base, 'projects', project_id);
+  if (!project_id || project_id === 'default') return ownerMemoryRoot();
+  return join(bossMemoryRoot(), 'projects', project_id);
 }
 
 function indexPath(project_id?: string | null): string {
@@ -96,6 +110,15 @@ function indexPath(project_id?: string | null): string {
 
 function memoryDir(project_id?: string | null): string {
   return join(projectMemoryRoot(project_id), 'MEMORY');
+}
+
+/**
+ * Project archive root: <boss>/projects/_archived/
+ * Project-retire harvest moves the project's memory dir here so owner can
+ * still grep historical context.
+ */
+export function projectArchiveRoot(): string {
+  return join(bossMemoryRoot(), 'projects', '_archived');
 }
 
 function classifyFs(action: string, err: unknown): BossMemoryError {
@@ -107,75 +130,81 @@ function classifyFs(action: string, err: unknown): BossMemoryError {
   };
 }
 
+/**
+ * Migrate legacy flat boss-memory (<boss>/INDEX.md + <boss>/MEMORY/) into the
+ * new System 2 owner scope at <boss>/owner/. Idempotent — runs only when:
+ *   - <boss>/owner/ does NOT yet exist (or is empty of INDEX/MEMORY), AND
+ *   - at least one of <boss>/INDEX.md or <boss>/MEMORY/ exists.
+ *
+ * This is the ONLY direction we auto-migrate now. The earlier flat→project
+ * migration was wrong under the System 0/1/2 split: legacy accumulated
+ * content is owner-global by historical default (everything written before
+ * this split lived in one shared box).
+ */
+function migrateLegacyFlatToOwner(): void {
+  const owner = ownerMemoryRoot();
+  const ownerIndex = join(owner, 'INDEX.md');
+  const ownerMemory = join(owner, 'MEMORY');
+  if (existsSync(ownerIndex) || existsSync(ownerMemory)) return; // already migrated
+
+  const legacyIndex = join(bossMemoryRoot(), 'INDEX.md');
+  const legacyMemory = join(bossMemoryRoot(), 'MEMORY');
+  if (!existsSync(legacyIndex) && !existsSync(legacyMemory)) return; // nothing to migrate
+
+  try {
+    mkdirSync(owner, { recursive: true });
+    if (existsSync(legacyIndex)) renameSync(legacyIndex, ownerIndex);
+    if (existsSync(legacyMemory)) renameSync(legacyMemory, ownerMemory);
+    console.log(JSON.stringify({
+      audit: 'boss.memory_migrated_legacy_to_owner',
+      from_index: legacyIndex,
+      to_index: ownerIndex,
+      ts: new Date().toISOString(),
+    }));
+  } catch (err) {
+    // Non-fatal: subsequent ensureBossStore will create fresh owner files
+    // alongside whatever legacy artifacts remain.
+    console.warn(JSON.stringify({
+      audit: 'boss.memory_migration_failed',
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    }));
+  }
+}
+
 function ensureBossStore(project_id?: string | null): BossMemoryError | null {
+  const isOwner = !project_id || project_id === 'default';
+  if (isOwner) migrateLegacyFlatToOwner();
   const mDir = memoryDir(project_id);
   const iPath = indexPath(project_id);
   try {
     mkdirSync(mDir, { recursive: true });
     if (!existsSync(iPath)) {
-      writeFileSync(iPath, `# Boss Memory Index
-
-Lean pointers only. Read a specific scope for detail.
-
-## Scopes
-- decisions -> MEMORY/decisions.md - durable decisions and owner training
-- roster -> MEMORY/roster.md - employee roles, strengths, and tuning notes
-- work -> MEMORY/work.md - active work and handoff pointers
-`);
+      const scopeLines = isOwner
+        ? [
+            '- decisions -> MEMORY/decisions.md - durable decisions and owner training',
+            '- preferences -> MEMORY/preferences.md - owner preferences (System 2 owner-global)',
+            '- roster -> MEMORY/roster.md - employee roles, strengths, and tuning notes',
+            '- work -> MEMORY/work.md - active work and handoff pointers',
+          ]
+        : [
+            '- decisions -> MEMORY/decisions.md - durable project decisions',
+            '- architecture -> MEMORY/architecture.md - project-scoped architecture notes',
+            '- roster -> MEMORY/roster.md - project-scoped role notes',
+            '- work -> MEMORY/work.md - active work and handoff pointers',
+          ];
+      writeFileSync(iPath, `# Boss Memory Index\n\nLean pointers only. Read a specific scope for detail.\n\n## Scopes\n${scopeLines.join('\n')}\n`);
     }
-    for (const scope of ['decisions', 'roster', 'work']) {
+    const seedScopes = isOwner
+      ? ['decisions', 'roster', 'work', 'preferences']
+      : ['decisions', 'roster', 'work'];
+    for (const scope of seedScopes) {
       const path = detailPath(scope, project_id);
       if (!existsSync(path)) writeFileSync(path, `# ${scope}\n`);
     }
     return null;
   } catch (err) {
     return classifyFs('ensure boss memory store', err);
-  }
-}
-
-/**
- * Migration: if the legacy flat boss memory exists (INDEX.md + MEMORY/ at bossMemoryRoot())
- * and the target project dir does NOT yet exist, move the legacy files into
- * projects/<project_id>/ on first access. Idempotent.
- *
- * Only runs when project_id is a real project (not null/default).
- */
-function migrateToProjectDir(project_id: string): void {
-  // Only migrate if project_id is a real, non-legacy id.
-  if (!project_id || project_id === 'default') return;
-
-  const legacyIndex = join(bossMemoryRoot(), 'INDEX.md');
-  const legacyMemory = join(bossMemoryRoot(), 'MEMORY');
-  const targetRoot = projectMemoryRoot(project_id);
-  const targetIndex = join(targetRoot, 'INDEX.md');
-
-  // Target already has data — skip (idempotent).
-  if (existsSync(targetIndex)) return;
-  // No legacy data to migrate — skip.
-  if (!existsSync(legacyIndex) && !existsSync(legacyMemory)) return;
-
-  try {
-    mkdirSync(targetRoot, { recursive: true });
-    if (existsSync(legacyIndex) && !existsSync(targetIndex)) {
-      renameSync(legacyIndex, targetIndex);
-    }
-    const targetMemory = join(targetRoot, 'MEMORY');
-    if (existsSync(legacyMemory) && !existsSync(targetMemory)) {
-      renameSync(legacyMemory, targetMemory);
-    }
-    console.log(JSON.stringify({
-      audit: 'boss.memory_migrated_to_project',
-      project_id,
-      ts: new Date().toISOString(),
-    }));
-  } catch (err) {
-    // Migration failure is non-fatal — new writes will still go to the right place.
-    console.warn(JSON.stringify({
-      audit: 'boss.memory_migration_failed',
-      project_id,
-      error: err instanceof Error ? err.message : String(err),
-      ts: new Date().toISOString(),
-    }));
   }
 }
 
@@ -214,7 +243,6 @@ function scopedPath(scope: string, project_id?: string | null): { ok: true; scop
 }
 
 export function readBossMemory(scope?: string, project_id?: string | null): BossMemoryRead {
-  if (project_id && project_id !== 'default') migrateToProjectDir(project_id);
   const ensured = ensureBossStore(project_id);
   if (ensured) return ensured;
 
@@ -293,7 +321,6 @@ function listMarkdownFiles(dir: string): string[] {
 }
 
 export function readBossMemoryLog(project_id?: string | null): BossMemoryRead {
-  if (project_id && project_id !== 'default') migrateToProjectDir(project_id);
   const ensured = ensureBossStore(project_id);
   if (ensured) return ensured;
 
@@ -460,7 +487,6 @@ function upsertIndexLine(scope: string, text: string, project_id?: string | null
 }
 
 export function writeBossMemory(scope: string, text: string, project_id?: string | null): BossMemoryWrite {
-  if (project_id && project_id !== 'default') migrateToProjectDir(project_id);
   const ensured = ensureBossStore(project_id);
   if (ensured) return ensured;
   const target = scopedPath(scope, project_id);

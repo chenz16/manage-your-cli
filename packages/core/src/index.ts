@@ -88,7 +88,9 @@ export {
 } from './a2a-peer-store.js';
 export {
   bossMemoryRoot,
+  ownerMemoryRoot,
   projectMemoryRoot,
+  projectArchiveRoot,
   readBossMemory,
   readBossMemoryLog,
   writeBossMemory,
@@ -99,6 +101,15 @@ export {
   type BossMemoryFrontmatter,
   type BossMemoryBudgetExceeded,
 } from './boss-memory-service.js';
+export {
+  harvestEmployeeRetire,
+  harvestProjectRetire,
+  setBossMemoryHarvestDispatcher,
+  type HarvestEmployeeInput,
+  type HarvestProjectInput,
+  type HarvestResult,
+  type HarvestDispatcher,
+} from './boss-memory-harvest-service.js';
 export {
   getOrCreateSecretaryStaff,
   ensureSecretaryCliSession,

@@ -57,7 +57,7 @@ describe('parseFrontmatter', () => {
 
 describe('readBossMemory frontmatter strip', () => {
   it('strips frontmatter from returned text and exposes structured fields', () => {
-    const mDir = join(workDir, 'boss', 'MEMORY');
+    const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
     mkdirSync(mDir, { recursive: true });
     writeFileSync(
       join(mDir, 'decisions.md'),
@@ -75,7 +75,7 @@ describe('readBossMemory frontmatter strip', () => {
   });
 
   it('treats a legacy file without frontmatter as default budget', () => {
-    const mDir = join(workDir, 'boss', 'MEMORY');
+    const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
     mkdirSync(mDir, { recursive: true });
     writeFileSync(join(mDir, 'work.md'), '# work\nlegacy content\n');
 
@@ -90,7 +90,7 @@ describe('readBossMemory frontmatter strip', () => {
 
 describe('writeBossMemory budget enforcement', () => {
   it('returns budget_exceeded when projected size would overflow', () => {
-    const mDir = join(workDir, 'boss', 'MEMORY');
+    const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
     mkdirSync(mDir, { recursive: true });
     const big = 'x'.repeat(95);
     writeFileSync(
@@ -131,7 +131,7 @@ describe('writeBossMemory budget enforcement', () => {
 
 describe('backlinks scan', () => {
   it('lists other scopes that contain [[scope]] wikilinks', () => {
-    const mDir = join(workDir, 'boss', 'MEMORY');
+    const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
     mkdirSync(mDir, { recursive: true });
     writeFileSync(join(mDir, 'decisions.md'), '# decisions\nsee [[roster]] for ownership\n');
     writeFileSync(join(mDir, 'work.md'), '# work\nblocked on [[roster#alice]]\n');
@@ -144,7 +144,7 @@ describe('backlinks scan', () => {
   });
 
   it('ignores wikilinks that live inside frontmatter', () => {
-    const mDir = join(workDir, 'boss', 'MEMORY');
+    const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
     mkdirSync(mDir, { recursive: true });
     // The link [[roster]] is in the frontmatter region, not the body.
     writeFileSync(
@@ -159,7 +159,7 @@ describe('backlinks scan', () => {
   });
 
   it('returns empty backlinks for a scope nobody references', () => {
-    const mDir = join(workDir, 'boss', 'MEMORY');
+    const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
     mkdirSync(mDir, { recursive: true });
     writeFileSync(join(mDir, 'lonely.md'), '# lonely\n');
     writeFileSync(join(mDir, 'other.md'), '# other\nno refs\n');
@@ -167,5 +167,103 @@ describe('backlinks scan', () => {
     const res = readBossMemory('lonely');
     if (!res.ok) throw new Error('expected ok');
     expect(res.backlinks).toEqual([]);
+  });
+});
+
+describe('System 0/1/2 owner vs project split', () => {
+  it('reads owner scope from <boss>/owner/MEMORY when project_id is absent', () => {
+    const mDir = join(workDir, 'boss', 'owner', 'MEMORY');
+    mkdirSync(mDir, { recursive: true });
+    writeFileSync(join(mDir, 'preferences.md'), '# preferences\nowner prefers zh\n');
+
+    const res = readBossMemory('preferences');
+    if (!res.ok) throw new Error('expected ok');
+    expect(res.path).toBe(join(mDir, 'preferences.md'));
+    expect(res.text).toContain('owner prefers zh');
+  });
+
+  it('reads project scope from <boss>/projects/<id>/MEMORY when project_id given', () => {
+    const mDir = join(workDir, 'boss', 'projects', 'sproj_abc', 'MEMORY');
+    mkdirSync(mDir, { recursive: true });
+    writeFileSync(join(mDir, 'architecture.md'), '# architecture\nproject A picked HTTP\n');
+
+    const res = readBossMemory('architecture', 'sproj_abc');
+    if (!res.ok) throw new Error('expected ok');
+    expect(res.path).toBe(join(mDir, 'architecture.md'));
+    expect(res.project_id).toBe('sproj_abc');
+    expect(res.text).toContain('project A picked HTTP');
+  });
+
+  it('writing with project_id creates the project dir + INDEX.md', () => {
+    const res = writeBossMemory('decisions', 'pick redis', 'sproj_new');
+    if (!res.ok) throw new Error('expected write ok');
+    expect(res.project_id).toBe('sproj_new');
+
+    const indexPath = join(workDir, 'boss', 'projects', 'sproj_new', 'INDEX.md');
+    const decisionsPath = join(workDir, 'boss', 'projects', 'sproj_new', 'MEMORY', 'decisions.md');
+    expect(readFileSync(indexPath, 'utf8')).toContain('decisions');
+    expect(readFileSync(decisionsPath, 'utf8')).toContain('pick redis');
+
+    // Owner scope must not have the project decision leaked into it.
+    // Owner scope may or may not have been touched; if it exists, assert
+    // the project text is not in it.
+    const ownerDecisionsPath = join(workDir, 'boss', 'owner', 'MEMORY', 'decisions.md');
+    let ownerHas = '';
+    try { ownerHas = readFileSync(ownerDecisionsPath, 'utf8'); } catch { /* owner dir not yet created — fine */ }
+    expect(ownerHas).not.toContain('pick redis');
+  });
+
+  it('migrates legacy flat layout into owner/ on first read', () => {
+    // Seed legacy flat layout.
+    const legacyMemory = join(workDir, 'boss', 'MEMORY');
+    mkdirSync(legacyMemory, { recursive: true });
+    writeFileSync(join(workDir, 'boss', 'INDEX.md'), '# Old Index\n- legacy -> MEMORY/legacy.md\n');
+    writeFileSync(join(legacyMemory, 'legacy.md'), '# legacy\nold owner content\n');
+
+    const res = readBossMemory('legacy');
+    if (!res.ok) throw new Error('expected ok');
+    expect(res.text).toContain('old owner content');
+
+    // Legacy paths should be gone; owner paths should exist.
+    expect(() => readFileSync(join(workDir, 'boss', 'INDEX.md'), 'utf8')).toThrow();
+    expect(readFileSync(join(workDir, 'boss', 'owner', 'INDEX.md'), 'utf8')).toContain('legacy');
+    expect(readFileSync(join(workDir, 'boss', 'owner', 'MEMORY', 'legacy.md'), 'utf8')).toContain('old owner content');
+  });
+
+  it('legacy migration is idempotent', () => {
+    const legacyMemory = join(workDir, 'boss', 'MEMORY');
+    mkdirSync(legacyMemory, { recursive: true });
+    writeFileSync(join(workDir, 'boss', 'INDEX.md'), '# Old\n');
+    writeFileSync(join(legacyMemory, 'a.md'), '# a\n');
+
+    readBossMemory('a');
+    // Second call must not throw or clobber.
+    const res2 = readBossMemory('a');
+    if (!res2.ok) throw new Error('expected ok');
+    expect(res2.text).toContain('# a');
+  });
+
+  it('backlinks scan respects scope boundary — project links do not leak into owner', () => {
+    // Owner scope has a wikilink target.
+    const ownerDir = join(workDir, 'boss', 'owner', 'MEMORY');
+    mkdirSync(ownerDir, { recursive: true });
+    writeFileSync(join(ownerDir, 'preferences.md'), '# preferences\n');
+    writeFileSync(join(ownerDir, 'decisions.md'), '# decisions\nsee [[preferences]]\n');
+
+    // Project scope tries to reference owner's preferences.
+    const projDir = join(workDir, 'boss', 'projects', 'sproj_x', 'MEMORY');
+    mkdirSync(projDir, { recursive: true });
+    writeFileSync(join(projDir, 'architecture.md'), '# arch\nrefs [[preferences]] (should NOT cross over)\n');
+    writeFileSync(join(projDir, 'preferences.md'), '# preferences\n'); // same scope name, different layer
+
+    // Owner.preferences backlinks should only list owner.decisions, not project.architecture.
+    const ownerRes = readBossMemory('preferences');
+    if (!ownerRes.ok) throw new Error('expected ok');
+    expect(ownerRes.backlinks).toEqual(['decisions']);
+
+    // Project.preferences backlinks should only list project.architecture.
+    const projRes = readBossMemory('preferences', 'sproj_x');
+    if (!projRes.ok) throw new Error('expected ok');
+    expect(projRes.backlinks).toEqual(['architecture']);
   });
 });
