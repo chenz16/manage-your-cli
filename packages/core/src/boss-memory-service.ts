@@ -3,10 +3,13 @@ import { homedir } from 'node:os';
 import { basename, join, normalize, relative, sep } from 'node:path';
 
 /**
- * Default per-scope character budget (Hermes-style bounded memory file).
+ * Default per-scope character budget (bounded markdown memory file).
  * Owner may override on a per-file basis by setting `budget: <n>` in the
  * scope file's YAML frontmatter. Files without frontmatter inherit this
  * default — backward compatible with pre-frontmatter scope files.
+ *
+ * [Lineage] The bounded-budget pattern is from the sister-repo Hermes
+ * runtime; applied here as a memory-hygiene rule, not a runtime dependency.
  */
 export const DEFAULT_SCOPE_BUDGET = 8000;
 
@@ -523,7 +526,7 @@ export function writeBossMemory(scope: string, text: string, project_id?: string
   const projectedUsed = body.length + appendBlock.length;
 
   if (projectedUsed > limit) {
-    // Hermes-style hard ceiling: do not silently overflow. Surface the
+    // Hard ceiling: do not silently overflow. Surface the
     // signal so the memory-manager can react (compress / split / archive).
     console.log(JSON.stringify({
       audit: 'boss.memory_budget_exceeded',
