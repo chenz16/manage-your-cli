@@ -83,13 +83,18 @@ export ANDROID_SDK_ROOT="$ANDROID_SDK"
 # ---------- 1/6 · next build (static export for Capacitor) ----------
 log "1/6 next build (NEXT_PUBLIC_CAPACITOR=1 → static export to apps/mobile/out/)"
 cd "$APP_DIR"
-# M-L-046 — a Capacitor static export inlines NEXT_PUBLIC_DESK_ORIGIN at build
-# time (deskOrigin(), apps/mobile/app/_lib/desk-origin.ts). With it unset the
-# fallback localhost:3000 gets baked into the APK and every desk call resolves
-# to the phone itself — a silently-broken install (Engineering Rule #4).
-# Require it explicitly; the host is the owner's call, supplied at build time,
-# never hardcoded here (Rule #11).
-[ -n "${NEXT_PUBLIC_DESK_ORIGIN:-}" ] || fail "NEXT_PUBLIC_DESK_ORIGIN unset · the APK would inline the localhost:3000 fallback and every desk call would hit the phone. Re-run as: NEXT_PUBLIC_DESK_ORIGIN=https://<desk-host> $0"
+# Slice-1 generic APK: NEXT_PUBLIC_DESK_ORIGIN is now OPTIONAL. When unset,
+# the APK ships with no baked URL and the first-launch OnboardingDeskUrl
+# screen asks the user to type their own desk URL (stored in localStorage,
+# read at runtime by deskOrigin()). The localhost:3000 fallback only kicks
+# in for dev — the boot gate (hasDeskUrl) routes users straight to
+# onboarding when nothing is configured.
+#
+# Owners building for their own phone may still set NEXT_PUBLIC_DESK_ORIGIN
+# to skip onboarding on install.
+if [ -z "${NEXT_PUBLIC_DESK_ORIGIN:-}" ]; then
+  log "NOTE: NEXT_PUBLIC_DESK_ORIGIN unset — APK will boot to OnboardingDeskUrl on first launch (generic build, any user can configure)."
+fi
 # Clean out/ so a partial/stale build cannot mask a real failure (was the
 # 2026-05-18 silent-fallback bug in scripts/build-android.sh).
 rm -rf out
@@ -103,7 +108,7 @@ log "stamping build: sha=$BUILD_SHA date=$BUILD_DATE"
 # would otherwise serve yesterday's hashed bundle with the old DESK_ORIGIN).
 sed -i.bak "s|__BUILD_SHA__|$BUILD_SHA|g" public/sw.js
 trap 'mv public/sw.js.bak public/sw.js 2>/dev/null || true' EXIT
-NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN="$NEXT_PUBLIC_DESK_ORIGIN" \
+NEXT_PUBLIC_CAPACITOR=1 NEXT_PUBLIC_DESK_ORIGIN="${NEXT_PUBLIC_DESK_ORIGIN:-}" \
   NEXT_PUBLIC_BUILD_SHA="$BUILD_SHA" NEXT_PUBLIC_BUILD_DATE="$BUILD_DATE" \
   pnpm exec next build 2>&1 | tail -8
 [ -d out ] || fail "next build did not produce apps/mobile/out/ · static export config is broken (commonly: a dynamic [param] route is missing generateStaticParams)"
