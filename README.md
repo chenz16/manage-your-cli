@@ -178,14 +178,28 @@ flowchart TB
 holds its own session memory; we don't draw it as a separate node
 because it's per-turn and ephemeral.
 
-**Harvest-on-retire**: memory bubbles **up** the hierarchy when a
-container is destroyed.
+**Harvest-on-retire — like a human life.** When a container is
+destroyed, its memory doesn't all get saved — it gets **distilled then
+discarded**. A small durable fraction bubbles **up** the hierarchy;
+the time-bound rest is dropped.
 
-| Container destroyed | Who harvests | Memory bubbles |
-|---|---|---|
-| CLI employee retired | The owning secretary | Employee `CLAUDE.md` → project boss-memory (System 1) |
-| Project retired | Owner (or an optional super-agent if the owner spawns one) | Project boss-memory → owner boss-memory (System 2) |
-| Owner | — | Terminal — no layer above |
+The human parallel is exact. You don't remember every meal you ate
+this month, but you do remember "I like spicy food" — a
+higher-abstraction trace that survived the curation. The same shape
+runs through all three layers:
+
+| Container destroyed | Who harvests | What bubbles up | What gets discarded |
+|---|---|---|---|
+| CLI employee retired | The owning secretary | Durable contributions, role-shape lessons → project boss-memory (System 1) | Per-turn chat, scaffolding, resolved threads |
+| Project retired | Owner (or an optional super-agent if the owner spawns one) | Owner-relevant decisions, patterns, references → owner boss-memory (System 2) | Project-internal mechanics, time-bound scope |
+| Owner | — | Terminal — no layer above | — |
+
+The **memory-manager** (System 2's curator) is what runs this
+distillation — it's another CLI agent, runs in the background, and
+shapes the surviving memory the way a person sleeps on a day's events.
+Old projects get archived to `_archived/` (we don't grep history away,
+just retire it from active context), preserving the same "fadeable but
+recoverable" quality biological memory has.
 
 > **Why this matters as differentiation.** No agent framework we've
 > found applies Kahneman's System 1 / System 2 to agent memory; most
