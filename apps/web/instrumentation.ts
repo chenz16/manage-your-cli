@@ -249,6 +249,21 @@ export async function register(): Promise<void> {
     const heartbeat = await import('./lib/heartbeat');
     heartbeat.startHeartbeat();
     process.stderr.write(JSON.stringify({ audit: 'heartbeat.started' }) + '\n');
+    // HR slice 2 — scaffold owner-HR filesystem and register the Path-B
+    // producer. Both are idempotent + side-effect-light. Scaffold never
+    // clobbers owner edits (writeFileIfAbsent semantics).
+    try {
+      const dynamicImportHr = new Function('specifier', 'return import(specifier)') as <T>(specifier: string) => Promise<T>;
+      const coreHr = await dynamicImportHr<typeof import('@holon/core')>('@holon/core');
+      const r = coreHr.ensureOwnerHrScaffold();
+      process.stderr.write(JSON.stringify({ audit: 'hr.scaffolded', root: r.root, created: r.created }) + '\n');
+      const hrMod = await import('./lib/hr-path-b-producer');
+      hrMod.registerHrPathBProducerOnce();
+      process.stderr.write(JSON.stringify({ audit: 'hr.path_b_producer_registered' }) + '\n');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(JSON.stringify({ audit: 'hr.boot_failed', error: msg }) + '\n');
+    }
     const tmuxDiscovery = await import('./lib/tmux-discovery');
     setTimeout(() => {
       void tmuxDiscovery.discoverTmuxEmployees().then((found) => {
