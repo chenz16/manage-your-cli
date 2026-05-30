@@ -35,6 +35,56 @@ function binaryInteractiveArgs(binary: string): string {
   }
 }
 
+/**
+ * Per-binary resume fragment for the launch command. Returns the shell
+ * fragment that, prepended to the binary's interactive args, will resume the
+ * given session id. Returns '' when the binary doesn't support resume from
+ * the launch command line (we then start fresh and accept the lost context).
+ *
+ * Resume flag matrix (verified against each binary's --help, 2026-05-30):
+ *   claude  → `--resume <id>`        (id captured in warm-agent.ts saveSession)
+ *   codex   → `resume <id>` (subcommand, prepended) — id NOT captured anywhere
+ *             today; we surface the flag for future capture but normally
+ *             callers pass no sessionId for codex, so launches fresh.
+ *   gemini  → `-r <id>`              (id NOT captured today → typically fresh)
+ *   qwen    → `-r <id>`              (id NOT captured today → typically fresh)
+ *
+ * Session-id capture today:
+ *   - claude: apps/web/lib/warm-agent.ts saveSession; tmux pane parsed in
+ *     apps/web/lib/tmux-discovery.ts via `--resume <uuid>` regex.
+ *   - codex / gemini / qwen: not captured. First respawn after a crash will
+ *     run fresh. TODO(future): parse their pane invocation for `-r <id>` /
+ *     `resume <id>` and stash it on ProcessEntry.sessionId so a real respawn
+ *     can carry the id forward.
+ *
+ * Returned fragment is the substring inserted BEFORE the binary's interactive
+ * args, except for claude where `--resume <id>` comes AFTER the args (kept
+ * for backward compat with the prior code).
+ */
+interface ResumeFragment {
+  /** Inserted between binary name and interactiveArgs. Includes trailing space. */
+  prefix: string;
+  /** Appended after interactiveArgs. Includes leading space. */
+  suffix: string;
+}
+
+export function buildResume(binary: string, sessionId: string | undefined | null): ResumeFragment {
+  if (!sessionId) return { prefix: '', suffix: '' };
+  switch (binary) {
+    // claude: `claude --dangerously-skip-permissions --resume <id>`
+    case 'claude': return { prefix: '', suffix: ` --resume ${sessionId}` };
+    // codex's resume story is a SUBCOMMAND: `codex resume <id>`. Args still
+    // come after — codex resume accepts the same per-config flags.
+    case 'codex':  return { prefix: `resume ${sessionId} `, suffix: '' };
+    // gemini: `gemini -r <id> --yolo`
+    case 'gemini': return { prefix: `-r ${sessionId} `, suffix: '' };
+    // qwen: `qwen -r <id> --yolo`
+    case 'qwen':   return { prefix: `-r ${sessionId} `, suffix: '' };
+    // Unknown binary: launch fresh rather than fake a flag we can't verify.
+    default:       return { prefix: '', suffix: '' };
+  }
+}
+
 // Respawn a dead tmux-employee. Idempotent per-entry: the entry is
 // unregistered after spawn, the next discovery tick re-registers with the
 // new pid. Owner request: "CLI 死了自动重启".
@@ -46,10 +96,11 @@ function respawnTmuxEmployee(entry: ProcessEntry): void {
   if (!session) return;
   try { execFileSync('tmux', ['kill-session', '-t', session], { timeout: 1500 }); } catch { /* fine */ }
   const interactiveArgs = binaryInteractiveArgs(binary);
-  // Only claude has --resume today; codex/gemini/qwen launch fresh.
-  const resumePart = sessionId && binary === 'claude' ? ` --resume ${sessionId}` : '';
+  // Per-binary resume: claude --resume <id>; codex resume <id>; gemini/qwen -r <id>.
+  // See buildResume() JSDoc for the full matrix + capture-status notes.
+  const { prefix: resumePrefix, suffix: resumeSuffix } = buildResume(binary, sessionId);
   const cdPart = cwd ? `cd ${shQuote(cwd)}; ` : '';
-  const launchCmd = `${cdPart}exec ${binary} ${interactiveArgs}${resumePart}`;
+  const launchCmd = `${cdPart}exec ${binary} ${resumePrefix}${interactiveArgs}${resumeSuffix}`;
   try {
     spawn('tmux', ['new-session', '-d', '-s', session, '-x', '120', '-y', '32',
       'bash', '-l', '-c', launchCmd], { stdio: 'ignore', detached: true }).unref();

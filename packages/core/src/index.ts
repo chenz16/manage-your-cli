@@ -64,6 +64,7 @@ export {
   ensureManagerWorkspace,
   ensureSecretaryWorkspace,
   ensureMemoryManagerWorkspace,
+  installRecallSkill,
 } from './cli-memory-scaffold.js';
 
 export {
@@ -334,3 +335,27 @@ export {
 
 // TTS preprocessing (shared by desk + mobile)
 export { sanitizeForTts } from './sanitize-for-tts.js';
+
+// HR evaluator (ADR: docs/adr/hr-evaluator-and-behavior-correction.md)
+export {
+  ownerHrRoot,
+  hrEvaluationLogPath,
+  hrVetoPath,
+  hrPromotionLogPath,
+  hrStateFilePath,
+  ensureOwnerHrScaffold,
+} from './hr-paths.js';
+export {
+  writeHrCorrection,
+  normalizeRuleText,
+  stableRuleHash,
+  type HrCorrectionRule,
+} from './hr-path-a.js';
+export {
+  maybePromoteToA,
+  isVetoed,
+  firesInWindow,
+  type HrCounter,
+  type PromotionVeto,
+  type PromotionResult,
+} from './hr-promotion.js';

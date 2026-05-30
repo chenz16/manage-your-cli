@@ -4,10 +4,19 @@
 team of agents.** A lean **Secretary** you chat with creates and dispatches
 **employee** agents to do the heavy work — all running on *your own* CLI logins.
 
+- **Stable working relationships.** Team members are persistent, not ephemeral
+  one-shots. The secretary you chat with on Monday remembers what you decided
+  last Friday; the employee you named "auditor" is still the same auditor next
+  week, with the same accumulated context.
+- **Hierarchical memory recovery.** When an employee retires, the secretary
+  distills its memory into the project's boss-memory. When a project retires,
+  the owner distills it into owner-global memory. Knowledge bubbles up the
+  hierarchy and the dross gets discarded — like a human life, like an org.
 - **No API keys.** It drives the official CLI you're already logged into. Your
   subscription, your machine, your auth — we never touch tokens.
-- **Thin shell.** All the intelligence is the CLI's. We add only **context, memory,
-  orchestration, and a clean UI**. No RAG, no vector DB, no bespoke "AI" layer.
+- **Thin shell, no wheel reinvention.** All the intelligence is the CLI's. We
+  add only **context, memory, orchestration, and a clean UI**. No RAG, no
+  vector DB, no bespoke "AI" layer.
 - **Gets better for free.** Every model/CLI upgrade upgrades the whole product.
 - **You keep direct control.** Create a CLI agent from the app — *or* attach one you
   already launched yourself. Either way it's your own `tmux` session: `attach` and drive
@@ -219,6 +228,120 @@ recoverable" quality biological memory has.
 > edition stays file-only on purpose: zero ops, zero lock-in, owner can grep / version
 > / back up everything as plain files.
 
+### Memory update flow
+
+Three ways memory changes, all flowing through the System 0/1/2 layers:
+**(1) read-on-demand** via a Skill, **(2) write-up** on retirement
+(harvest), **(3) write-down** by HR correction.
+
+```
+                  ┌──────────────────────────────────────────┐
+   ┌── distill ──►│  System 2 — owner-global memory          │
+   │  (project    │  ~/holon-agents/boss/owner/{INDEX,...}   │
+   │   retires)   │  • identity / preferences / decisions    │
+   │              │  • owner-HR persona + evaluation logs    │
+   │              └────┬─────────────────────────────────────┘
+   │                   │  read on demand
+   │                   │  SKILL: holon-owner-recall
+   │                   ▼  (installed on owner-CLI)
+   │              ┌──────────────────────────────────────────┐
+   │  ┌─ distill ►│  System 1 — per-project boss-memory      │
+   │  │ (employee │  ~/holon-agents/boss/projects/<id>/      │
+   │  │  retires) │  • project decisions / architecture      │
+   │  │           │  • secretary CLAUDE.md                   │
+   │  │           │    └── ## HR-Corrections  (managed)      │
+   │  │           └────┬─────────────────────────────────────┘
+   │  │                │  read on demand
+   │  │                │  SKILL: holon-memory-recall
+   │  │                ▼  (installed on secretary)
+   │  │           ┌──────────────────────────────────────────┐
+   │  │           │  System 0 — per-employee turn memory     │
+   │  │           │  CLAUDE.md / AGENTS.md / GEMINI.md / ... │
+   │  │           │  • employee role memory                  │
+   │  │           │  • turn-scoped working memory            │
+   │  │           │    └── ## HR-Corrections  (managed)      │
+   │  │           └──────────────────────────────────────────┘
+   │  │                ▲                          ▲
+   │  │                │                          │
+   │  │   Path A: write rule to                   │
+   │  │   ## HR-Corrections section               │
+   │  │   (persistent, rule-hash idempotent)      │
+   │  │                                           │
+   │  │   Path B: enqueue synthetic message ──────┘
+   │  │   non-preemptive, prepended on next inbound
+   │  │
+   │  │   ≥3 × in 24h ─► auto-promote B → A ─► 🔴 owner accept/edit/revert
+   │  │
+   │  └── secretary-HR (inline loop step) scores employee dispatches
+   │
+   └────── owner-HR (cron ~30 min + settle-watch) scores secretaries
+```
+
+**Read path (Skill).** When a secretary or owner-CLI needs prior context,
+the recall Skill triggers, reads `INDEX.md` first, then opens at most
+2–3 detail files. Budget capped (~8k chars). Markdown only — no RAG, no
+vector DB.
+
+**Write-up path (harvest-on-retire).** When an employee retires, the
+owning secretary distills its memory file into the project boss-memory
+and discards the original. When a project retires, the owner distills
+project memory into owner-global and discards. Knowledge bubbles up,
+dross goes away — like a human life, like an org.
+
+**Write-down path (HR correction).** HR watches behavior, scores against
+a rubric, and corrects two ways: persistent rules go to Path A (managed
+`## HR-Corrections` section in the target's per-CLI memory file); single
+deviations go to Path B (next-turn synthetic message, non-preemptive).
+Repeated Path-B fires auto-promote to Path A with owner accept/edit/revert.
+
+### HR evaluator + two-path behavior correction
+
+Secretaries drift. The 7×24 manager pattern says "dispatch, don't do" — but
+on any given turn, an agent can decide to just do it. **HR is the loop that
+catches drift and corrects it.** Two tiers, two correction paths, no new
+runtime tier.
+
+**Two HR tiers**
+
+- **owner-HR** (System 2, fixed) — one agent under `~/holon-agents/boss/owner/hr/`
+  that evaluates **secretaries** across all projects. Catches cross-project
+  drift: the same mistake in N projects = an owner-level signal.
+- **secretary-HR** (per secretary, inline loop step — not a separate process)
+  — each secretary scores its **employees** after dispatch completion. The
+  manager already reads the output; HR is just "score what you read."
+
+Employees do not get HR. They're ephemeral.
+
+**Two correction paths**
+
+| Path | When | How | Persistence |
+|---|---|---|---|
+| **A — memory patch** | Rule-shaped, recurring (role definition, "always X / never Y") | Append to a managed `## HR-Corrections` section in the target's per-CLI memory file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `QWEN.md`). Idempotent by rule-hash. | Survives respawn |
+| **B — next-turn nudge** | Single-turn deviation (e.g., manager did work instead of dispatching) | HR enqueues a synthetic message; it's **prepended to the next inbound** (owner turn or dispatch return). **Non-preemptive** — does not interrupt the running turn. | Vanishes with the conversation |
+
+**Auto-promotion B → A.** If the same Path-B nudge fires ≥ 3 times in a
+24-hour window for the same target, HR auto-promotes the rule to Path A
+and surfaces a 🔴 line to owner: `HR auto-promoted on <agent>: "<rule>".
+Accept / edit / revert`. Owner stays in the loop on persistent changes;
+ephemeral corrections HR ships on its own.
+
+**Triggers.** owner-HR cron-ticks every ~30 min (drift is statistical);
+secretary-HR scores every dispatch completion (already in the loop);
+both wake on settle-watch events and on employee retirement (the harvest
+hook also feeds HR). Manual override: `review <agent>` from owner.
+
+**Rubric** is a markdown checklist, not a numeric score. Default ships
+with `dispatched-not-DIY · respected-north-star · read-INDEX-before-act ·
+role-fidelity · memory-hygiene`. Owner extends by editing the owner-HR
+persona. Evaluations log to
+`~/holon-agents/boss/owner/hr/evaluations/<sproj_id>/YYYY-MM-DD.md`.
+
+HR is pure read-only on the agents it watches — it never mutates the
+secretary's process. All correction goes through Path A (memory file
+write) or Path B (synthetic next-turn message). See
+[`docs/adr/hr-evaluator-and-behavior-correction.md`](docs/adr/hr-evaluator-and-behavior-correction.md)
+for the full spec.
+
 ### Two orthogonal axes: shell vs gateway
 
 Every connection above is "agent ↔ agent," but they differ on **two independent
@@ -257,13 +380,15 @@ reference points — what we share, where we differ.
 
 | Dimension | **This project** (Manage Your CLI) | **CLI itself** (Claude Code · Codex · Gemini · Qwen) | **Hermes** (NousResearch/hermes-agent) | **OpenClaw / WeChat-ClawBot** | **Obsidian** |
 |---|---|---|---|---|---|
-| **Primary purpose** | Manager layer over your CLI subscriptions | The actual model loop + tool calling | Minimal markdown-only memory for one agent | Multi-tenant WeChat gateway + routing to LLMs | Personal knowledge base (notes) |
+| **Primary purpose** | **Boss / manager view of workers** — manage a virtual team with stable members, secretary as buffer, supports micromanagement (attach to any worker's tmux, watch, intervene); **extremely optimized for mobile management** (the boss runs the team from a phone, not a workstation); don't reinvent the wheel (CLIs do the work) | The actual model loop + tool calling | Minimal markdown-only memory for one agent | Multi-tenant WeChat gateway + routing to LLMs | Personal knowledge base (notes) |
 | **Scope** | Multi-CLI, multi-project | One CLI, per-session | One agent, one user | Multi-user routing fabric | One user, manual workflow |
 | **Memory model** | 3-layer System 0/1/2; markdown only | `CLAUDE.md` per repo (system 1-ish); session context (system 0); recent "Memory" feature in claude.ai (system 2-ish, server-side) | Two markdown files: `MEMORY.md` + `USER.md`; char budget; no DB | None of its own — passes through | Markdown vault + `[[wikilinks]]` + YAML frontmatter; manual organization |
 | **Memory curator** | A separate CLI agent (memory-manager) that you can attach + watch | None — model decides each turn what to remember | Optional KG/RAG providers behind a plugin seam | n/a | The user, by hand (no automation) |
-| **Cross-vendor (Claude ↔ Codex etc.)** | ✅ Yes — same secretary can dispatch to any CLI | ❌ Each CLI sees only its own context | ❌ Single-agent | ⚠️ Routes to multiple model APIs but no shared memory | n/a |
+| **Cross-vendor (Claude ↔ Codex etc.)** | ✅ Employees: any CLI mix (claude / codex / gemini / qwen). ⚠️ Secretary: claude-pinned today — relies on Claude Code's `--print --input-format stream-json` warm-process contract that the other three CLIs don't expose the same way | ❌ Each CLI sees only its own context | ❌ Single-agent | ⚠️ Routes to multiple model APIs but no shared memory | n/a |
 | **Multi-project hierarchy** | ✅ One secretary per project + owner-global memory above | ❌ Each project = a folder in claude.ai (no scoped agents); Claude Code is per-repo | ❌ Single agent, no project concept | ⚠️ Per-tenant routing, but no project layer | ⚠️ Per-vault, manually curated |
 | **Manager → worker pattern** | ✅ Secretary dispatches employees via MCP; `Task` tool fan-out preserved | ✅ Internally — Claude Code's `Task` does sub-agents | ❌ One-shot | ❌ Routing, not orchestration | n/a |
+| **Auto-create persistent employee teams** | ✅ Secretary `create_agent(role, persona, cwd)` at runtime → tmux-attached, own per-CLI memory file, survives restart, watchable | ⚠️ `Task` sub-agents are **ephemeral** (return-then-die); no persistent named role | ❌ Single agent | ❌ No team layer | n/a |
+| **Hierarchical memory recycling (harvest-on-retire)** | ✅ Employee dies → secretary distills its memory file into project boss-memory; project dies → owner distills into owner-global; **bubble-up + discard**, like a human life | ❌ Sub-agent returns a result; no memory harvesting | ❌ Within-agent compaction only (single budget) | ❌ Tenant-scoped, no hierarchy | ❌ Manual; notes never "retire" |
 | **Where memory lives** | Local files (`~/holon-agents/`), owner's disk, git-able | `CLAUDE.md` local (Claude Code); claude.ai Memory on Anthropic's servers | Local files (`~/.hermes/memories/`), owner's disk | Server (the tenant's gateway box) | Local files (vault folder), owner's disk |
 | **Data ownership** | ✅ Full — markdown on your box; vendor-neutral | ⚠️ Server-side context; Memory feature is opaque | ✅ Full — same markdown principle | ⚠️ Tenant trusts gateway operator | ✅ Full |
 | **Open source** | ✅ MIT-direction (license pending) | ⚠️ Mixed: Codex is OSS; Claude Code's binary is closed; Gemini CLI is OSS | ✅ OSS | ✅ OSS (nightsailer/wechat-clawbot) | ❌ Closed; ✅ vault format open |
@@ -287,9 +412,13 @@ different role:
   folder; we automate the curation with a memory-manager agent.
 
 Where we are alone is the intersection: **vendor-neutral CLI
-federation + per-project secretary layer + local-owned 0/1/2 memory
-with an agent curator + mobile thin-client**. Any one of those four
-exists somewhere; the **bundle** doesn't.
+federation + per-project secretary layer + auto-create persistent
+employee teams + System 0/1/2 memory with hierarchical
+harvest-on-retire (distill-then-discard) + mobile thin-client**. Any
+one of those exists somewhere; we may be the first to combine
+**persistent dispatched agents with hierarchical memory recovery
+between them** — the recursion of "the same pattern at every layer"
+is the actual moat, not any single dimension.
 
 ## The 6 core pieces
 
@@ -335,10 +464,10 @@ exact distro-specific install command for each missing one.
 - **pnpm 9.10.0**: `corepack prepare pnpm@9.10.0 --activate`
 - **tmux** + **git**
 - **At least one CLI subscription** logged in on your machine:
-  - Claude Code: `npm install -g @anthropic-ai/claude-code` then `claude` (OAuth)
-  - Codex: `npm install -g @openai/codex` then `codex` (OAuth)
-  - Gemini: `npm install -g @google/gemini-cli` then `gemini` (OAuth)
-  - Qwen: per Alibaba Cloud docs, then `qwen login`
+  - **Claude Code** ([install docs](https://docs.claude.com/en/docs/claude-code/setup) · [GitHub](https://github.com/anthropics/claude-code)) — `npm install -g @anthropic-ai/claude-code` then `claude` (OAuth, Pro/Max plan or API key)
+  - **Codex** ([install docs](https://developers.openai.com/codex/cli) · [GitHub](https://github.com/openai/codex)) — `npm install -g @openai/codex` then `codex` (ChatGPT Plus/Pro OAuth or API key)
+  - **Gemini CLI** ([install docs](https://github.com/google-gemini/gemini-cli#quickstart) · [GitHub](https://github.com/google-gemini/gemini-cli)) — `npm install -g @google/gemini-cli` then `gemini` (Google OAuth, free tier available)
+  - **Qwen Code** ([install docs](https://github.com/QwenLM/qwen-code#quick-start) · [GitHub](https://github.com/QwenLM/qwen-code)) — `npm install -g @qwen-code/qwen-code` then `qwen` (OAuth, Alibaba Cloud / DashScope)
 
 No API keys are ever entered into this app — it drives your existing CLI login.
 

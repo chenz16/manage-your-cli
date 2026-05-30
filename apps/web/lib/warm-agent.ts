@@ -15,6 +15,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { register as regProcess, unregister as unregProcess, touch as touchProcess, markStatus } from './process-registry';
+import { setBusyProbe } from './settle-watch';
+import type { SyntheticMessage } from './synthetic-producers';
 
 // Persist warm session ids per key so when the warm process dies (idle reap /
 // HMR / OS restart), the next spawn can `claude --resume <id>` and pick up
@@ -55,11 +57,53 @@ const G = globalThis as unknown as {
   __holonWarmAgents?: Map<string, WarmAgent>;
   __holonWarmKeep?: Map<string, { binary: string; cwd: string | undefined }>;
   __holonWarmHeartbeat?: boolean;
+  /** Per-secretary-key queue of pending synthetic messages. Drained
+   *  (prepended) on the NEXT inbound turn. Non-preemptive: never pushed
+   *  mid-turn. */
+  __holonWarmSynthQueue?: Map<string, SyntheticMessage[]>;
+  __holonWarmBusyProbeWired?: boolean;
 };
 if (!G.__holonWarmAgents) G.__holonWarmAgents = new Map();
 if (!G.__holonWarmKeep) G.__holonWarmKeep = new Map();
+if (!G.__holonWarmSynthQueue) G.__holonWarmSynthQueue = new Map();
 const AGENTS = G.__holonWarmAgents;
 const KEEP = G.__holonWarmKeep; // keys here are kept always-warm: never reaped, respawned if they die
+const SYNTH_QUEUE = G.__holonWarmSynthQueue;
+
+// One-time wiring: tell settle-watch how to ask "is this warm key busy right
+// now?" — it needs that to gate the settle event (don't fire while mid-turn).
+if (!G.__holonWarmBusyProbeWired) {
+  G.__holonWarmBusyProbeWired = true;
+  setBusyProbe((key) => {
+    const a = AGENTS.get(key);
+    return !!a && a.busy;
+  });
+}
+
+/**
+ * Enqueue synthetic messages for a warm-secretary key. The queue drains on
+ * the NEXT inbound owner turn (sendWarmTurn) — NEVER pushed into a mid-turn
+ * stream. That is the explicit ADR §4.3 Path B invariant ("不要打断 就是下
+ * 一次提醒"). Tests verify this in warm-agent-synthetic.test.ts.
+ */
+export function enqueueSyntheticMessages(key: string, messages: SyntheticMessage[]): void {
+  if (messages.length === 0) return;
+  const existing = SYNTH_QUEUE.get(key) ?? [];
+  existing.push(...messages);
+  SYNTH_QUEUE.set(key, existing);
+}
+
+/** Snapshot the queue for a key — does NOT clear (test/inspection use). */
+export function peekSyntheticQueue(key: string): SyntheticMessage[] {
+  return [...(SYNTH_QUEUE.get(key) ?? [])];
+}
+
+/** Drain (read + clear) the queue. Used by sendWarmTurn on next inbound. */
+export function drainSyntheticQueue(key: string): SyntheticMessage[] {
+  const msgs = SYNTH_QUEUE.get(key) ?? [];
+  SYNTH_QUEUE.delete(key);
+  return msgs;
+}
 
 const IDLE_REAP_MS = 5 * 60 * 1000; // kill a warm process after 5 min idle (non-keep agents only)
 
@@ -299,11 +343,39 @@ export function sendWarmTurn(
     h.signal.addEventListener('abort', onAbort, { once: true });
   }
 
-  const msg = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: prompt }] } });
+  // Drain any synthetic messages queued by producers (HR, event-followup …)
+  // and PREPEND them before the inbound owner turn. This is the §4.3-Path-B
+  // next-turn-nudge channel — non-preemptive, so we only ever consult the
+  // queue at the input boundary (here), never mid-turn.
+  const queued = drainSyntheticQueue(key);
+  const lines: string[] = [];
+  for (const sm of queued) {
+    // stream-json's --input-format only accepts 'user' frames on stdin, so a
+    // producer's 'system' role is wrapped as a user frame with a tag prefix.
+    // HR Path B uses role:'user' and so passes through as-is.
+    const content = sm.role === 'system'
+      ? `[synthetic:${sm.sourceProducer}] ${sm.content}`
+      : sm.content;
+    lines.push(JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text: content }] },
+    }));
+  }
+  lines.push(JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: [{ type: 'text', text: prompt }] },
+  }));
   try {
-    a.proc.stdin?.write(msg + '\n');
+    a.proc.stdin?.write(lines.join('\n') + '\n');
   } catch (err) {
     h.onError(err instanceof Error ? err.message : String(err));
     a.busy = false;
   }
+}
+
+/** Test-only: clear the per-key synthetic queue. Module reload via
+ *  vi.resetModules() is the canonical reset, but this helper lets a single
+ *  spec scrub state without a full reload. */
+export function _resetWarmAgentForTest(): void {
+  SYNTH_QUEUE.clear();
 }
