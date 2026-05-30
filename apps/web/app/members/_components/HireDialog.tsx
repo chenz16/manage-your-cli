@@ -90,6 +90,16 @@ interface Props {
   owner?: OwnerAssistant | null;
 }
 
+interface CliBinaryStatus {
+  name: 'claude' | 'codex' | 'gemini' | 'qwen';
+  label: string;
+  installed: boolean;
+  path: string | null;
+  version: string | null;
+  install_hint: string;
+  docs_url: string;
+}
+
 export function HireDialog({ open, onClose, onHired, owner }: Props) {
   const { t } = useT();
   const [step, setStep] = useState<'sketch' | 'review' | 'saving'>('sketch');
@@ -100,6 +110,17 @@ export function HireDialog({ open, onClose, onHired, owner }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const sketchRef = useRef<HTMLTextAreaElement>(null);
+  // iter-019 (feat/desk-cli-discovery): dynamic CLI binary picker driven by
+  // /api/v1/cli/binaries instead of a hardcoded {claude, codex, gemini, qwen}.
+  // - zero installed → block hire with an error + link back to onboarding
+  // - one installed → auto-select, hide picker
+  // - multiple → dropdown, default to first installed
+  // (Hardcoded "claude" was never sent in this dialog before; we now send
+  //  substrate explicitly so the secretary's choice tracks the owner's
+  //  installed subscription set.)
+  const [cliBinaries, setCliBinaries] = useState<CliBinaryStatus[] | null>(null);
+  const [cliErr, setCliErr] = useState<string | null>(null);
+  const [selectedBinary, setSelectedBinary] = useState<string>('');
 
   // Quick-pick presets in the active owner language. Recomputed when
   // language flips so chips re-render translated.
@@ -118,6 +139,30 @@ export function HireDialog({ open, onClose, onHired, owner }: Props) {
       setTimeout(() => sketchRef.current?.focus(), 0);
     }
   }, [open, suggested]);
+
+  // Load installed CLI binaries on open. Auto-select if exactly one
+  // installed; otherwise prefer the first installed as the default.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setCliErr(null);
+      setCliBinaries(null);
+      try {
+        const r = await fetch('/api/v1/cli/binaries', { cache: 'no-store' });
+        const j = (await r.json()) as { binaries?: CliBinaryStatus[]; error?: string };
+        if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+        if (cancelled) return;
+        const list = Array.isArray(j.binaries) ? j.binaries : [];
+        setCliBinaries(list);
+        const installed = list.filter((b) => b.installed);
+        setSelectedBinary(installed[0]?.name ?? '');
+      } catch (e) {
+        if (!cancelled) setCliErr(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
 
   // ESC closes
   useEffect(() => {
@@ -166,12 +211,24 @@ export function HireDialog({ open, onClose, onHired, owner }: Props) {
       setErr(t('staff.hire.err_required'));
       return;
     }
+    if (!selectedBinary) {
+      setErr(t('staff.hire.err_no_cli', 'No CLI installed on this desk. Install one and re-run onboarding.'));
+      return;
+    }
     setStep('saving'); setBusy(true); setErr(null);
     try {
+      // ADR-029 cli_agent substrate. args_template defaults to '' (per schema);
+      // approval_rules empty so the user-level CLI defaults apply.
+      const substrate = {
+        kind: 'cli_agent' as const,
+        binary: selectedBinary,
+        args_template: '',
+        approval_rules: [],
+      };
       const r = await fetch('/api/v1/staff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, role_label: roleLabel, system_prompt: systemPrompt }),
+        body: JSON.stringify({ name, role_label: roleLabel, system_prompt: systemPrompt, substrate }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -241,6 +298,7 @@ export function HireDialog({ open, onClose, onHired, owner }: Props) {
           </>
         )}
 
+        {/* CliBinaryPicker is rendered inline inside the review step below. */}
         {(step === 'review' || step === 'saving') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ fontSize: 11, color: 'var(--ink-mute)', marginBottom: -4 }}>
@@ -258,6 +316,13 @@ export function HireDialog({ open, onClose, onHired, owner }: Props) {
               {t('staff.hire.system_prompt_label')} <span style={{ opacity: 0.7 }}>{t('staff.hire.system_prompt_hint')}</span>
               <textarea className="bug-modal-textarea" rows={9} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
             </label>
+            <CliBinaryPicker
+              binaries={cliBinaries}
+              error={cliErr}
+              selected={selectedBinary}
+              onSelect={setSelectedBinary}
+              disabled={busy}
+            />
             <div style={{ fontSize: 11, color: 'var(--ink-mute)', lineHeight: 1.5 }}>
               {t('staff.hire.review_footer')}
             </div>
@@ -266,7 +331,13 @@ export function HireDialog({ open, onClose, onHired, owner }: Props) {
               <button type="button" className="btn" onClick={() => setStep('sketch')} disabled={busy}>{t('staff.hire.back')}</button>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" className="btn" onClick={onClose} disabled={busy}>{t('staff.hire.cancel')}</button>
-                <button type="button" className="btn btn-primary" onClick={hire} disabled={busy}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={hire}
+                  disabled={busy || !selectedBinary}
+                  title={selectedBinary ? '' : 'No CLI installed on this desk. Install one (see /onboarding) before hiring.'}
+                >
                   {step === 'saving' ? t('staff.hire.hiring') : t('staff.hire.hire_button')}
                 </button>
               </div>
@@ -275,5 +346,99 @@ export function HireDialog({ open, onClose, onHired, owner }: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Dynamic CLI binary picker. Behavior:
+ *   - loading → grey "Detecting…" line
+ *   - error   → red error line + retry-via-onboarding link
+ *   - zero installed → error block with link to /onboarding for "Check again"
+ *   - exactly one installed → silent (auto-selected by parent; no UI)
+ *   - multiple installed → labeled <select> dropdown
+ *
+ * The component is purely presentational — the parent owns `selected` so the
+ * picker's value flows straight into the create-staff payload.
+ */
+function CliBinaryPicker({
+  binaries,
+  error,
+  selected,
+  onSelect,
+  disabled,
+}: {
+  binaries: CliBinaryStatus[] | null;
+  error: string | null;
+  selected: string;
+  onSelect: (b: string) => void;
+  disabled: boolean;
+}) {
+  if (error) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--red, #c0392b)' }}>
+        Could not detect CLIs: {error}
+      </div>
+    );
+  }
+  if (!binaries) {
+    return <div style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Detecting installed CLIs…</div>;
+  }
+  const installed = binaries.filter((b) => b.installed);
+  if (installed.length === 0) {
+    return (
+      <div
+        style={{
+          fontSize: 12,
+          padding: '8px 10px',
+          borderRadius: 8,
+          background: 'var(--warn-bg, #fff8e1)',
+          border: '1px solid var(--warn-line, #e0b400)',
+          color: 'var(--ink)',
+          lineHeight: 1.5,
+        }}
+      >
+        <strong>No CLI installed.</strong> A staff member needs a CLI subscription
+        (Claude Code / Codex / Gemini / Qwen) to run. Install one in a terminal,
+        then re-run the check from{' '}
+        <a href="/onboarding" style={{ textDecoration: 'underline' }}>onboarding</a>.
+      </div>
+    );
+  }
+  if (installed.length === 1) {
+    // Auto-selected silently — show a one-line confirmation so the user
+    // knows which CLI their new staff will run on.
+    const only = installed[0]!;
+    return (
+      <div style={{ fontSize: 12, color: 'var(--ink-mute)' }}>
+        CLI: <strong style={{ color: 'var(--ink)' }}>{only.label}</strong>
+        {only.version ? ` · v${only.version}` : ''}
+      </div>
+    );
+  }
+  return (
+    <label style={{ fontSize: 12, color: 'var(--ink-mute)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      CLI binary <span style={{ opacity: 0.7 }}>(which subscription this staff drives)</span>
+      <select
+        value={selected}
+        onChange={(e) => onSelect(e.target.value)}
+        disabled={disabled}
+        style={{
+          padding: '8px 12px',
+          borderRadius: 10,
+          border: '1px solid var(--ink)',
+          fontSize: 14,
+          fontFamily: 'inherit',
+          color: 'var(--ink)',
+          background: '#fff',
+          outline: 'none',
+        }}
+      >
+        {installed.map((b) => (
+          <option key={b.name} value={b.name}>
+            {b.label}{b.version ? ` · v${b.version}` : ''}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
