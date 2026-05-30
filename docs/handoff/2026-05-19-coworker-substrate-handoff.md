@@ -1,5 +1,16 @@
 # Handoff — Coworker substrate model (ADR-029) + left-nav restructure
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 Date: 2026-05-19
 Branch: `claude/employee-hierarchy-design-1aumA`
 From: web Claude session (owner ↔ AI 设计讨论)

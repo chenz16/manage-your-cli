@@ -1,5 +1,16 @@
 # Install Holon Personal Edition V1
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 **Welcome to Holon Personal Edition V1 — your AI desk assistant for small business owners.** Holon runs as a desk app on your PC. A small flat team of AI staff sits on the desk and does the things you'd otherwise context-switch through: read your inbox, draft replies, summarize the morning, file deliverables. You delegate; they execute; you review. No cloud, no SaaS account — the desk and your data live on your own machine.
 
 This page is the entry point. Pick your install path below, walk the step-by-step doc it links to, and you'll have a working desk in ~15 minutes (plus a one-time ~15 min Google Cloud setup if you want Gmail integration on day one).

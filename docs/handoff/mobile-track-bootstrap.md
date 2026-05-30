@@ -1,5 +1,16 @@
 # Mobile Track — Bootstrap & Auto-Pipeline Handoff
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 **Purpose.** This document hands off the working pattern from the Holon desk-development session (this CLI session, 2026-05-17) to a NEW session that will develop the mobile app track in parallel. Goal: the mobile session should reach the same level of "user-can-walk-away" 7×24 autonomous operation that the desk track has reached, with the user intervening only at strategic decision points (iter scope, irreversible ops).
 
 **Audience.** A fresh Claude Code session in a new terminal, with no shared context. Read top-to-bottom before touching anything.

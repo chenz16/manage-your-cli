@@ -1,5 +1,16 @@
 # Holon Dev Queue — Backlog Feeder
 
+> **Status: Historical record.** This document captures a point-in-time
+> snapshot. References to **Hermes** / `hermes-acp` /
+> `hermes_profile_generic_v1` describe the runtime used by the sister
+> repo [`holon-engineering`](https://github.com/chenz16/holon-engineering)
+> at the time of writing. `manage-your-cli` does not bundle, link to, or
+> depend on Hermes — its live substrate is a direct multi-CLI adapter
+> (`claude` / `codex` / `gemini` / `qwen`) under
+> [`packages/core/src/cli-adapters.ts`](../packages/core/src/cli-adapters.ts)
+> and [`apps/web/lib/warm-agent.ts`](../apps/web/lib/warm-agent.ts).
+> The body below is preserved unedited for history.
+
 **Status changed 2026-05-17:** this file is no longer the canonical priority list for the dev rotation. Live, prioritized work now lives in **`iterations/010-catalog-real/plan.md`** (and successor iter `plan.md` files). This file is the long-tail, unprioritized backlog from which the Requirements Agent pulls items into each iter's `plan.md`.
 
 ## How this works now
