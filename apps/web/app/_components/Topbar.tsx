@@ -7,6 +7,7 @@
 
 import { HealthDot } from './HealthDot';
 import { SecretaryProjectSwitcher } from './SecretaryProjectSwitcher';
+import { TopbarMe } from './TopbarMe';
 
 export function Topbar() {
   return (
@@ -29,10 +30,7 @@ export function Topbar() {
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
         </button>
-        <div className="topbar-me" data-inert="user menu" tabIndex={0} role="button">
-          <span className="topbar-me-avatar">CZ</span>
-          <span className="topbar-me-name">Chen · laptop-desk</span>
-        </div>
+        <TopbarMe />
       </div>
     </header>
   );

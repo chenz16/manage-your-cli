@@ -24,8 +24,8 @@ async function maybeCreateGitHubIssue(opts: {
   const token = process.env.HOLON_FEEDBACK_GITHUB_TOKEN ?? '';
   if (!token) return { created: false, reason: 'token_absent' };
 
-  const repo =
-    process.env.HOLON_FEEDBACK_GITHUB_REPO ?? 'chenz16/holon-engineering';
+  const repo = process.env.HOLON_FEEDBACK_GITHUB_REPO;
+  if (!repo) return { created: false, reason: 'repo_unset' };
 
   // Title: "[feedback] <first 80 chars of description, single line>"
   const shortSummary = opts.description
