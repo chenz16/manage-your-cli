@@ -1,15 +1,21 @@
 'use client';
 
 /**
- * /onboarding — first-launch 5-step wizard.
+ * /onboarding — first-launch 6-step wizard.
+ *
+ * iter-019 (feat/desk-cli-discovery): inserted Step 3 "CLI capability
+ * check" between Step 2 (About you) and the prior Step 3 (Gmail). Holon
+ * is a thin shell — without at least one CLI binary on the desk, the
+ * secretary has nothing to drive. Renumbered subsequent steps:
+ *   Gmail (was 3) → 4, TryDelegating (was 4) → 5, Watch (was 5) → 6.
+ * Component class names retained (Step3ConnectGmail / Step4TryDelegating /
+ * Step5WatchDeliverable) to keep the diff narrow; their PROPS-level
+ * position number is updated where it matters (back/next handlers).
  *
  * iter-012 Pass #3. Per plan.md § Pass #3 components 1-5.
  *
- * Step state machine + localStorage persistence. Step components live
- * in ./_components/Step{1..5}*.tsx. On Step 5 completion we POST
- * /api/v1/me/complete-onboarding (audit-only) and redirect to /.
- *
- * State persisted under `holon-onboarding-state-v1`:
+ * Step state machine + localStorage persistence. State persisted under
+ * `holon-onboarding-state-v1`:
  *   { current_step, persona_id, gmail_connected, started_at }
  * The "finished" flag is `holon-onboarded-v1` (truthy when set) per
  * Q-004 default. Layout reads that flag for the /-redirect check.
@@ -19,6 +25,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Step1Welcome } from './_components/Step1Welcome';
 import { Step2AboutYou } from './_components/Step2AboutYou';
+import { Step3CliCheck } from './_components/Step3CliCheck';
 import { Step3ConnectGmail } from './_components/Step3ConnectGmail';
 import { Step4TryDelegating } from './_components/Step4TryDelegating';
 import { Step5WatchDeliverable } from './_components/Step5WatchDeliverable';
@@ -27,8 +34,11 @@ import './_components/onboarding.css';
 const STATE_KEY = 'holon-onboarding-state-v1';
 const DONE_KEY = 'holon-onboarded-v1';
 
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
+const FINAL_STEP: Step = 6;
+
 interface OnbState {
-  current_step: 1 | 2 | 3 | 4 | 5;
+  current_step: Step;
   persona_id: string | null;
   gmail_connected: boolean;
   started_at: number;
@@ -47,8 +57,10 @@ function loadState(): OnbState {
     const raw = window.localStorage.getItem(STATE_KEY);
     if (!raw) return DEFAULT_STATE;
     const parsed = JSON.parse(raw) as Partial<OnbState>;
+    const rawStep = (parsed.current_step ?? 1) as number;
+    const step = (rawStep >= 1 && rawStep <= FINAL_STEP ? rawStep : 1) as Step;
     return {
-      current_step: (parsed.current_step ?? 1) as OnbState['current_step'],
+      current_step: step,
       persona_id: parsed.persona_id ?? null,
       gmail_connected: !!parsed.gmail_connected,
       started_at: parsed.started_at ?? Date.now(),
@@ -63,8 +75,6 @@ function saveState(s: OnbState): void {
 }
 
 export default function OnboardingPage() {
-  // useSearchParams requires a Suspense boundary in Next 15 to avoid
-  // build-time bail-out warnings on client pages.
   return (
     <Suspense fallback={<div className="onb-wrap"><div className="onb-sub">Loading…</div></div>}>
       <OnboardingInner />
@@ -78,17 +88,13 @@ function OnboardingInner() {
   const [state, setState] = useState<OnbState>(DEFAULT_STATE);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from localStorage on mount.
   useEffect(() => {
     const loaded = loadState();
     setState(loaded);
     setHydrated(true);
   }, []);
 
-  // L-054 · already-onboarded guard. If DONE_KEY is set, a customer
-  // landed here via bookmark / accidental click / /me-config exploration
-  // — silently bounce back to / rather than re-run the 5-step wizard
-  // (which would PATCH owner_name + stack a second persona).
+  // L-054 · already-onboarded guard.
   useEffect(() => {
     if (!hydrated) return;
     let done = false;
@@ -96,30 +102,29 @@ function OnboardingInner() {
     if (done) router.replace('/');
   }, [hydrated, router]);
 
-  // OAuth callback return: ?step=3&gmail=connected → advance to Step 4.
-  // (Per plan.md Step 3 component.) Falls back to a no-op if those
-  // params aren't present.
+  // OAuth callback return: Gmail step is now Step 4 (was Step 3 pre-iter-019).
+  // Step3ConnectGmail.tsx's callbackUrl is `?step=4&gmail=connected` — but we
+  // accept the legacy `?step=3` value too so a stale tab from a previous
+  // install still resolves correctly.
   useEffect(() => {
     if (!hydrated) return;
     const stepParam = searchParams.get('step');
     const gmailParam = searchParams.get('gmail');
-    if (stepParam === '3' && gmailParam === 'connected') {
+    if ((stepParam === '4' || stepParam === '3') && gmailParam === 'connected') {
       setState((s) => {
-        const next = { ...s, gmail_connected: true, current_step: 4 as const };
+        const next = { ...s, gmail_connected: true, current_step: 5 as Step };
         saveState(next);
         return next;
       });
     }
   }, [hydrated, searchParams]);
 
-  // Step 3 detects post-OAuth via /api/v1/me polling and dispatches
-  // this event. We advance to Step 4 with gmail_connected=true.
-  // (See Q-007 for the rationale on this indirect path.)
+  // Gmail step (now 4) dispatches this event on post-OAuth poll. Advance to 5.
   useEffect(() => {
     function onGmailConnected() {
       setState((s) => {
-        if (s.current_step !== 3) return s;
-        const next = { ...s, gmail_connected: true, current_step: 4 as const };
+        if (s.current_step !== 4) return s;
+        const next = { ...s, gmail_connected: true, current_step: 5 as Step };
         saveState(next);
         return next;
       });
@@ -136,7 +141,7 @@ function OnboardingInner() {
     });
   }, []);
 
-  const goto = useCallback((step: OnbState['current_step']) => {
+  const goto = useCallback((step: Step) => {
     updateState({ current_step: step });
   }, [updateState]);
 
@@ -151,32 +156,20 @@ function OnboardingInner() {
     router.push('/');
   }, [router]);
 
-  // Owner directive 2026-05-19: skip-for-now exit on every step. Sets the
-  // existing DONE_KEY (matches the AppShell L-052 gate convention) so the
-  // user doesn't bounce back into /onboarding from /. State is preserved
-  // (we do NOT clear STATE_KEY) so /me → Replay onboarding picks up where
-  // they left off. No new schema, no API call — purely client-side exit.
   const skipOnboarding = useCallback(() => {
     try { window.localStorage.setItem(DONE_KEY, '1'); } catch { /* quota */ }
     router.push('/');
   }, [router]);
 
-  // Owner directive 2026-05-19 20:35 ("你应该只是 skip 一步啊"): per-step
-  // skip that ONLY advances to the next step, never exits onboarding. On
-  // the final step there is no next step, so we treat it as completion
-  // (which fires the audit + sets DONE_KEY via completeOnboarding).
-  //
-  // iter-018 Pass #4 (2026-05-19 ~21:04Z): bumped final-step boundary
-  // from 5 → 6 with the new Step 6 (Choose LLM) added.
-  const skipStep = useCallback((current: OnbState['current_step']) => {
-    if (current < 5) {
-      goto((current + 1) as OnbState['current_step']);
+  const skipStep = useCallback((current: Step) => {
+    if (current < FINAL_STEP) {
+      goto((current + 1) as Step);
     } else {
       void completeOnboarding();
     }
   }, [goto, completeOnboarding]);
 
-  const dots = useMemo(() => [1, 2, 3, 4, 5] as const, []);
+  const dots = useMemo(() => [1, 2, 3, 4, 5, 6] as const, []);
 
   if (!hydrated) {
     return (
@@ -190,7 +183,7 @@ function OnboardingInner() {
     <div className="onb-wrap">
       <div className="onb-header">
         <div className="onb-brand">Holon</div>
-        <div className="onb-progress" aria-label={`Step ${state.current_step} of 5`}>
+        <div className="onb-progress" aria-label={`Step ${state.current_step} of ${FINAL_STEP}`}>
           {dots.map((d) => (
             <div
               key={d}
@@ -217,31 +210,39 @@ function OnboardingInner() {
           />
         )}
         {state.current_step === 3 && (
-          <Step3ConnectGmail
+          <Step3CliCheck
             onBack={() => goto(2)}
-            onSkip={() => {
-              updateState({ gmail_connected: false });
-              goto(4);
-            }}
+            onNext={() => goto(4)}
+            onSkipStep={() => skipStep(3)}
             onSkipOnboarding={skipOnboarding}
           />
         )}
         {state.current_step === 4 && (
-          <Step4TryDelegating
-            personaId={state.persona_id}
-            gmailConnected={state.gmail_connected}
+          <Step3ConnectGmail
             onBack={() => goto(3)}
-            onNext={() => goto(5)}
-            onSkipStep={() => skipStep(4)}
+            onSkip={() => {
+              updateState({ gmail_connected: false });
+              goto(5);
+            }}
             onSkipOnboarding={skipOnboarding}
           />
         )}
         {state.current_step === 5 && (
+          <Step4TryDelegating
+            personaId={state.persona_id}
+            gmailConnected={state.gmail_connected}
+            onBack={() => goto(4)}
+            onNext={() => goto(6)}
+            onSkipStep={() => skipStep(5)}
+            onSkipOnboarding={skipOnboarding}
+          />
+        )}
+        {state.current_step === 6 && (
           <Step5WatchDeliverable
             startedAt={state.started_at}
-            onBack={() => goto(4)}
+            onBack={() => goto(5)}
             onDone={completeOnboarding}
-            onSkipStep={() => skipStep(5)}
+            onSkipStep={() => skipStep(6)}
             onSkipOnboarding={skipOnboarding}
           />
         )}
