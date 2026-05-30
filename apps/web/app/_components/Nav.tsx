@@ -98,19 +98,6 @@ const primaryItems: NavItem[] = [
     ),
   },
   {
-    key: 'projects',
-    href: '/projects',
-    label: 'Projects',
-    labelZh: 'Projects',
-    activeWhen: (p) => p.startsWith('/projects'),
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 7h7l2 2h9v11H3z" />
-        <path d="M3 7V5h7l2 2" />
-      </svg>
-    ),
-  },
-  {
     key: 'deliverables',
     href: '/deliverables',
     label: 'Drops',
