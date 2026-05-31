@@ -47,10 +47,14 @@ export function hrPromotionLogPath(): string {
   return join(ownerHrRoot(), 'promotions.log');
 }
 
-/** Per-(target × rule) counter store for Path B → A promotion threshold. */
+/** Per-(target × rule) counter store for Path B → A promotion threshold.
+ *  Override precedence: HOLON_HR_STATE > HOLON_STATE_ROOT/hr-state.json >
+ *  $HOME/.holon/hr-state.json. */
 export function hrStateFilePath(): string {
-  return process.env.HOLON_HR_STATE
-    ?? join(process.env.HOME ?? homedir(), '.holon', 'hr-state.json');
+  if (process.env.HOLON_HR_STATE) return process.env.HOLON_HR_STATE;
+  const stateRoot = process.env.HOLON_STATE_ROOT?.trim()
+    || join(process.env.HOME ?? homedir(), '.holon');
+  return join(stateRoot, 'hr-state.json');
 }
 
 const PERSONA_MD = `# owner-HR — persona

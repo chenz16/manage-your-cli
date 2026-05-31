@@ -61,6 +61,8 @@ const requireFn = createRequire(import.meta.url);
 
 function resolveDbPath(): string {
   if (process.env.HOLON_DB_PATH) return process.env.HOLON_DB_PATH;
+  const stateRoot = process.env.HOLON_STATE_ROOT?.trim();
+  if (stateRoot) return join(stateRoot, 'owner.sqlite');
   if (platform() === 'win32') {
     const base = process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local');
     return join(base, 'Holon', 'owner.sqlite');
