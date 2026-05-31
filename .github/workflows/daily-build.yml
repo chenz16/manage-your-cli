@@ -215,13 +215,19 @@ jobs:
             exit 1
           fi
 
+      - name: Rename .exe to stable filename (for marketing site URL stability)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv dist-windows/*.exe dist-windows/Holon-Setup.exe
+
       - name: Upload .exe to nightly release (clobber prior)
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release upload nightly dist-windows/*.exe \
+          gh release upload nightly dist-windows/Holon-Setup.exe \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
 
@@ -287,7 +293,7 @@ jobs:
             ls -la dist/ >&2 || true
             exit 1
           fi
-          STABLE="dist/holon-mobile-nightly.apk"
+          STABLE="dist/Holon-Android.apk"
           cp "$APK" "$STABLE"
           gh release upload nightly "$STABLE" \
             --repo "$GITHUB_REPOSITORY" \
@@ -400,7 +406,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           IPA=$(ls "$RUNNER_TEMP/ios-out/ipa"/*.ipa | head -1)
-          cp "$IPA" dist/holon-mobile-nightly.ipa
+          cp "$IPA" dist/Holon-iOS.ipa
 
       - name: Upload .ipa to nightly release (clobber prior)
         shell: bash
@@ -408,6 +414,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release upload nightly dist/holon-mobile-nightly.ipa \
+          gh release upload nightly dist/Holon-iOS.ipa \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
