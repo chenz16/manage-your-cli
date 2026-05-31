@@ -18,7 +18,7 @@ set -u
 #   MAC_SSH_HOST            user@host of the Mac that owns Xcode + signing keys
 #   APPLE_TEAM_ID           your Apple Developer team id (10-char)
 #   IPHONE_DEVICE_UUID      target device's CoreDevice identifier
-#   MAC_KEYCHAIN_PWD        login-keychain pwd so xcodebuild can codesign over SSH
+#   HOLON_BUILD_KEYCHAIN  (default: holon-build.keychain) — pre-imported Apple Dev cert; no Mac password needed
 #   MAC_BUILD_DIR           remote dir on the Mac for sync'd source
 #                           (default: ~/holon-mobile-build)
 #   NEXT_PUBLIC_DESK_ORIGIN URL the iPhone bundle should call (your desk's
@@ -29,7 +29,7 @@ MAC="${MAC_SSH_HOST:?MAC_SSH_HOST is required (e.g. user@10.0.0.x)}"
 MD="${MAC_BUILD_DIR:-~/holon-mobile-build}"
 TEAM="${APPLE_TEAM_ID:?APPLE_TEAM_ID is required}"
 IPHONE="${IPHONE_DEVICE_UUID:?IPHONE_DEVICE_UUID is required}"
-MAC_PWD="${MAC_KEYCHAIN_PWD:?MAC_KEYCHAIN_PWD is required}"
+HOLON_BUILD_KEYCHAIN="${HOLON_BUILD_KEYCHAIN:-holon-build.keychain}"
 SSH="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8"
 ts() { date -u +%H:%M:%SZ; }
 log() { echo "[ios-push $(ts)] $*"; }
@@ -79,7 +79,7 @@ $SSH "$MAC" "PLIST=$MD/apps/mobile/ios/App/App/Info.plist && \
   || { log FAIL ats-patch; exit 1; }
 
 log "[3/5] archive (auto-sign, team $TEAM)"
-$SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keychain-db && \
+$SSH "$MAC" "security unlock-keychain -p '' $HOLON_BUILD_KEYCHAIN && \
   cd $MD/apps/mobile/ios/App && rm -rf build/App.xcarchive && \
   xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
     -destination 'generic/platform=iOS' \
@@ -100,7 +100,7 @@ $SSH "$MAC" "cd $MD/apps/mobile/ios/App && cat > ExportOptionsDev.plist <<'PLIST
 </dict>
 </plist>
 PLIST"
-$SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keychain-db && \
+$SSH "$MAC" "security unlock-keychain -p '' $HOLON_BUILD_KEYCHAIN && \
   cd $MD/apps/mobile/ios/App && rm -rf build/export-dev && \
   xcodebuild -exportArchive -archivePath build/App.xcarchive \
     -exportPath build/export-dev -exportOptionsPlist ExportOptionsDev.plist \
@@ -108,7 +108,7 @@ $SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keyc
 
 log "[5/5] devicectl install to iPhone over Tailscale LAN"
 # `tail` would swallow xcrun's non-zero exit. Use grep -q on success marker.
-INSTALL_OUT=$($SSH "$MAC" "security unlock-keychain -p $MAC_PWD ~/Library/Keychains/login.keychain-db && \
+INSTALL_OUT=$($SSH "$MAC" "security unlock-keychain -p '' $HOLON_BUILD_KEYCHAIN && \
   xcrun devicectl device install app --device $IPHONE \
     $MD/apps/mobile/ios/App/build/export-dev/App.ipa 2>&1")
 echo "$INSTALL_OUT" | tail -5
