@@ -22,11 +22,10 @@
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Step1Welcome } from './_components/Step1Welcome';
 import { Step2AboutYou } from './_components/Step2AboutYou';
 import { Step3CliCheck } from './_components/Step3CliCheck';
-import { Step3ConnectGmail } from './_components/Step3ConnectGmail';
 import { Step4TryDelegating } from './_components/Step4TryDelegating';
 import { Step5WatchDeliverable } from './_components/Step5WatchDeliverable';
 import './_components/onboarding.css';
@@ -34,20 +33,18 @@ import './_components/onboarding.css';
 const STATE_KEY = 'holon-onboarding-state-v1';
 const DONE_KEY = 'holon-onboarded-v1';
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
-const FINAL_STEP: Step = 6;
+type Step = 1 | 2 | 3 | 4 | 5;
+const FINAL_STEP: Step = 5;
 
 interface OnbState {
   current_step: Step;
   persona_id: string | null;
-  gmail_connected: boolean;
   started_at: number;
 }
 
 const DEFAULT_STATE: OnbState = {
   current_step: 1,
   persona_id: null,
-  gmail_connected: false,
   started_at: Date.now(),
 };
 
@@ -62,7 +59,6 @@ function loadState(): OnbState {
     return {
       current_step: step,
       persona_id: parsed.persona_id ?? null,
-      gmail_connected: !!parsed.gmail_connected,
       started_at: parsed.started_at ?? Date.now(),
     };
   } catch {
@@ -84,7 +80,6 @@ export default function OnboardingPage() {
 
 function OnboardingInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [state, setState] = useState<OnbState>(DEFAULT_STATE);
   const [hydrated, setHydrated] = useState(false);
 
@@ -102,36 +97,10 @@ function OnboardingInner() {
     if (done) router.replace('/');
   }, [hydrated, router]);
 
-  // OAuth callback return: Gmail step is now Step 4 (was Step 3 pre-iter-019).
-  // Step3ConnectGmail.tsx's callbackUrl is `?step=4&gmail=connected` — but we
-  // accept the legacy `?step=3` value too so a stale tab from a previous
-  // install still resolves correctly.
-  useEffect(() => {
-    if (!hydrated) return;
-    const stepParam = searchParams.get('step');
-    const gmailParam = searchParams.get('gmail');
-    if ((stepParam === '4' || stepParam === '3') && gmailParam === 'connected') {
-      setState((s) => {
-        const next = { ...s, gmail_connected: true, current_step: 5 as Step };
-        saveState(next);
-        return next;
-      });
-    }
-  }, [hydrated, searchParams]);
-
-  // Gmail step (now 4) dispatches this event on post-OAuth poll. Advance to 5.
-  useEffect(() => {
-    function onGmailConnected() {
-      setState((s) => {
-        if (s.current_step !== 4) return s;
-        const next = { ...s, gmail_connected: true, current_step: 5 as Step };
-        saveState(next);
-        return next;
-      });
-    }
-    window.addEventListener('holon-onboarding:gmail-connected', onGmailConnected);
-    return () => window.removeEventListener('holon-onboarding:gmail-connected', onGmailConnected);
-  }, []);
+  // feat/remove-nextauth: Gmail OAuth step removed; the wizard is now 5 steps
+  // (Welcome → AboutYou → CliCheck → TryDelegating → WatchDeliverable).
+  // Legacy `?step=4&gmail=connected` URLs from older installs map onto the
+  // current TryDelegating step.
 
   const updateState = useCallback((patch: Partial<OnbState>) => {
     setState((s) => {
@@ -169,7 +138,7 @@ function OnboardingInner() {
     }
   }, [goto, completeOnboarding]);
 
-  const dots = useMemo(() => [1, 2, 3, 4, 5, 6] as const, []);
+  const dots = useMemo(() => [1, 2, 3, 4, 5] as const, []);
 
   if (!hydrated) {
     return (
@@ -218,31 +187,21 @@ function OnboardingInner() {
           />
         )}
         {state.current_step === 4 && (
-          <Step3ConnectGmail
+          <Step4TryDelegating
+            personaId={state.persona_id}
+            gmailConnected={false}
             onBack={() => goto(3)}
-            onSkip={() => {
-              updateState({ gmail_connected: false });
-              goto(5);
-            }}
+            onNext={() => goto(5)}
+            onSkipStep={() => skipStep(4)}
             onSkipOnboarding={skipOnboarding}
           />
         )}
         {state.current_step === 5 && (
-          <Step4TryDelegating
-            personaId={state.persona_id}
-            gmailConnected={state.gmail_connected}
-            onBack={() => goto(4)}
-            onNext={() => goto(6)}
-            onSkipStep={() => skipStep(5)}
-            onSkipOnboarding={skipOnboarding}
-          />
-        )}
-        {state.current_step === 6 && (
           <Step5WatchDeliverable
             startedAt={state.started_at}
-            onBack={() => goto(5)}
+            onBack={() => goto(4)}
             onDone={completeOnboarding}
-            onSkipStep={() => skipStep(6)}
+            onSkipStep={() => skipStep(5)}
             onSkipOnboarding={skipOnboarding}
           />
         )}

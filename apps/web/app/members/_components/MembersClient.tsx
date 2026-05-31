@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { useSession } from 'next-auth/react';
 import clsx from 'clsx';
 import type {
   ListStaffResponse, Staff, GetStaffResponse, OwnerAssistant,
@@ -261,11 +260,8 @@ function MemberDetailInline({ id, onClose }: { id: string; onClose: () => void }
   // Shared useOwner() cache — sibling components (ChatEmptyState,
   // AppShell, Step2) on the same page reuse the same fetch.
   const { owner } = useOwner();
-  // bug-20260519-045432: Gmail moved to NextAuth in iter-013 — it lives in
-  // the session, not in owner.integrations. Dual-source the same way
-  // AuthorizationsSection on /me does so a CEO-connected Gmail surfaces
-  // here as an inherited authorization.
-  const { data: session } = useSession();
+  // feat/remove-nextauth: Gmail (and all integrations) live ONLY in
+  // owner.integrations now. The dual-source NextAuth merge is gone.
 
   useEffect(() => {
     let cancelled = false;
@@ -436,12 +432,7 @@ function MemberDetailInline({ id, onClose }: { id: string; onClose: () => void }
               // staff don't appear unauthorized when the CEO is connected.
               // Skip if a legacy IntegrationLink with kind='gmail' already
               // exists (transitional window — same dedup as AuthorizationsSection).
-              const sessionEmail = session?.user?.email ?? null;
-              const hasLinkGmail = enabledLinks.some((g) => g.kind === 'gmail');
-              const enabled: Array<{ kind: IntegrationLink['kind']; label: string }> =
-                sessionEmail && !hasLinkGmail
-                  ? [{ kind: 'gmail', label: sessionEmail }, ...enabledLinks]
-                  : enabledLinks;
+              const enabled: Array<{ kind: IntegrationLink['kind']; label: string }> = enabledLinks;
               const denied = detail.staff.denied_skills ?? [];
               return (
                 <div className="drawer-section">

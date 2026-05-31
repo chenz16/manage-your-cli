@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { isGmailLink, type IntegrationLink } from '@holon/api-contract';
 import { useT } from '../../../lib/i18n/useT';
 import type { Lang } from '../../../lib/i18n/I18nProvider';
@@ -50,14 +49,13 @@ export function AuthorizationsSection({
   onChange: (next: IntegrationLink[]) => Promise<void>;
 }) {
   const { t: tr, lang } = useT();
-  const { data: session } = useSession();
 
-  // Resolve dual-source Gmail status — preserve the iter-013 Pass #3
-  // semantics so a legacy install (IntegrationLink row but no NextAuth
-  // account) still renders "Connected".
+  // feat/remove-nextauth: Gmail status comes solely from the
+  // IntegrationLink row (`integrations[]` on /me). NextAuth session
+  // surface removed.
   const gmailLink = value.find(isGmailLink) ?? null;
-  const gmailEmail = session?.user?.email ?? gmailLink?.config.email_address ?? null;
-  const gmailConnected = Boolean(session?.user?.email) || Boolean(gmailLink);
+  const gmailEmail = gmailLink?.config.email_address ?? null;
+  const gmailConnected = Boolean(gmailLink);
 
   const configured = value
     .filter((link) => link.enabled !== false)

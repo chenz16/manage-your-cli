@@ -20,7 +20,6 @@
   "dependencies": {
     "@assistant-ui/react": "0.14.5",
     "@assistant-ui/styles": "0.3.7",
-    "@auth/drizzle-adapter": "^1.11.2",
     "@holon/api-contract": "workspace:*",
     "@holon/auth": "workspace:*",
     "@holon/core": "workspace:*",
@@ -28,10 +27,8 @@
     "@types/qrcode": "^1.5.6",
     "better-sqlite3": "^12.10.0",
     "clsx": "2.1.1",
-    "drizzle-orm": "^0.45.2",
     "jsqr": "^1.4.0",
     "next": "15.5.18",
-    "next-auth": "5.0.0-beta.31",
     "qrcode": "^1.5.4",
     "react": "19.2.0",
     "react-dom": "19.2.0",
