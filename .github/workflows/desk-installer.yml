@@ -94,6 +94,22 @@ jobs:
       # tauri.conf.json's beforeBuildCommand also runs these, but doing
       # them here surfaces failures earlier.
       # ----------------------------------------------------------------
+      # Isolate the user profile so the build doesn't traverse the
+      # legacy `Application Data` junction in C:\Users\runneradmin\AppData\Local\
+      # which has a restricted ACL + symlink loop and raises EPERM in webpack's
+      # scandir. The outputFileTracingExcludes patch only covers the trace
+      # phase; webpack's source walk during build still hits the junction.
+      - name: Isolate user profile (avoid Application Data junction EPERM)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/clean-profile"
+          echo "USERPROFILE=$RUNNER_TEMP\\clean-profile" >> $GITHUB_ENV
+          echo "HOME=$RUNNER_TEMP/clean-profile" >> $GITHUB_ENV
+          echo "APPDATA=$RUNNER_TEMP\\clean-profile\\AppData\\Roaming" >> $GITHUB_ENV
+          echo "LOCALAPPDATA=$RUNNER_TEMP\\clean-profile\\AppData\\Local" >> $GITHUB_ENV
+          mkdir -p "$RUNNER_TEMP/clean-profile/AppData/Roaming"
+          mkdir -p "$RUNNER_TEMP/clean-profile/AppData/Local"
+
       - name: Build Next.js standalone
         run: pnpm -F web build
 
