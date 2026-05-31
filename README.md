@@ -106,30 +106,56 @@ flowchart LR
 
   subgraph Machine["🖥️ Your machine (local)"]
     direction TB
-    Sec["🧑‍💼 Secretary<br/>warm CLI · fast · clean<br/>(claude/codex/…)"]
-    E1["🤖 Employee<br/>tmux CLI"]
-    E2["🤖 Employee<br/>tmux CLI"]
-    Mem[("🗂️ Boss memory<br/>markdown files<br/>INDEX + details")]
-    MCP{{"Holon MCP<br/>list · dispatch · read<br/>create · retire · memory"}}
 
-    Sec -- via MCP --> MCP
-    MCP --> E1
-    MCP --> E2
-    E1 <-->|agent ↔ agent| E2
-    Sec --- Mem
-    MCP --- Mem
+    OwnerMem[("🗂️ Owner-global memory<br/>~/holon-agents/boss/owner/<br/>identity · preferences")]
+
+    subgraph PA["📁 Project A"]
+      direction TB
+      SecA["🧑‍💼 Secretary A<br/>warm CLI · per-project"]
+      MCPA{{"Holon MCP (A)"}}
+      EA1["🤖 Employee"]
+      EA2["🤖 Employee"]
+      MemA[("Project A boss-memory")]
+      SecA -- via MCP --> MCPA
+      MCPA --> EA1 & EA2
+      EA1 <--> EA2
+      SecA --- MemA
+    end
+
+    subgraph PB["📁 Project B"]
+      direction TB
+      SecB["🧑‍💼 Secretary B<br/>warm CLI · per-project"]
+      MCPB{{"Holon MCP (B)"}}
+      EB1["🤖 Employee"]
+      MemB[("Project B boss-memory")]
+      SecB -- via MCP --> MCPB
+      MCPB --> EB1
+      SecB --- MemB
+    end
+
+    SecA -.reads.-> OwnerMem
+    SecB -.reads.-> OwnerMem
   end
 
-  Owner <-->|chat| Sec
-  Sec <-->|A2A| Ext["🌐 External agents<br/>other Holons /<br/>internet of agents"]
+  Owner <-->|chat| SecA
+  Owner <-->|chat| SecB
+  SecA <-->|A2A| Ext["🌐 External agents<br/>other Holons /<br/>internet of agents"]
+  SecB <-->|A2A| Ext
 
   classDef hub fill:#1F6F9E,color:#fff,stroke:#0d3d57;
-  class Sec hub
+  classDef proj fill:#E5F0E8,stroke:#2E7D52;
+  classDef owner fill:#E5EEF5,stroke:#1F6F9E;
+  class SecA,SecB hub
+  class PA,PB proj
+  class OwnerMem owner
 ```
 
-**Connection structure:** *local agents ↔ Secretary ↔ you ↔ the outside* — an
-**internet of agents**. The Secretary is the hub: it coordinates your local team and
-is the single gateway out to other people's agents (over the **A2A** standard).
+**Connection structure:** *local agents ↔ project secretary ↔ you ↔ the outside* — an
+**internet of agents**. **One secretary per project** (you can run as many projects
+as you want, each with its own team). Every secretary shares one owner-global memory
+(identity, preferences, cross-project context) and is its project's single gateway
+to external agents over the **A2A** standard. Diagram shows 2 projects for clarity —
+real owners typically run 1-5 projects in parallel.
 
 ### System 0 / System 1 / System 2 — the memory hierarchy
 
