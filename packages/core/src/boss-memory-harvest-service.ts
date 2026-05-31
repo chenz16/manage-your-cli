@@ -24,13 +24,13 @@
  * No UI for this knob in this PR — back-end slot only.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Staff } from '@holon/api-contract';
 import { dispatchCliTask, type DispatchCliTaskResult } from './cli-dispatch-service.js';
 import { getOrCreateMemoryManagerStaff } from './memory-manager-service.js';
 import { listStaffMerged } from './staff-management-service.js';
 import { projectMemoryRoot, projectArchiveRoot } from './boss-memory-service.js';
+import { holonAgentsHome } from './holon-paths.js';
 
 /** Test seam: swap dispatchCliTask for a mock. */
 export type HarvestDispatcher = (input: { staffId: string; brief: string }) => Promise<DispatchCliTaskResult>;
@@ -40,7 +40,7 @@ export function setBossMemoryHarvestDispatcher(d: HarvestDispatcher | null): voi
 }
 
 function agentsHome(): string {
-  return process.env.HOLON_AGENTS_HOME?.trim() || join(homedir(), 'holon-agents');
+  return holonAgentsHome();
 }
 
 /**

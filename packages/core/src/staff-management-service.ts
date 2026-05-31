@@ -13,8 +13,8 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { holonAgentsHome } from './holon-paths.js';
 import type { Staff } from '@holon/api-contract';
 import { loadFixtures } from './fixture-store.js';
 import {
@@ -68,7 +68,7 @@ function mintStaffUuidV7LikeId(): string {
 }
 
 function agentsHome(): string {
-  return process.env.HOLON_AGENTS_HOME?.trim() || join(homedir(), 'holon-agents');
+  return holonAgentsHome();
 }
 
 export interface CreateCliAgentInput {

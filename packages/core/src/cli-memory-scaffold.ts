@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { McpPluginInstallSpec, Staff } from '@holon/api-contract';
 import { MCP_PLUGIN_REGISTRY, findMcpPluginManifest } from '@holon/api-contract';
 import { getOwner } from './owner-config-service.js';
 import { mcpPluginId } from './plugin-store.js';
+import { holonAgentsHome } from './holon-paths.js';
 import {
   ROLE_COMPOSITION_HEADING,
   ROLE_COMPOSITION_SENTINEL,
@@ -200,7 +200,7 @@ export function ensureAgentMemoryFile(cwd: string, staff: Staff, binary: string)
 }
 
 export function ensureManagerWorkspace(): string {
-  const cwd = join(homedir(), 'holon-agents', 'manager');
+  const cwd = join(holonAgentsHome(), 'manager');
   const memoryDir = join(cwd, 'MEMORY');
   mkdirIfNeeded(memoryDir);
   writeFileIfAbsent(join(cwd, 'CLAUDE.md'), `# Sr Manager — Holon desk
@@ -241,7 +241,7 @@ You are the Sr Manager of the owner's (CEO's) Holon desk. The owner talks to you
 }
 
 function agentsHome(): string {
-  return process.env.HOLON_AGENTS_HOME?.trim() || join(homedir(), 'holon-agents');
+  return holonAgentsHome();
 }
 
 function findRepoRoot(): string {

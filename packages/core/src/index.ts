@@ -2,6 +2,14 @@
 
 import './token-storage-adapter.js';
 
+// Shared filesystem-root helpers (test/dev/release state isolation).
+// See docs/adr/test-release-state-isolation.md.
+export {
+  holonAgentsHome,
+  holonStateRoot,
+  holonDefaultDbPath,
+} from './holon-paths.js';
+
 export { loadFixtures, _resetFixtureCacheForTests } from './fixture-store.js';
 export type { Fixtures } from './fixture-store.js';
 

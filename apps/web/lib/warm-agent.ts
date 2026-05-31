@@ -13,7 +13,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
+import { holonStateRoot } from '@holon/core';
 import { register as regProcess, unregister as unregProcess, touch as touchProcess, markStatus } from './process-registry';
 import { setBusyProbe } from './settle-watch';
 import type { SyntheticMessage } from './synthetic-producers';
@@ -22,7 +22,7 @@ import type { SyntheticMessage } from './synthetic-producers';
 // HMR / OS restart), the next spawn can `claude --resume <id>` and pick up
 // the same conversation history — same trick the owner uses to adopt the mgr
 // tmux. Without resume, secretary loses everything on every cold spawn.
-const SESSION_STORE = join(homedir(), '.holon', 'warm-sessions.json');
+const SESSION_STORE = join(holonStateRoot(), 'warm-sessions.json');
 function loadSessions(): Record<string, string> {
   try {
     if (existsSync(SESSION_STORE)) {

@@ -48,6 +48,20 @@ describe('desk-url-storage', () => {
     expect(() => mod.writeDeskOrigin('ws://x')).toThrow();
   });
 
+  // Env-aware namespacing: dev preview and release APK MUST NOT collide in
+  // the same Capacitor WebView storage. Default (prod / unset) keeps the
+  // legacy key so existing installs continue to work without migration.
+  // Spec: docs/adr/test-release-state-isolation.md (slice E).
+  it('default env=prod uses the legacy key (no suffix)', async () => {
+    // No NEXT_PUBLIC_HOLON_ENV set → prod.
+    const mod = await import('./desk-url-storage');
+    mod.writeDeskOrigin('http://192.168.1.50:3110');
+    const win = (globalThis as { window: { localStorage: { getItem(k: string): string | null } } }).window;
+    expect(win.localStorage.getItem('myc.mobile.deskOrigin.v1')).toBe('http://192.168.1.50:3110');
+    // The dev-suffixed key must remain empty.
+    expect(win.localStorage.getItem('myc.mobile.deskOrigin.v1.dev')).toBeNull();
+  });
+
   it('round-trips tailscale URL + enabled flag, and clearAll wipes both', async () => {
     const mod = await import('./desk-url-storage');
     mod.writeDeskOrigin('http://192.168.1.50:3110');
