@@ -1,0 +1,145 @@
+name: desk-installer
+
+# Build the Holon Windows .exe (NSIS installer) on GitHub-hosted windows-latest.
+#
+# Triggered manually (workflow_dispatch) or automatically when a Release is
+# published. Owner does NOT need Rust + NSIS installed locally — the runner
+# has MSVC + Windows SDK + NSIS preinstalled.
+#
+# Hermes-stripped vs sister repo holon-engineering/.github/workflows/windows-installer.yml:
+#   - No deps/hermes clone, no PyInstaller bundle, no Hermes ACP smoke
+#   - No WeChat daemon build
+#   - No .msi target — NSIS only (per tauri.conf.json bundle.targets)
+#   - No installer-extract verify-acp step
+# This is a CLI-only build per CLAUDE.md North Star.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Optional release notes for the artifact (free-form)'
+        required: false
+        default: ''
+  release:
+    types: [published]
+
+permissions:
+  contents: write    # release upload
+
+jobs:
+  build-windows:
+    name: Build Holon desk (Windows NSIS)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    env:
+      NODE_VERSION: '22.14.0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.10.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Rust (stable, MSVC host)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache cargo build (src-tauri/target)
+        uses: actions/cache@v4
+        with:
+          path: apps/web/src-tauri/target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
+      - name: Install JS deps (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # ----------------------------------------------------------------
+      # Fetch Node sidecar binary for the Rust target triple.
+      # Tauri's externalBin convention requires binaries/node-<triple>.exe
+      # — on windows-latest the triple is x86_64-pc-windows-msvc.
+      # ----------------------------------------------------------------
+      - name: Fetch Node sidecar (x86_64-pc-windows-msvc)
+        shell: bash
+        env:
+          NODE_VERSION: ${{ env.NODE_VERSION }}
+        run: bash scripts/fetch-node-sidecar.sh x86_64-pc-windows-msvc
+
+      # ----------------------------------------------------------------
+      # Build Next.js standalone bundle + copy into src-tauri/resources.
+      # tauri.conf.json's beforeBuildCommand also runs these, but doing
+      # them here surfaces failures earlier.
+      # ----------------------------------------------------------------
+      - name: Build Next.js standalone
+        run: pnpm -F web build
+
+      - name: Copy Next standalone into Tauri resources
+        run: node scripts/copy-standalone-for-tauri.mjs
+
+      # ----------------------------------------------------------------
+      # Tauri build — emits .exe (NSIS) into
+      # apps/web/src-tauri/target/release/bundle/nsis/
+      # ----------------------------------------------------------------
+      - name: Tauri build (release)
+        working-directory: apps/web
+        run: pnpm tauri build --verbose
+
+      - name: Stage installer artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist-windows"
+          mkdir -p "$STAGE"
+          BUNDLE_DIR="apps/web/src-tauri/target/release/bundle"
+          if [ -d "$BUNDLE_DIR/nsis" ]; then
+            cp "$BUNDLE_DIR/nsis"/*.exe "$STAGE"/ || true
+          fi
+          ls -la "$STAGE"
+          if [ -z "$(ls -A "$STAGE")" ]; then
+            echo "[desk-installer:err:no_artifacts] bundle dir contained no .exe" >&2
+            find "$BUNDLE_DIR" -type f | head -50 >&2 || true
+            exit 1
+          fi
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: holon-desk-windows-${{ github.sha }}
+          path: dist-windows/*
+          if-no-files-found: error
+          retention-days: 30
+
+      # Auto-attach to the Release when this workflow was triggered by a
+      # published release. Skipped on workflow_dispatch.
+      - name: Attach to release (release-published only)
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-windows/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
