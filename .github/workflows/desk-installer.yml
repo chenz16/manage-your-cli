@@ -94,23 +94,24 @@ jobs:
       # tauri.conf.json's beforeBuildCommand also runs these, but doing
       # them here surfaces failures earlier.
       # ----------------------------------------------------------------
-      # Isolate the user profile so the build doesn't traverse the
-      # legacy `Application Data` junction in C:\Users\runneradmin\AppData\Local\
-      # which has a restricted ACL + symlink loop and raises EPERM in webpack's
-      # scandir. The outputFileTracingExcludes patch only covers the trace
-      # phase; webpack's source walk during build still hits the junction.
-      - name: Isolate user profile (avoid Application Data junction EPERM)
+      # Prep an isolated user-profile dir for the Next.js build step ONLY.
+      # The legacy `Application Data` junction in C:\Users\runneradmin\AppData\Local\
+      # has a restricted ACL + symlink loop and raises EPERM in webpack's scandir.
+      # We can't override HOME globally for the job — rustup + cargo need their
+      # default HOME for toolchain config — so we scope the override to the
+      # single step via step-level env: vars.
+      - name: Prep clean profile dir for Next build
         shell: bash
         run: |
-          mkdir -p "$RUNNER_TEMP/clean-profile"
-          echo "USERPROFILE=$RUNNER_TEMP\\clean-profile" >> $GITHUB_ENV
-          echo "HOME=$RUNNER_TEMP/clean-profile" >> $GITHUB_ENV
-          echo "APPDATA=$RUNNER_TEMP\\clean-profile\\AppData\\Roaming" >> $GITHUB_ENV
-          echo "LOCALAPPDATA=$RUNNER_TEMP\\clean-profile\\AppData\\Local" >> $GITHUB_ENV
           mkdir -p "$RUNNER_TEMP/clean-profile/AppData/Roaming"
           mkdir -p "$RUNNER_TEMP/clean-profile/AppData/Local"
 
       - name: Build Next.js standalone
+        env:
+          USERPROFILE: ${{ runner.temp }}\clean-profile
+          HOME: ${{ runner.temp }}/clean-profile
+          APPDATA: ${{ runner.temp }}\clean-profile\AppData\Roaming
+          LOCALAPPDATA: ${{ runner.temp }}\clean-profile\AppData\Local
         run: pnpm -F web build
 
       - name: Copy Next standalone into Tauri resources
