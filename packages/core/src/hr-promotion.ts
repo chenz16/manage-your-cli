@@ -11,9 +11,9 @@
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nodeRequire = eval('require') as (id: string) => any;
-const { appendFileSync, existsSync, mkdirSync, readFileSync } = nodeRequire('fs') as typeof import('fs');
+const { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync } = nodeRequire('fs') as typeof import('fs');
 const { dirname } = nodeRequire('path') as typeof import('path');
-import { hrPromotionLogPath, hrVetoPath } from './hr-paths.js';
+import { hrPromotionLogPath, hrVetoPath, legacyHrVetoPath } from './hr-paths.js';
 import { writeHrCorrection, type HrCorrectionRule } from './hr-path-a.js';
 
 export interface HrCounter {
@@ -33,7 +33,61 @@ interface VetoFile { vetoes: PromotionVeto[] }
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const THRESHOLD = 3;
 
+/**
+ * One-shot migration of the legacy HR-scoped veto file (ADR §4.9).
+ *
+ * If `legacyHrVetoPath()` exists AND `hrVetoPath()` does not, atomic-rename
+ * legacy → new. If the new path already exists, leave the legacy file in
+ * place untouched (no overwrite, no delete — preserves owner data while
+ * avoiding silent loss; owner can inspect and remove manually). If legacy
+ * doesn't exist, no-op.
+ *
+ * NEVER throws — HR boot must not fail on a migration error. Errors are
+ * logged via console.warn + an `hr.veto.migrate.failed` audit line.
+ *
+ * Returns the action taken so callers (and tests) can verify.
+ */
+export function migrateLegacyVetoesIfNeeded(): 'migrated' | 'skipped_new_exists' | 'noop' | 'failed' {
+  const legacy = legacyHrVetoPath();
+  const current = hrVetoPath();
+  try {
+    if (!existsSync(legacy)) return 'noop';
+    if (existsSync(current)) return 'skipped_new_exists';
+    mkdirSync(dirname(current), { recursive: true });
+    renameSync(legacy, current);
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify({
+      audit: 'hr.veto.migrated',
+      from: legacy,
+      to: current,
+      at: Date.now(),
+    }));
+    return 'migrated';
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(JSON.stringify({
+      audit: 'hr.veto.migrate.failed',
+      from: legacy,
+      to: current,
+      error: err instanceof Error ? err.message : String(err),
+      at: Date.now(),
+    }));
+    return 'failed';
+  }
+}
+
+/** Key migration by resolved paths so an env-override change (tests) does
+ *  not retain a stale "already migrated" flag. */
+const migrationAttemptedFor = new Set<string>();
+function ensureMigrationOnce(): void {
+  const key = `${legacyHrVetoPath()}|${hrVetoPath()}`;
+  if (migrationAttemptedFor.has(key)) return;
+  migrationAttemptedFor.add(key);
+  migrateLegacyVetoesIfNeeded();
+}
+
 function readVetoes(): PromotionVeto[] {
+  ensureMigrationOnce();
   const p = hrVetoPath();
   if (!existsSync(p)) return [];
   try {

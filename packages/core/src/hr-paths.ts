@@ -22,6 +22,16 @@ export function ownerHrRoot(): string {
     ?? join(process.env.HOME ?? homedir(), 'holon-agents', 'boss', 'owner', 'hr');
 }
 
+/** Owner-global System 2 boss-memory root. Holds vetoes + INDEX/MEMORY.
+ *  Env-aware via HOLON_AGENTS_HOME (state-isolation work); falls back to
+ *  ~/holon-agents. NOTE: deliberately NOT HOLON_HR_ROOT-scoped — vetoes
+ *  survive HR re-scaffold (ADR §4.9). */
+function ownerSystem2Root(): string {
+  const home = process.env.HOLON_AGENTS_HOME?.trim()
+    || join(process.env.HOME ?? homedir(), 'holon-agents');
+  return join(home, 'boss', 'owner');
+}
+
 /** Per-secretary-project evaluation log. One markdown file per day so a
  *  cron sweep is append-only inside a day and rotation is by-file. */
 export function hrEvaluationLogPath(sprojId: string, date: string): string {
@@ -30,10 +40,18 @@ export function hrEvaluationLogPath(sprojId: string, date: string): string {
 
 /** Promotion-veto list. Owner-edited (or HR-edited after owner revert).
  *  Format documented in the module-level test fixture: a JSON file with
- *  `{ vetoes: [{ ruleHash, ruleText, vetoedAt }] }`. §4.9 open question:
- *  veto persistence across re-scaffolds; we keep it under ownerHrRoot()
- *  which IS lost on re-scaffold — see ADR §4.9. */
+ *  `{ vetoes: [{ ruleHash, ruleText, vetoedAt }] }`.
+ *
+ *  Resolved (ADR §4.9, 2026-05-30): lives under owner System 2 root, NOT
+ *  ownerHrRoot(), so vetoes survive HR re-scaffold. One-shot legacy
+ *  migration in `migrateLegacyVetoesIfNeeded()`. */
 export function hrVetoPath(): string {
+  return join(ownerSystem2Root(), 'hr-promotion-vetoes.json');
+}
+
+/** Legacy (pre-§4.9) veto path. Kept exported for one-shot migration only;
+ *  do NOT read at runtime — readers always go through `hrVetoPath()`. */
+export function legacyHrVetoPath(): string {
   return join(ownerHrRoot(), 'promotion-vetoes.json');
 }
 

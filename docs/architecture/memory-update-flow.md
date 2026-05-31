@@ -238,7 +238,9 @@ smallest "pattern" signal. 24h matches a typical owner workday.
   installs migrate on first HR boot via atomic rename from the old
   `…/owner/hr/promotion-vetoes.json` path (idempotent; no-op if the file
   already lives at the new location). Spec lives in ADR § 4.9;
-  implementation deferred to Task #19.
+  implementation: `migrateLegacyVetoesIfNeeded()` in
+  `packages/core/src/hr-promotion.ts` (lazy-invoked on first veto read;
+  emits `hr.veto.migrated` audit line).
 - **Skill edits don't hot-reload.** Skill files are read at CLI startup.
   Restart the secretary to pick up a description change.
 - **Author/target CLI mismatch.** Path A picks the file by the **target**'s
