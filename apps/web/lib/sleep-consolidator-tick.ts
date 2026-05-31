@@ -15,9 +15,10 @@
  * file under entry.cwd (CLAUDE.md / AGENTS.md / GEMINI.md / QWEN.md) and
  * call `consolidateMemoryFile`.
  *
- * Slice 1 ships a stub distill (marker line; see `STUB_DISTILL` in
- * @holon/core). Real LLM-backed distill via the warm-agent's own binary
- * lands in a downstream slice.
+ * Distill: real LLM-backed via `claudeDistill` (apps/web/lib/consolidator-
+ * distill.ts) — one-shot `claude --print` per section. Falls back to the
+ * `STUB_DISTILL` marker (still exported from @holon/core) on spawn timeout
+ * or failure so the tick never blocks.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,9 +26,10 @@ const nodeRequire = eval('require') as (id: string) => any;
 const { join } = nodeRequire('path') as typeof import('path');
 
 import {
-  consolidateMemoryFile, STUB_DISTILL,
+  consolidateMemoryFile,
   type ConsolidationResult, type ConsolidatorOptions,
 } from '@holon/core/memory-consolidator';
+import { claudeDistill } from './consolidator-distill';
 import { list, type ProcessEntry } from './process-registry';
 
 const DEFAULT_TICK_MS = 6 * 60 * 60 * 1000; // 6h
@@ -100,7 +102,7 @@ export async function consolidatorTick(now: number = Date.now()): Promise<Consol
   for (const entry of list((e) => e.kind === 'warm-secretary')) {
     try {
       const r = await consolidateForEntry(entry, {
-        distill: STUB_DISTILL, minBytes, minIntervalMs, now,
+        distill: claudeDistill, minBytes, minIntervalMs, now,
       });
       // Type narrow — only push full ConsolidationResults; the early-skip
       // shape is logged but not returned.
