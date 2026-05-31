@@ -49,6 +49,13 @@ const config: NextConfig = {
   // artifacts; resources/ contains the previous standalone copy (1 GB
   // recursive bloat); binaries/ has the 115 MB Node sidecar. Excluding
   // src-tauri here keeps the bundle at the expected ~80-100 MB.
+  // Windows-only EPERM workaround (GHA windows-latest desk-installer):
+  // Next 15's file tracer walks HOME/USERPROFILE and chokes on the legacy
+  // `C:\Users\<user>\AppData\Local\Application Data` junction (XP compat
+  // self-referential symlink with restricted ACL). Stock Node hits
+  // `EPERM: operation not permitted, scandir` and the build fails. Excluding
+  // the user-profile junction paths globally keeps the tracer off them.
+  // Linux/Mac patterns are no-ops on those platforms.
   outputFileTracingExcludes: {
     '*': [
       'src-tauri/**/*',
@@ -58,6 +65,18 @@ const config: NextConfig = {
       '**/src-tauri/resources/**/*',
       '**/src-tauri/binaries/**/*',
       '**/.next/cache/**/*',
+      // Windows legacy junction loops (EPERM on GHA windows-latest)
+      'C:/Users/**/AppData/**',
+      '**/Application Data/**',
+      '**/My Documents/**',
+      '**/Local Settings/**',
+      '**/Cookies/**',
+      '**/NetHood/**',
+      '**/PrintHood/**',
+      '**/Recent/**',
+      '**/SendTo/**',
+      '**/Start Menu/**',
+      '**/Templates/**',
     ],
   },
   // Allow Next.js to transpile the workspace packages (they ship raw TS).
