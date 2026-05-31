@@ -385,3 +385,13 @@ export {
   type PromotionVeto,
   type PromotionResult,
 } from './hr-promotion.js';
+
+// Warm-agent transcript reader (ADR §4.7 follow-up: HR Path B reads real
+// turns, not just dispatch result strings).
+export {
+  readRecentTurns,
+  readSince,
+  transcriptsRoot,
+  type TranscriptEvent,
+  type TranscriptEvType,
+} from './transcript-reader.js';

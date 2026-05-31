@@ -109,3 +109,187 @@ describe('hrPathBProducer', () => {
     expect(out).toEqual([]);
   });
 });
+
+// ---- Transcript-aware rubric tightening -------------------------------------
+// The wired-up `scoreAndEmitNudges` now reads the warm-agent JSONL transcript
+// and tightens 3 of 5 rubric items. We provide synthetic transcripts on disk
+// (via the appendTranscriptEvent helper exported from warm-agent) so the
+// tests exercise the real reader → scorer path, not a mock.
+
+describe('scoreAndEmitNudges — transcript-aware refinements', () => {
+  it('tightens dispatched-not-DIY when no Task/dispatch tool_use but a file-edit tool_use is observed', async () => {
+    const { scoreAndEmitNudges, HR_NUDGES } = await import('./hr-path-b-producer');
+    const { appendTranscriptEvent, _resetTranscriptWritersForTest } = await import('./warm-agent');
+    const transcriptRoot = mkdtempSync(join(tmpdir(), 'hr-tx-'));
+    const prev = process.env.HOLON_TRANSCRIPT_ROOT;
+    process.env.HOLON_TRANSCRIPT_ROOT = transcriptRoot;
+    try {
+      _resetTranscriptWritersForTest();
+      // entry.key is 'warm:sec_acme' → reader uses 'sec_acme' as warm key.
+      const cwd = mkdtempSync(join(tmpdir(), 'hr-target-'));
+      const entry = { ...ENTRY, cwd };
+      // Build a synthetic 1-turn transcript: user_input + Edit tool_use (no
+      // Task/dispatch). Result-text is BENIGN (would pass the base rubric).
+      appendTranscriptEvent('sec_acme', { ev_type: 'user_input', content: 'do thing' });
+      appendTranscriptEvent('sec_acme', {
+        ev_type: 'tool_use',
+        content: { id: 'tu_1', name: 'Edit', input: { file_path: '/tmp/foo.ts' } },
+      });
+      appendTranscriptEvent('sec_acme', { ev_type: 'result', content: 'all good' });
+      await new Promise((r) => setTimeout(r, 15));
+      const msgs = scoreAndEmitNudges(entry, 'all good — clean dispatch', { transcriptRoot });
+      // Without transcript refinement the result text passes everything,
+      // so msgs would be []. With refinement, dispatched-not-DIY fails.
+      expect(msgs.map((m) => m.content)).toContain(HR_NUDGES['dispatched-not-DIY']);
+    } finally {
+      _resetTranscriptWritersForTest();
+      if (prev === undefined) delete process.env.HOLON_TRANSCRIPT_ROOT;
+      else process.env.HOLON_TRANSCRIPT_ROOT = prev;
+      try { rmSync(transcriptRoot, { recursive: true, force: true }); } catch { /* noop */ }
+    }
+  });
+
+  it('tightens read-INDEX-before-act when a memory Write happens without a preceding INDEX.md Read', async () => {
+    const { scoreAndEmitNudges, HR_NUDGES } = await import('./hr-path-b-producer');
+    const { appendTranscriptEvent, _resetTranscriptWritersForTest } = await import('./warm-agent');
+    const transcriptRoot = mkdtempSync(join(tmpdir(), 'hr-tx-'));
+    const prev = process.env.HOLON_TRANSCRIPT_ROOT;
+    process.env.HOLON_TRANSCRIPT_ROOT = transcriptRoot;
+    try {
+      _resetTranscriptWritersForTest();
+      const cwd = mkdtempSync(join(tmpdir(), 'hr-target-'));
+      const entry = { ...ENTRY, cwd };
+      appendTranscriptEvent('sec_acme', { ev_type: 'user_input', content: 'remember this' });
+      appendTranscriptEvent('sec_acme', {
+        ev_type: 'tool_use',
+        content: { id: 'tu_1', name: 'Write', input: { file_path: '/boss/MEMORY/notes.md' } },
+      });
+      appendTranscriptEvent('sec_acme', { ev_type: 'result', content: 'noted' });
+      await new Promise((r) => setTimeout(r, 15));
+      const msgs = scoreAndEmitNudges(entry, 'noted', { transcriptRoot });
+      expect(msgs.map((m) => m.content)).toContain(HR_NUDGES['read-INDEX-before-act']);
+    } finally {
+      _resetTranscriptWritersForTest();
+      if (prev === undefined) delete process.env.HOLON_TRANSCRIPT_ROOT;
+      else process.env.HOLON_TRANSCRIPT_ROOT = prev;
+      try { rmSync(transcriptRoot, { recursive: true, force: true }); } catch { /* noop */ }
+    }
+  });
+
+  it('does NOT tighten read-INDEX when the secretary read INDEX.md first', async () => {
+    const { scoreAndEmitNudges, HR_NUDGES } = await import('./hr-path-b-producer');
+    const { appendTranscriptEvent, _resetTranscriptWritersForTest } = await import('./warm-agent');
+    const transcriptRoot = mkdtempSync(join(tmpdir(), 'hr-tx-'));
+    const prev = process.env.HOLON_TRANSCRIPT_ROOT;
+    process.env.HOLON_TRANSCRIPT_ROOT = transcriptRoot;
+    try {
+      _resetTranscriptWritersForTest();
+      const cwd = mkdtempSync(join(tmpdir(), 'hr-target-'));
+      const entry = { ...ENTRY, cwd };
+      appendTranscriptEvent('sec_acme', { ev_type: 'user_input', content: 'remember this' });
+      appendTranscriptEvent('sec_acme', {
+        ev_type: 'tool_use',
+        content: { id: 'tu_0', name: 'Read', input: { file_path: '/boss/INDEX.md' } },
+      });
+      appendTranscriptEvent('sec_acme', {
+        ev_type: 'tool_use',
+        content: { id: 'tu_1', name: 'Write', input: { file_path: '/boss/MEMORY/notes.md' } },
+      });
+      appendTranscriptEvent('sec_acme', { ev_type: 'result', content: 'noted' });
+      await new Promise((r) => setTimeout(r, 15));
+      const msgs = scoreAndEmitNudges(entry, 'noted', { transcriptRoot });
+      expect(msgs.map((m) => m.content)).not.toContain(HR_NUDGES['read-INDEX-before-act']);
+    } finally {
+      _resetTranscriptWritersForTest();
+      if (prev === undefined) delete process.env.HOLON_TRANSCRIPT_ROOT;
+      else process.env.HOLON_TRANSCRIPT_ROOT = prev;
+      try { rmSync(transcriptRoot, { recursive: true, force: true }); } catch { /* noop */ }
+    }
+  });
+
+  it('role-fidelity corroborator: assistant DIY text in transcript fails the check even if result string is clean', async () => {
+    const { scoreAndEmitNudges, HR_NUDGES } = await import('./hr-path-b-producer');
+    const { appendTranscriptEvent, _resetTranscriptWritersForTest } = await import('./warm-agent');
+    const transcriptRoot = mkdtempSync(join(tmpdir(), 'hr-tx-'));
+    const prev = process.env.HOLON_TRANSCRIPT_ROOT;
+    process.env.HOLON_TRANSCRIPT_ROOT = transcriptRoot;
+    try {
+      _resetTranscriptWritersForTest();
+      const cwd = mkdtempSync(join(tmpdir(), 'hr-target-'));
+      const entry = { ...ENTRY, cwd };
+      appendTranscriptEvent('sec_acme', { ev_type: 'user_input', content: 'do thing' });
+      appendTranscriptEvent('sec_acme', { ev_type: 'assistant', content: "OK I'll write the code myself." });
+      appendTranscriptEvent('sec_acme', {
+        ev_type: 'tool_use',
+        content: { id: 'tu_d', name: 'Task', input: { description: 'dispatch' } },
+      });
+      appendTranscriptEvent('sec_acme', { ev_type: 'result', content: 'all dispatched cleanly' });
+      await new Promise((r) => setTimeout(r, 15));
+      const msgs = scoreAndEmitNudges(entry, 'all dispatched cleanly', { transcriptRoot });
+      expect(msgs.map((m) => m.content)).toContain(HR_NUDGES['role-fidelity']);
+    } finally {
+      _resetTranscriptWritersForTest();
+      if (prev === undefined) delete process.env.HOLON_TRANSCRIPT_ROOT;
+      else process.env.HOLON_TRANSCRIPT_ROOT = prev;
+      try { rmSync(transcriptRoot, { recursive: true, force: true }); } catch { /* noop */ }
+    }
+  });
+
+  it('falls back to base rubric when no transcript exists (missing root)', async () => {
+    const { scoreAndEmitNudges } = await import('./hr-path-b-producer');
+    const cwd = mkdtempSync(join(tmpdir(), 'hr-target-'));
+    const entry = { ...ENTRY, cwd };
+    const emptyRoot = mkdtempSync(join(tmpdir(), 'hr-tx-empty-'));
+    try {
+      // Clean result text → base rubric passes everything → no nudges.
+      const msgs = scoreAndEmitNudges(entry, 'Dispatched to the implementation sub-agent via Task tool.', { transcriptRoot: emptyRoot });
+      expect(msgs).toEqual([]);
+    } finally {
+      try { rmSync(emptyRoot, { recursive: true, force: true }); } catch { /* noop */ }
+    }
+  });
+});
+
+describe('deriveTranscriptSignals + refineRubricWithTranscript — unit', () => {
+  it('deriveTranscriptSignals detects dispatch / file-edit / index-read ordering', async () => {
+    const { deriveTranscriptSignals } = await import('./hr-path-b-producer');
+    const turns = [
+      [
+        { ts: 't0', turn_id: 'a', ev_type: 'user_input' as const, content: 'q' },
+        { ts: 't1', turn_id: 'a', ev_type: 'tool_use' as const, content: { name: 'Read', input: { file_path: '/boss/INDEX.md' } } },
+        { ts: 't2', turn_id: 'a', ev_type: 'tool_use' as const, content: { name: 'Write', input: { file_path: '/boss/MEMORY/x.md' } } },
+        { ts: 't3', turn_id: 'a', ev_type: 'tool_use' as const, content: { name: 'mcp__holon__dispatch', input: {} } },
+        { ts: 't4', turn_id: 'a', ev_type: 'assistant' as const, content: 'all good' },
+      ],
+    ];
+    const s = deriveTranscriptSignals(turns);
+    expect(s.hasDispatchToolUse).toBe(true);
+    expect(s.hasFileEditToolUse).toBe(true);
+    expect(s.hasMemoryWrite).toBe(true);
+    expect(s.hasIndexReadBeforeMemoryWrite).toBe(true);
+    expect(s.assistantFirstPersonDIY).toBe(false);
+  });
+
+  it('refineRubricWithTranscript never up-grades a base fail', async () => {
+    const { refineRubricWithTranscript } = await import('./hr-path-b-producer');
+    const baseAllFail = {
+      checks: {
+        'dispatched-not-DIY': false,
+        'respected-north-star': false,
+        'read-INDEX-before-act': false,
+        'role-fidelity': false,
+        'memory-hygiene': false,
+      },
+    };
+    const cleanSignals = {
+      hasDispatchToolUse: true,
+      hasFileEditToolUse: false,
+      hasIndexReadBeforeMemoryWrite: true,
+      hasMemoryWrite: false,
+      assistantFirstPersonDIY: false,
+    };
+    const out = refineRubricWithTranscript(baseAllFail, cleanSignals);
+    // All still false — refinement only tightens, doesn't loosen.
+    for (const v of Object.values(out.checks)) expect(v).toBe(false);
+  });
+});
