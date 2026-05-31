@@ -15,11 +15,15 @@ const { existsSync, mkdirSync, writeFileSync } = nodeRequire('fs') as typeof imp
 const { homedir } = nodeRequire('os') as typeof import('os');
 const { join } = nodeRequire('path') as typeof import('path');
 
-/** Root of the owner-HR agent's on-disk presence. Env override is the only
- *  knob — tests set HOLON_HR_ROOT to a tmpdir; production lets it default. */
+/** Root of the owner-HR agent's on-disk presence. Two env knobs:
+ *  - HOLON_HR_ROOT: explicit per-feature override (existing tests).
+ *  - HOLON_AGENTS_HOME: parent root; tests set this to redirect every
+ *    holon-agents/* path at once. See docs/adr/test-release-state-isolation.md. */
 export function ownerHrRoot(): string {
-  return process.env.HOLON_HR_ROOT
-    ?? join(process.env.HOME ?? homedir(), 'holon-agents', 'boss', 'owner', 'hr');
+  if (process.env.HOLON_HR_ROOT) return process.env.HOLON_HR_ROOT;
+  const agentsHome = process.env.HOLON_AGENTS_HOME?.trim()
+    || join(process.env.HOME ?? homedir(), 'holon-agents');
+  return join(agentsHome, 'boss', 'owner', 'hr');
 }
 
 /** Per-secretary-project evaluation log. One markdown file per day so a

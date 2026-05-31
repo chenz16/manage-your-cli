@@ -32,6 +32,7 @@ import { join } from 'node:path';
 import { getStaffMerged, listStaffMerged } from './staff-management-service.js';
 import { ensureAgentMemoryFile } from './cli-memory-scaffold.js';
 import { getCliAdapter } from './cli-adapters.js';
+import { holonAgentsHome } from './holon-paths.js';
 
 const TMUX = 'tmux';
 const FIFO_DIR = join(tmpdir(), 'holon-cli');
@@ -70,7 +71,7 @@ function shQuote(s: string): string {
  *  ~/holon-agents. It's the agent's workspace AND memory anchor (CLAUDE.md +
  *  resumable session both live here). */
 function defaultCwdFor(staffId: string): string {
-  return join(homedir(), 'holon-agents', staffId.replace(/[^A-Za-z0-9_-]/g, '_'));
+  return join(holonAgentsHome(), staffId.replace(/[^A-Za-z0-9_-]/g, '_'));
 }
 
 /** Pre-accept Claude Code's per-folder trust dialog so an auto-launched `claude`
