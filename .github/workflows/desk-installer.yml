@@ -36,6 +36,12 @@ jobs:
       NODE_VERSION: '22.14.0'
 
     steps:
+      - name: Enable Windows long paths (MAX_PATH > 260)
+        shell: powershell
+        run: |
+          New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1 -PropertyType DWORD -Force
+          git config --system core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
