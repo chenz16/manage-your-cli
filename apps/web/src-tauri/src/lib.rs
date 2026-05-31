@@ -231,7 +231,8 @@ pub fn run() {
             if let tauri::WindowEvent::Destroyed = event {
                 if window.label() == "main" {
                     let node_state = window.state::<NodeSidecar>();
-                    if let Some(child) = node_state.child.lock().unwrap().take() {
+                    let child_opt = node_state.child.lock().unwrap().take();
+                    if let Some(child) = child_opt {
                         log::info!("[holon-desk] killing Node sidecar on main-window destroy");
                         let _ = child.kill();
                     }
