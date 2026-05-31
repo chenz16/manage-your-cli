@@ -446,7 +446,26 @@ is the actual moat, not any single dimension.
 
 ## Install & Use
 
-**Full install guide: [`INSTALL.md`](INSTALL.md)** (one page, copy-pasteable
+### Non-developer install (recommended for end users)
+
+Download pre-built artifacts from the
+[latest GitHub Release](https://github.com/chenz16/manage-your-cli/releases/latest):
+
+| Platform | Artifact | How |
+|---|---|---|
+| **Windows** | `Holon_*_x64-setup.exe` | Double-click; installer launches the desk + creates a Start-menu shortcut. *(First install: Windows SmartScreen may warn — "More info" → "Run anyway"; signing planned.)* |
+| **Linux / WSL / Mac** | `holon-desk-standalone-*.tar.gz` | Extract + `bash run.sh` → desk on `http://localhost:3110`. Needs Node 22. |
+| **Android phone** | `holon-mobile-v*.apk` | Sideload (Settings → enable "Install unknown apps"). On first launch: input your desk URL (LAN IP or Tailscale). |
+| **iOS phone** | *(deferred to next release — code-signing certificates not yet wired)* | — |
+
+After install, install at least one **CLI subscription** on the same machine
+that runs the desk: Claude Code (recommended), Codex, Gemini CLI, or Qwen
+Code (see install links below). The desk's onboarding step detects which
+CLIs are present and tells you what's missing.
+
+### Developer install (clone + build)
+
+**Full developer guide: [`INSTALL.md`](INSTALL.md)** (one page, copy-pasteable
 commands). The version below is the at-a-glance flow.
 
 ### 0. Pre-flight (recommended)
