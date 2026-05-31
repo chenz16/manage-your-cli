@@ -13,9 +13,18 @@
 //      already proven in this app.
 //   3. Capacitor WebView localStorage IS persistent across app restarts.
 
-const KEY_DESK_ORIGIN = 'myc.mobile.deskOrigin.v1';
-const KEY_TAILSCALE_URL = 'myc.mobile.tailscaleUrl.v1';
-const KEY_TAILSCALE_ENABLED = 'myc.mobile.tailscaleEnabled.v1';
+// Env-aware namespace so dev preview builds (NEXT_PUBLIC_HOLON_ENV=dev) and
+// release APKs (default 'prod') don't collide in the same Capacitor WebView
+// localStorage. See docs/adr/test-release-state-isolation.md slice E.
+//
+// Default = 'prod' preserves the historical key `myc.mobile.deskOrigin.v1`
+// so the owner's already-installed release APK keeps reading its existing
+// stored origin — zero-migration upgrade.
+const ENV_TAG = (process.env.NEXT_PUBLIC_HOLON_ENV ?? 'prod').replace(/[^a-z0-9_-]/gi, '') || 'prod';
+const KEY_SUFFIX = ENV_TAG === 'prod' ? '' : `.${ENV_TAG}`;
+const KEY_DESK_ORIGIN = `myc.mobile.deskOrigin.v1${KEY_SUFFIX}`;
+const KEY_TAILSCALE_URL = `myc.mobile.tailscaleUrl.v1${KEY_SUFFIX}`;
+const KEY_TAILSCALE_ENABLED = `myc.mobile.tailscaleEnabled.v1${KEY_SUFFIX}`;
 
 function hasWindow(): boolean {
   return typeof window !== 'undefined';
