@@ -417,3 +417,233 @@ jobs:
           gh release upload internal-nightly dist/Holon-iOS-internal.ipa \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
+
+  # ---------------------------------------------------------------------------
+  # Job 4 — macOS Tauri desk installer (.dmg, universal arm64 + x86_64)
+  # Mirror of daily-build.yml::macos-tauri; builds off `dev` branch and
+  # uploads to internal-nightly with `-internal` filename suffix.
+  # ---------------------------------------------------------------------------
+  macos-tauri:
+    name: Build macOS desk installer (Tauri DMG, universal)
+    needs: prepare-release
+    runs-on: macos-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      NODE_VERSION: '22.14.0'
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: dev
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.10.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Rust (stable, both Apple targets for universal binary)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache cargo build (src-tauri/target)
+        uses: actions/cache@v4
+        with:
+          path: apps/web/src-tauri/target
+          key: ${{ runner.os }}-cargo-target-universal-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-universal-
+
+      - name: Install JS deps (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch Node sidecar (aarch64-apple-darwin)
+        env:
+          NODE_VERSION: ${{ env.NODE_VERSION }}
+        run: bash scripts/fetch-node-sidecar.sh aarch64-apple-darwin
+
+      - name: Fetch Node sidecar (x86_64-apple-darwin)
+        env:
+          NODE_VERSION: ${{ env.NODE_VERSION }}
+        run: bash scripts/fetch-node-sidecar.sh x86_64-apple-darwin
+
+      - name: Build Next.js standalone
+        run: pnpm -F web build
+
+      - name: Copy Next standalone into Tauri resources
+        run: node scripts/copy-standalone-for-tauri.mjs
+
+      # macOS path limits are generous (APFS ~1024); SKIP the pnpm-flatten
+      # step. Tauri's mac bundler handles the symlinked .pnpm tree fine.
+
+      - name: Tauri build (universal-apple-darwin → DMG)
+        working-directory: apps/web
+        run: pnpm tauri build --target universal-apple-darwin --bundles dmg --verbose
+
+      - name: Stage + rename DMG to stable internal filename
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist-macos"
+          mkdir -p "$STAGE"
+          BUNDLE_DIR="apps/web/src-tauri/target/universal-apple-darwin/release/bundle"
+          if [ -d "$BUNDLE_DIR/dmg" ]; then
+            cp "$BUNDLE_DIR/dmg"/*.dmg "$STAGE"/ || true
+          fi
+          ls -la "$STAGE"
+          if [ -z "$(ls -A "$STAGE")" ]; then
+            echo "[internal-build:err:no_dmg] bundle dir contained no .dmg" >&2
+            find "$BUNDLE_DIR" -type f | head -50 >&2 || true
+            exit 1
+          fi
+          mv "$STAGE"/*.dmg "$STAGE/Holon-Mac-internal.dmg"
+
+      - name: Upload .dmg to internal-nightly release (clobber prior)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload internal-nightly dist-macos/Holon-Mac-internal.dmg \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+  # ---------------------------------------------------------------------------
+  # Job 5 — Linux Tauri desk installer (.AppImage + .deb)
+  # Mirror of daily-build.yml::linux-tauri; builds off `dev` branch and
+  # uploads to internal-nightly with `-internal` filename suffix.
+  # ---------------------------------------------------------------------------
+  linux-tauri:
+    name: Build Linux desk installer (Tauri AppImage + deb)
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      NODE_VERSION: '22.14.0'
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: dev
+
+      - name: Install Tauri Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.10.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache cargo build (src-tauri/target)
+        uses: actions/cache@v4
+        with:
+          path: apps/web/src-tauri/target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
+      - name: Install JS deps (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch Node sidecar (x86_64-unknown-linux-gnu)
+        env:
+          NODE_VERSION: ${{ env.NODE_VERSION }}
+        run: bash scripts/fetch-node-sidecar.sh x86_64-unknown-linux-gnu
+
+      - name: Build Next.js standalone
+        run: pnpm -F web build
+
+      - name: Copy Next standalone into Tauri resources
+        run: node scripts/copy-standalone-for-tauri.mjs
+
+      # Linux PATH_MAX 4096; SKIP the pnpm-flatten step.
+
+      - name: Tauri build (release → AppImage + deb)
+        working-directory: apps/web
+        run: pnpm tauri build --bundles appimage,deb --verbose
+
+      - name: Stage + rename Linux artifacts to stable internal filenames
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist-linux"
+          mkdir -p "$STAGE"
+          BUNDLE_DIR="apps/web/src-tauri/target/release/bundle"
+          if [ -d "$BUNDLE_DIR/appimage" ]; then
+            cp "$BUNDLE_DIR/appimage"/*.AppImage "$STAGE"/ || true
+          fi
+          if [ -d "$BUNDLE_DIR/deb" ]; then
+            cp "$BUNDLE_DIR/deb"/*.deb "$STAGE"/ || true
+          fi
+          ls -la "$STAGE"
+          if [ -z "$(ls "$STAGE"/*.AppImage 2>/dev/null)" ]; then
+            echo "[internal-build:err:no_appimage] bundle dir contained no .AppImage" >&2
+            find "$BUNDLE_DIR" -type f | head -50 >&2 || true
+            exit 1
+          fi
+          if [ -z "$(ls "$STAGE"/*.deb 2>/dev/null)" ]; then
+            echo "[internal-build:err:no_deb] bundle dir contained no .deb" >&2
+            find "$BUNDLE_DIR" -type f | head -50 >&2 || true
+            exit 1
+          fi
+          mv "$STAGE"/*.AppImage "$STAGE/Holon-Linux-internal.AppImage"
+          mv "$STAGE"/*.deb "$STAGE/Holon-Linux-internal.deb"
+
+      - name: Upload .AppImage + .deb to internal-nightly release (clobber prior)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload internal-nightly \
+            dist-linux/Holon-Linux-internal.AppImage \
+            dist-linux/Holon-Linux-internal.deb \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
