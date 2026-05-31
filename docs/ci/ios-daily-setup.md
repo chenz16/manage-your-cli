@@ -82,6 +82,13 @@ to:
     if: ${{ always() }}   # parallel with windows/android, runs even if prepare-release-only
 ```
 
+**The same four secrets also enable iOS in `.github/workflows/internal-build.yml`**
+(the dev-branch sibling pipeline that ships to the `internal-nightly` release).
+Flip both `if: false` → `if: ${{ true }}` in the same PR after the secrets are
+wired — there's no separate secret set; both workflows read the same
+`APPLE_DEV_CERT_P12` / `APPLE_DEV_CERT_PWD` / `PROVISIONING_PROFILE_BASE64` /
+`APPLE_TEAM_ID` repo secrets.
+
 Commit on a branch + PR + merge. Next 06:00 UTC cron tick will build + upload
 `holon-mobile-nightly.ipa` to the rolling `nightly` release.
 
