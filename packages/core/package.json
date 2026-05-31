@@ -9,7 +9,8 @@
     "./sanitize-for-tts": "./src/sanitize-for-tts.ts",
     "./hr-path-a": "./src/hr-path-a.ts",
     "./hr-paths": "./src/hr-paths.ts",
-    "./hr-promotion": "./src/hr-promotion.ts"
+    "./hr-promotion": "./src/hr-promotion.ts",
+    "./transcript-reader": "./src/transcript-reader.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
