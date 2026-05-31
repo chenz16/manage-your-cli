@@ -24,7 +24,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { holonStateRoot } from '@holon/core';
 import { deviceAuthErrorResponse, requireDeviceTokenForRemote } from '@/lib/device-token-auth';
 
 // 25 MB in bytes (binary base64 payload can be up to ~33% larger)
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const safe = safeFilename(filename);
   const id = mintId();
   const day = dateSlug();
-  const uploadDir = join(homedir(), '.holon', 'uploads', day);
+  const uploadDir = join(holonStateRoot(), 'uploads', day);
   const finalName = `${id}-${safe}`;
   const filePath = join(uploadDir, finalName);
 

@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync as readdirSyncFs, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, join, normalize, relative, sep } from 'node:path';
+import { holonAgentsHome } from './holon-paths.js';
 
 /**
  * Default per-scope character budget (bounded markdown memory file).
@@ -75,7 +75,7 @@ export type BossMemoryRead = BossMemoryReadResult | BossMemoryError;
 export type BossMemoryWrite = BossMemoryWriteResult | BossMemoryBudgetExceeded | BossMemoryError;
 
 function agentsHome(): string {
-  return process.env.HOLON_AGENTS_HOME?.trim() || join(homedir(), 'holon-agents');
+  return holonAgentsHome();
 }
 
 export function bossMemoryRoot(): string {

@@ -61,7 +61,19 @@ export interface ProcessEntry {
   meta?: Record<string, string | number | null>;
 }
 
-const STORE_PATH = join(homedir(), '.holon', 'process-registry.json');
+/** State root resolution mirrors `holonStateRoot()` from @holon/core. We
+ *  inline it here because this file uses the eval-require pattern (webpack
+ *  bundle compat) and adding a top-level ESM import to @holon/core would
+ *  re-introduce the bundler/CJS friction this file was written to avoid.
+ *  See docs/adr/test-release-state-isolation.md. */
+function resolveStateRoot(): string {
+  const env = process.env.HOLON_STATE_ROOT?.trim();
+  if (env) return env;
+  const xdg = process.env.XDG_DATA_HOME?.trim();
+  if (xdg) return join(xdg, 'holon');
+  return join(homedir(), '.holon');
+}
+const STORE_PATH = join(resolveStateRoot(), 'process-registry.json');
 
 const G = globalThis as unknown as {
   __holonProcessRegistry?: Map<string, ProcessEntry>;
