@@ -490,6 +490,19 @@ jobs:
           NODE_VERSION: ${{ env.NODE_VERSION }}
         run: bash scripts/fetch-node-sidecar.sh x86_64-apple-darwin
 
+      # tauri.conf.json's externalBin references `binaries/node-universal-apple-darwin`
+      # but fetch-node-sidecar.sh only produces per-arch binaries. Lipo-merge
+      # them into the universal binary Tauri expects, BEFORE `tauri build`.
+      - name: Merge per-arch Node sidecars into universal binary
+        shell: bash
+        run: |
+          cd apps/web/src-tauri/binaries
+          lipo -create -output node-universal-apple-darwin \
+            node-aarch64-apple-darwin \
+            node-x86_64-apple-darwin
+          chmod +x node-universal-apple-darwin
+          file node-universal-apple-darwin
+
       - name: Build Next.js standalone
         run: pnpm -F web build
 
@@ -533,14 +546,15 @@ jobs:
             --clobber
 
   # ---------------------------------------------------------------------------
-  # Job 5 — Linux Tauri desk installer (.AppImage + .deb)
+  # Job 5 — Linux Tauri desk installer (.deb)
   #
-  # Targets x86_64-unknown-linux-gnu (the default on ubuntu-latest). AppImage
-  # is the portable "double-click and run anywhere" format; .deb covers
-  # Debian/Ubuntu/Mint package-manager installs. Both ship from one build.
+  # Targets x86_64-unknown-linux-gnu (the default on ubuntu-latest). .deb
+  # covers Debian/Ubuntu/Mint package-manager installs — the standard for
+  # this audience. AppImage is intentionally skipped (linuxdeploy demands
+  # musl libc which ubuntu-latest doesn't ship); re-enable in a follow-up.
   # ---------------------------------------------------------------------------
   linux-tauri:
-    name: Build Linux desk installer (Tauri AppImage + deb)
+    name: Build Linux desk installer (Tauri deb)
     needs: prepare-release
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -614,45 +628,39 @@ jobs:
       # SKIP the pnpm-flatten step. The symlink tree under resources/n is
       # bundled fine by Tauri's AppImage + deb packagers.
 
-      - name: Tauri build (release → AppImage + deb)
+      # AppImage SKIPPED for first round: linuxdeploy demands `libc.musl-x86_64.so.1`
+      # which isn't on ubuntu-latest (glibc only). .deb is the standard for
+      # Ubuntu/Debian and ships unblocked. Re-enable AppImage in a follow-up by
+      # installing `musl libgpg-error0` deps + restoring `appimage` to --bundles.
+      - name: Tauri build (release → deb)
         working-directory: apps/web
-        run: pnpm tauri build --bundles appimage,deb --verbose
+        run: pnpm tauri build --bundles deb --verbose
 
-      - name: Stage + rename Linux artifacts to stable filenames
+      - name: Stage + rename Linux artifact to stable filename
         shell: bash
         run: |
           set -euo pipefail
           STAGE="dist-linux"
           mkdir -p "$STAGE"
           BUNDLE_DIR="apps/web/src-tauri/target/release/bundle"
-          if [ -d "$BUNDLE_DIR/appimage" ]; then
-            cp "$BUNDLE_DIR/appimage"/*.AppImage "$STAGE"/ || true
-          fi
           if [ -d "$BUNDLE_DIR/deb" ]; then
             cp "$BUNDLE_DIR/deb"/*.deb "$STAGE"/ || true
           fi
           ls -la "$STAGE"
-          if [ -z "$(ls "$STAGE"/*.AppImage 2>/dev/null)" ]; then
-            echo "[daily-build:err:no_appimage] bundle dir contained no .AppImage" >&2
-            find "$BUNDLE_DIR" -type f | head -50 >&2 || true
-            exit 1
-          fi
           if [ -z "$(ls "$STAGE"/*.deb 2>/dev/null)" ]; then
             echo "[daily-build:err:no_deb] bundle dir contained no .deb" >&2
             find "$BUNDLE_DIR" -type f | head -50 >&2 || true
             exit 1
           fi
-          mv "$STAGE"/*.AppImage "$STAGE/Holon-Linux.AppImage"
           mv "$STAGE"/*.deb "$STAGE/Holon-Linux.deb"
 
-      - name: Upload .AppImage + .deb to nightly release (clobber prior)
+      - name: Upload .deb to nightly release (clobber prior)
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           gh release upload nightly \
-            dist-linux/Holon-Linux.AppImage \
             dist-linux/Holon-Linux.deb \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
