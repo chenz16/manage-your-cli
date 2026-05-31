@@ -41,8 +41,7 @@ const TRANSCRIPT_WRITERS = new Map<string, TranscriptWriter>();
 
 function transcriptsDir(): string {
   if (process.env.HOLON_TRANSCRIPT_ROOT) return process.env.HOLON_TRANSCRIPT_ROOT;
-  if (process.env.HOLON_STATE_ROOT) return join(process.env.HOLON_STATE_ROOT, 'transcripts');
-  return join(homedir(), '.holon', 'transcripts');
+  return join(holonStateRoot(), 'transcripts');
 }
 
 function safeKey(warmKey: string): string {
