@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { cookies, headers } from 'next/headers';
 import { AppShell } from './_components/AppShell';
 import { ChatRuntimeProvider } from './_components/ChatRuntimeProvider';
-import SessionProviderClient from './_components/SessionProviderClient';
 import { I18nProvider } from '../lib/i18n/I18nProvider';
 import './globals.css';
 
@@ -47,27 +46,23 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang={lang}>
       <body data-page="react">
-        {/* iter-013 Pass #3 (ADR-024 step 3): SessionProvider must sit
-         * above every client component that calls useSession/signIn/signOut
-         * from next-auth/react — placed at the app-shell root so any
-         * future page also inherits it.
-         *
-         * ChatRuntimeProvider wraps the entire app shell so the
+        {/* ChatRuntimeProvider wraps the entire app shell so the
          * assistant-ui runtime lives ABOVE AppShell + Nav + path
-         * detection — surviving every soft route change. */}
-        {/* I18nProvider mounted inside the SessionProvider chain (above
-         * AppShell) so Nav + every page client component can call
-         * useT(). The provider reads `useOwner()` which fetches /me;
-         * placement under SessionProvider keeps the auth context
-         * available to that fetch. iter-017 Pass #12 part 1 — wires up
-         * the framework deferred since Phase A (91a2127). */}
-        <SessionProviderClient>
-          <ChatRuntimeProvider>
-            <I18nProvider>
-              <AppShell>{children}</AppShell>
-            </I18nProvider>
-          </ChatRuntimeProvider>
-        </SessionProviderClient>
+         * detection — surviving every soft route change. NextAuth
+         * SessionProvider removed in feat/remove-nextauth: this app is
+         * a local single-user desk; the owner identity comes from
+         * /api/v1/me via useOwner(), pairing/auth is the device-token
+         * flow (apps/web/lib/device-token-auth.ts). */}
+        {/* I18nProvider sits above AppShell so Nav + every page client
+         * component can call useT(). The provider reads `useOwner()`
+         * which fetches /me; loopback + paired device-token gate that
+         * fetch. iter-017 Pass #12 part 1 — wires up the framework
+         * deferred since Phase A (91a2127). */}
+        <ChatRuntimeProvider>
+          <I18nProvider>
+            <AppShell>{children}</AppShell>
+          </I18nProvider>
+        </ChatRuntimeProvider>
         {/* Bug-report button now lives in the Nav (next to the gear)
          * so it's never hidden by the Next.js dev indicator. */}
       </body>
