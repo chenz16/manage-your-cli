@@ -69,8 +69,8 @@ describe('readRecentTurns', () => {
     expect(turns).toHaveLength(2);
     expect(turns[0]).toHaveLength(3);
     expect(turns[1]).toHaveLength(3);
-    expect(turns[0][0]?.ev_type).toBe('user_input');
-    expect(turns[1][0]?.content).toBe('do thing');
+    expect(turns[0]![0]!.ev_type).toBe('user_input');
+    expect(turns[1]![0]!.content).toBe('do thing');
   });
 
   it('returns only the last N turns', () => {
@@ -84,8 +84,8 @@ describe('readRecentTurns', () => {
     ]);
     const turns = readRecentTurns(KEY, 2);
     expect(turns).toHaveLength(2);
-    expect(turns[0][0]?.content).toBe('q2');
-    expect(turns[1][0]?.content).toBe('q3');
+    expect(turns[0]![0]!.content).toBe('q2');
+    expect(turns[1]![0]!.content).toBe('q3');
   });
 
   it('merges rotated archives oldest-first', () => {
@@ -96,9 +96,9 @@ describe('readRecentTurns', () => {
     writeLive([ev('2026-05-30T00:00:00Z', 'user_input', 'new')]);
     const turns = readRecentTurns(KEY, 10);
     expect(turns).toHaveLength(3);
-    expect(turns[0][0]?.content).toBe('old');
-    expect(turns[1][0]?.content).toBe('mid');
-    expect(turns[2][0]?.content).toBe('new');
+    expect(turns[0]![0]!.content).toBe('old');
+    expect(turns[1]![0]!.content).toBe('mid');
+    expect(turns[2]![0]!.content).toBe('new');
   });
 
   it('tolerates corrupt / partial JSONL lines without crashing', () => {

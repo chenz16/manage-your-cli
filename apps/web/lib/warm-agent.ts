@@ -11,12 +11,132 @@
  * using live tmux (watchable); this is the latency-critical owner path.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, createWriteStream, statSync, renameSync, fsyncSync, type WriteStream } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { register as regProcess, unregister as unregProcess, touch as touchProcess, markStatus } from './process-registry';
 import { setBusyProbe } from './settle-watch';
 import type { SyntheticMessage } from './synthetic-producers';
+
+// ---- Transcript persistence ----------------------------------------------
+// One JSONL file per warm key; HR Path B scorer reads this back via
+// `@holon/core/transcript-reader` to tighten 3 of 5 rubric items against
+// actual tool_use / assistant events instead of just the final result text.
+// ADR §4.7 (docs/adr/hr-evaluator-and-behavior-correction.md).
+//
+// Hard constraints from the spec:
+//   - Append-only, non-blocking (createWriteStream, NOT writeFileSync) —
+//     warm-agent is in the owner-chat hot path.
+//   - Rotate at 50 MB → archive `<key>-YYYY-MM-DD.jsonl`, start fresh.
+//   - Optional fsync per write via HOLON_TRANSCRIPT_FSYNC=1 (paranoid mode).
+//   - Root: HOLON_TRANSCRIPT_ROOT > HOLON_STATE_ROOT/transcripts > ~/.holon/transcripts.
+const TRANSCRIPT_ROTATE_BYTES = 50 * 1024 * 1024;
+
+interface TranscriptWriter {
+  stream: WriteStream;
+  path: string;
+  bytes: number;
+}
+const TRANSCRIPT_WRITERS = new Map<string, TranscriptWriter>();
+
+function transcriptsDir(): string {
+  if (process.env.HOLON_TRANSCRIPT_ROOT) return process.env.HOLON_TRANSCRIPT_ROOT;
+  if (process.env.HOLON_STATE_ROOT) return join(process.env.HOLON_STATE_ROOT, 'transcripts');
+  return join(homedir(), '.holon', 'transcripts');
+}
+
+function safeKey(warmKey: string): string {
+  return warmKey.replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
+function rotateIfNeeded(w: TranscriptWriter, key: string): TranscriptWriter {
+  if (w.bytes < TRANSCRIPT_ROTATE_BYTES) return w;
+  try { w.stream.end(); } catch { /* noop */ }
+  const dir = dirname(w.path);
+  const safe = safeKey(key);
+  // YYYY-MM-DD archive — if today's archive already exists (multiple rotations
+  // in a day), bump with `-N`. Don't lose data.
+  const date = new Date().toISOString().slice(0, 10);
+  let archivePath = join(dir, `${safe}-${date}.jsonl`);
+  let n = 1;
+  while (existsSync(archivePath)) {
+    archivePath = join(dir, `${safe}-${date}.${n}.jsonl`);
+    n++;
+  }
+  try { renameSync(w.path, archivePath); } catch { /* best effort */ }
+  return openTranscriptWriter(key);
+}
+
+function openTranscriptWriter(key: string): TranscriptWriter {
+  const dir = transcriptsDir();
+  try { mkdirSync(dir, { recursive: true }); } catch { /* noop */ }
+  const path = join(dir, `${safeKey(key)}.jsonl`);
+  let bytes = 0;
+  try { bytes = statSync(path).size; } catch { /* new file */ }
+  const stream = createWriteStream(path, { flags: 'a' });
+  // Swallow async write errors — we never want a disk problem to crash the
+  // warm-agent hot path. (Owner chat > log fidelity.)
+  stream.on('error', () => { /* noop */ });
+  const w: TranscriptWriter = { stream, path, bytes };
+  TRANSCRIPT_WRITERS.set(key, w);
+  return w;
+}
+
+function getTranscriptWriter(key: string): TranscriptWriter {
+  const existing = TRANSCRIPT_WRITERS.get(key);
+  if (existing && !existing.stream.destroyed && existing.stream.writable) {
+    return rotateIfNeeded(existing, key);
+  }
+  return openTranscriptWriter(key);
+}
+
+export interface TranscriptAppend {
+  ev_type: 'user_input' | 'assistant' | 'result' | 'tool_use' | 'tool_result';
+  content: unknown;
+  tokens_in?: number;
+  tokens_out?: number;
+  /** ISO ts override (test only). Defaults to now. */
+  ts?: string;
+  /** turn_id override (test only). Defaults to <key>-<ts>. */
+  turn_id?: string;
+}
+
+/** Append one transcript event for a warm key. Non-blocking; returns
+ *  immediately. Errors are swallowed (never breaks the hot path). */
+export function appendTranscriptEvent(key: string, ev: TranscriptAppend): void {
+  try {
+    const w = getTranscriptWriter(key);
+    const ts = ev.ts ?? new Date().toISOString();
+    const line = JSON.stringify({
+      ts,
+      turn_id: ev.turn_id ?? `${key}-${ts}`,
+      ev_type: ev.ev_type,
+      content: ev.content,
+      ...(ev.tokens_in !== undefined ? { tokens_in: ev.tokens_in } : {}),
+      ...(ev.tokens_out !== undefined ? { tokens_out: ev.tokens_out } : {}),
+    }) + '\n';
+    w.stream.write(line);
+    w.bytes += Buffer.byteLength(line);
+    if (process.env.HOLON_TRANSCRIPT_FSYNC === '1') {
+      // Paranoid mode: fsync the underlying fd. Only on if the operator asked.
+      const fd = (w.stream as unknown as { fd: number | null }).fd;
+      if (typeof fd === 'number') {
+        try { fsyncSync(fd); } catch { /* noop */ }
+      }
+    }
+    // Post-write rotation check (the next write will swap streams).
+    if (w.bytes >= TRANSCRIPT_ROTATE_BYTES) rotateIfNeeded(w, key);
+  } catch { /* never crash hot path on transcript failure */ }
+}
+
+/** Test-only: close + drop all writers (so a tmp HOLON_TRANSCRIPT_ROOT
+ *  can be rm-rf'd cleanly between tests). */
+export function _resetTranscriptWritersForTest(): void {
+  for (const w of TRANSCRIPT_WRITERS.values()) {
+    try { w.stream.end(); } catch { /* noop */ }
+  }
+  TRANSCRIPT_WRITERS.clear();
+}
 
 // Persist warm session ids per key so when the warm process dies (idle reap /
 // HMR / OS restart), the next spawn can `claude --resume <id>` and pick up
@@ -236,6 +356,21 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
           .filter((b) => b.type === 'text' && typeof b.text === 'string')
           .map((b) => b.text as string).join('');
         if (text && text !== a.assembled) { a.assembled = text; a.onText?.(a.assembled); }
+        // Persist a transcript event for the assistant turn AND for each
+        // tool_use block. HR Path B reads these back to score behavior.
+        if (text) appendTranscriptEvent(key, { ev_type: 'assistant', content: text });
+        for (const block of ev.message.content) {
+          if (block.type === 'tool_use' && block.name) {
+            appendTranscriptEvent(key, {
+              ev_type: 'tool_use',
+              content: {
+                id: block.id,
+                name: block.name,
+                input: block.input ?? {},
+              },
+            });
+          }
+        }
         // Stream-json Task tool tap: register any in-process subagent that
         // the secretary spawned via the Task tool. These don't appear in
         // `ps` (they're internal to claude-code) but they're real work
@@ -270,12 +405,17 @@ function spawnWarm(key: string, binary: string, cwd: string | undefined): WarmAg
           if (block.type === 'tool_result' && block.tool_use_id) {
             const subKey = `warm:${key}/tool:${block.tool_use_id}`;
             markStatus(subKey, 'reaped');
+            appendTranscriptEvent(key, {
+              ev_type: 'tool_result',
+              content: { tool_use_id: block.tool_use_id, content: block.content ?? null },
+            });
           }
         }
       } else if (ev.type === 'result') {
         if (typeof ev.result === 'string' && ev.result.trim() && ev.result !== a.assembled) {
           a.assembled = ev.result; a.onText?.(a.assembled);
         }
+        appendTranscriptEvent(key, { ev_type: 'result', content: a.assembled });
         settleTurn();
       }
     }
@@ -342,6 +482,12 @@ export function sendWarmTurn(
     };
     h.signal.addEventListener('abort', onAbort, { once: true });
   }
+
+  // Persist the inbound owner prompt as the canonical turn boundary BEFORE
+  // we write to stdin — readers group events by user_input boundaries
+  // (transcript-reader.readRecentTurns). The synthetic-message drain
+  // happens after so it's part of the same turn.
+  appendTranscriptEvent(key, { ev_type: 'user_input', content: prompt });
 
   // Drain any synthetic messages queued by producers (HR, event-followup …)
   // and PREPEND them before the inbound owner turn. This is the §4.3-Path-B
