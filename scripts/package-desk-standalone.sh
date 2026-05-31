@@ -13,7 +13,7 @@
 # Pre-req: `bash scripts/build-web.sh` was run successfully — i.e.
 # `apps/web/.next/standalone/apps/web/server.js` exists.
 #
-# Output: $OUT_DIR/myc-desk-standalone-${VERSION}.tar.gz
+# Output: $OUT_DIR/holon-desk-standalone-${VERSION}.tar.gz
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -21,8 +21,8 @@ REPO_ROOT="$(pwd)"
 
 VERSION="${VERSION:-dev}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT}"
-STAGE_NAME="myc-desk-${VERSION}"
-STAGE_DIR="$(mktemp -d -t myc-desk-stage-XXXXXX)"
+STAGE_NAME="holon-desk-${VERSION}"
+STAGE_DIR="$(mktemp -d -t holon-desk-stage-XXXXXX)"
 PKG_DIR="${STAGE_DIR}/${STAGE_NAME}"
 
 SERVER_JS="apps/web/.next/standalone/apps/web/server.js"
@@ -70,14 +70,14 @@ fi
 # 4. run.sh — single entrypoint for recipient.
 cat > "$PKG_DIR/run.sh" <<'RUN_SH'
 #!/usr/bin/env bash
-# myc-desk standalone runner
+# holon-desk standalone runner
 set -euo pipefail
 cd "$(dirname "$0")"
 export PORT="${PORT:-3110}"
 export HOSTNAME="${HOSTNAME:-0.0.0.0}"
 export NODE_ENV=production
 export HOLON_OPEN_DEMO=1   # single-user mode; no device token required
-echo "Starting MYC desk on http://localhost:$PORT ..."
+echo "Starting Holon desk on http://localhost:$PORT ..."
 exec node apps/web/server.js
 RUN_SH
 chmod +x "$PKG_DIR/run.sh"
@@ -111,7 +111,7 @@ if [ "$TS_AFTER" -ne 0 ]; then
   exit 1
 fi
 
-OUT_TARBALL="${OUT_DIR}/myc-desk-standalone-${VERSION}.tar.gz"
+OUT_TARBALL="${OUT_DIR}/holon-desk-standalone-${VERSION}.tar.gz"
 echo "[package] writing $OUT_TARBALL"
 tar -czf "$OUT_TARBALL" -C "$STAGE_DIR" "$STAGE_NAME"
 rm -rf "$STAGE_DIR"

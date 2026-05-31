@@ -4,7 +4,7 @@
 # Builds a sideload-ready debug APK from a clean tree. Strict mode: any
 # step failure aborts (next build, cap sync, gradle assembleDebug) — no
 # silent fallback to a stale apps/mobile/out/. Outputs the APK to
-# dist/holon-mobile-debug-{versionName}-{shortSha}.apk for easy download
+# dist/holon-mobile-v{versionName}-{shortSha}.apk for easy download
 # + sideload.
 #
 # Two-environment matrix (both tested 2026-05-18):
@@ -253,7 +253,7 @@ APK_SRC="$APP_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
 
 # ---------- 5/6 · copy to dist/ with versioned filename ----------
 mkdir -p "$DIST_DIR"
-APK_OUT="$DIST_DIR/holon-mobile-debug-${version_name}-${short_sha}.apk"
+APK_OUT="$DIST_DIR/holon-mobile-v${version_name}-${short_sha}.apk"
 cp "$APK_SRC" "$APK_OUT"
 size_h="$(du -h "$APK_OUT" | cut -f1)"
 size_b="$(stat -c %s "$APK_OUT" 2>/dev/null || wc -c < "$APK_OUT")"
