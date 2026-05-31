@@ -6,7 +6,71 @@ ISO-8601.
 
 ## [Unreleased]
 
-Post-0.2 prep — release-shape hygiene and follow-ups.
+Post-0.3.1 — next release window.
+
+### Known follow-ups
+
+- iOS .ipa (owner secrets not yet provided)
+- Tauri code signing (SmartScreen warning on first install)
+- Logo iteration (5 SVG candidates as inventory at `docs/brand/candidates/holon-cc/`)
+- ADR §4.9 HR veto path migration (path resolved; impl pending — task #19 area)
+- Backlog: #8 self-test DB iso, #12 NextAuth removal (owner not authorized), #18 desk UI lang mix (owner direction pending), #19 sleep-time consolidator
+
+---
+
+## [0.3.1] — 2026-05-30 (state isolation + role-templates seed + HR transcript scoring)
+
+### Added
+
+- **Test/release state isolation** ([ADR](docs/adr/test-release-state-isolation.md))
+  — `HOLON_AGENTS_HOME` + `HOLON_STATE_ROOT` env overrides so dev tests don't
+  pollute owner's real state. Mobile: `NEXT_PUBLIC_HOLON_ENV` namespacing on
+  localStorage (default `prod` = byte-identical to today). Integration test
+  asserts real `$HOME` untouched.
+- **Role-templates catalog** — 22 ROLE.md total (3 from slice 1 + 19 seed:
+  12 work + 7 role-play). Non-clinical / non-legal-advice framing for the
+  regulated thinking-partner roles. Catalog seed test asserts compose_with
+  graph closure + tag coverage.
+- **HR Path B real-transcript scoring** — warm-agent persists stream-json
+  events to `~/.holon/transcripts/<key>.jsonl` (50MB rotation); `@holon/core`
+  exports `readRecentTurns` / `readSince`. HR scorer tightens
+  `dispatched-not-DIY` / `read-INDEX-before-act` / `role-fidelity` rubric
+  items against actual events instead of just the dispatch result string.
+- **Tauri Windows installer infrastructure** —
+  `.github/workflows/desk-installer.yml` builds `Holon_*_x64-setup.exe` on
+  windows-latest, auto-attaches to release on `release.published`.
+
+### Changed
+
+- **Build artifact rename** — `myc-desk-standalone-*.tar.gz` →
+  `holon-desk-standalone-*.tar.gz`; `holon-mobile-debug-{ver}-{sha}.apk` →
+  `holon-mobile-v{ver}-{sha}.apk` (drop -debug suffix). Tauri
+  `Holon_*_x64-setup.exe` already aligned.
+- **README**: Glossary section clarifies MYC (repo codename) vs Holon
+  (umbrella + desk product) vs 微作 Weizo (mobile in-app brand).
+
+### Fixed
+
+- `apps/web/lib/warm-agent.ts`: `transcriptsDir()` uses `holonStateRoot()`
+  helper instead of unresolved `homedir()` call (PR #28 had the bug).
+
+### Verified
+
+- Typecheck clean: api-contract / core / holon-mcp / web.
+- `@holon/core` tests: **120 passed** (was 98) / 16 skipped.
+- `@holon/web` tests: **73 passed** (was 61).
+- `bash scripts/build-web.sh` production standalone build green.
+- Fresh tarball self-test: extract → `PORT=3210 bash run.sh` → `curl /api/v1/ping` 200.
+
+### Release artifacts
+
+- 📦 `holon-desk-standalone-v0.3.1.tar.gz` — Linux/WSL/Mac desk (30MB)
+- 📦 `Holon_0.3.1_x64-setup.exe` — Windows installer (via GHA, ~80MB)
+- 📦 `holon-mobile-v*.apk` — Android sideload (debug-signed)
+
+---
+
+## [0.3.0] — 2026-05-30 (post-Hermes-decouple cut)
 
 ### Added (post-Hermes-decouple)
 
