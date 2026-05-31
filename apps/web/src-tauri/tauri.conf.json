@@ -7,7 +7,7 @@
     "frontendDist": "frontend",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build && node ../../scripts/copy-standalone-for-tauri.mjs"
+    "beforeBuildCommand": ""
   },
   "app": {
     "windows": [
