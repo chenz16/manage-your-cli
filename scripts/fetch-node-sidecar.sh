@@ -90,10 +90,25 @@ if [ -x "$DEST" ]; then
 fi
 
 # Optimization for local dev: if the host's own node is the right version
-# and matches the triple, just copy it instead of downloading 30 MB.
+# AND matches the target OS+arch, just copy it instead of downloading.
+# Why arch check: GHA macos-latest is arm64 — without this guard, the x86_64
+# triple call would copy the arm64 host binary, then `lipo` fails because
+# the "fat" file has two arm64 slices.
+HOST_UNAME_OS="$(uname -s | tr '[:upper:]' '[:lower:]')"   # linux | darwin
+HOST_UNAME_ARCH="$(uname -m)"                              # x86_64 | arm64 | aarch64
+case "$NODE_ARCH" in
+  x64)   WANT_UNAME_ARCH="x86_64" ;;
+  arm64) WANT_UNAME_ARCH="arm64"  ;;
+  *)     WANT_UNAME_ARCH=""       ;;
+esac
+# Normalize Linux aarch64 → arm64 for compare
+[ "$HOST_UNAME_ARCH" = "aarch64" ] && HOST_UNAME_ARCH="arm64"
 if command -v node >/dev/null 2>&1; then
   HOST_NODE_VERSION="$(node --version | sed 's/^v//')"
-  if [ "$HOST_NODE_VERSION" = "$NODE_VERSION" ] && [ "$NODE_OS" = "linux" ] || [ "$NODE_OS" = "darwin" ]; then
+  if [ "$HOST_NODE_VERSION" = "$NODE_VERSION" ] \
+     && [ "$NODE_OS" = "$HOST_UNAME_OS" ] \
+     && [ -n "$WANT_UNAME_ARCH" ] \
+     && [ "$WANT_UNAME_ARCH" = "$HOST_UNAME_ARCH" ]; then
     HOST_NODE_BIN="$(command -v node)"
     # Resolve symlinks (nvm wraps node behind a shim that points at the
     # real binary; we want the actual ELF/Mach-O to copy).
