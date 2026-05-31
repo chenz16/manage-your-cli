@@ -3,12 +3,18 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { pathToFileURL } from 'node:url';
 import {
+  composeRolePersonaTool,
+  composeRolePersonaSchema,
   consolidateMemory,
   createAgent,
   createAgentSchema,
+  createAgentWithRole,
+  createAgentWithRoleSchema,
   dispatch,
   dispatchSchema,
   listLiveAgents,
+  listRoleTemplatesSchema,
+  listRoleTemplatesTool,
   readAgentOutput,
   readAgentOutputSchema,
   readMemory,
@@ -100,6 +106,37 @@ export function buildServer(): McpServer {
       inputSchema: writeMemorySchema,
     },
     async ({ scope, text, project_id }) => toolResult(await writeMemory(scope, text, project_id)),
+  );
+
+  server.registerTool(
+    'list_role_templates',
+    {
+      title: 'List role templates',
+      description: 'Discover available role templates (id/name/description/tags/compose_with). Optional tag filter.',
+      inputSchema: listRoleTemplatesSchema,
+    },
+    async ({ tag }) => toolResult(await listRoleTemplatesTool(tag)),
+  );
+
+  server.registerTool(
+    'compose_role_persona',
+    {
+      title: 'Compose role persona',
+      description: 'Preview the composed persona for a nominal role + optional compose_with override. Returns structured persona + rendered markdown.',
+      inputSchema: composeRolePersonaSchema,
+    },
+    async ({ nominal, actual_ids }) => toolResult(await composeRolePersonaTool(nominal, actual_ids)),
+  );
+
+  server.registerTool(
+    'create_agent_with_role',
+    {
+      title: 'Create CLI agent with role',
+      description: 'End-to-end: validate role, compose persona, create CLI agent (long lifecycle), write Role-Composition into the per-binary memory file. Default binary picks first installed in claude → codex → gemini → qwen.',
+      inputSchema: createAgentWithRoleSchema,
+    },
+    async ({ role_id, name, binary, cwd, compose_with }) =>
+      toolResult(await createAgentWithRole(role_id, name, binary, cwd, compose_with)),
   );
 
   server.registerTool(

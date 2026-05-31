@@ -15,72 +15,79 @@ or more role templates into a single persona and writes it into the new
 agent's per-CLI memory file.
 
 Source of truth: `docs/adr/role-templates-and-persona-composition.md`.
-APIs you call: `@holon/core`'s `listRoleTemplates`, `loadRoleTemplate`,
-`composeRoles`, `renderPersona`, `writeRoleComposition`.
+
+You drive this flow by calling THREE MCP tools on the `holon-mcp` server:
+`list_role_templates`, `compose_role_persona`, `create_agent_with_role`.
+Do not call the core APIs (`composeRoles`, `writeRoleComposition`, …)
+directly — the MCP tools are the only stable surface for the skill.
+
+Each composed persona follows the 5-section schema from the ADR §1:
+Identity / Responsibilities / Behaviors (Do / Don't) / Voice / Tone /
+Knowledge anchors.
 
 ## Protocol
 
 When this skill fires, follow these steps in order. Do not improvise.
 
-### 1. Show the catalog
+### 1. Discover the catalog
 
-Surface the available role IDs to the owner. Slice-1 ships three seed
-roles; new roles land in `role-templates/<id>/ROLE.md`. Inline catalog:
+Call `list_role_templates`. Pass an optional `tag` filter when the owner's
+intent narrows naturally — e.g. "I need a code reviewer" → `tag: "review"`;
+"hire an engineer" → `tag: "engineering"`. Omit the tag when the request is
+broad ("create an agent for me").
 
-| id | name | compose_with (defaults) | source |
-|---|---|---|---|
-| `secretary` | Secretary | `[7x24-manager]` | owner-authored |
-| `7x24-manager` | 7x24 Engineering Manager | `[]` | owner-authored |
-| `code-reviewer` | Code Reviewer | `[]` | owner-authored |
+The tool returns `[{ id, name, description, tags, compose_with }, ...]`.
+Use `compose_with` to preview each role's default 1-hop chain.
 
-(Future slice: dynamic discovery via an MCP tool wrapping
-`listRoleTemplates`. For now this list is canonical for slice 1.)
+### 2. Present + ask the owner
 
-### 2. Ask the owner
-
-Single message, no over-asking:
+Show the matched roles to the owner with their `compose_with` defaults.
+Single ask, no over-asking:
 
 > Create a `<nominal>` composed of `[<role-1>, <role-2>, ...]`?
 > Reply `y` / `n` / `edit: [<list>]`.
 
-The default `compose_with` chain is the frontmatter chain of the nominal
-role plus its 1-hop transitive expansion (see ADR §7). Owner can override
-with `edit: [...]` — that list pins composition exactly (no implicit
-transitivity).
+The default chain is the nominal's `compose_with` plus its 1-hop
+transitive expansion (ADR §7). Owner can override with `edit: [...]` —
+that list pins composition exactly (no implicit transitivity).
 
-### 3. Compose
+### 3. Preview the composed persona
 
-Call `composeRoles(nominalId, actualIds)`:
+Call `compose_role_persona` with `nominal: "<role-id>"` and optionally
+`actual_ids: [...]` (only when the owner overrode the chain). The tool
+returns:
 
-- `actualIds = []` → use the nominal's `compose_with` chain (1-hop default).
-- `actualIds = ['a','b','c']` → pin the merge exactly to that list.
+- `persona` — structured `{ identity, responsibilities, behaviors,
+  voice, knowledge, conflicts, actualIds }`
+- `rendered_markdown` — the exact `## Role-Composition` block that will
+  land in the new agent's memory file
 
 ### 4. Surface conflicts
 
-If `composed.conflicts.length > 0`, show each conflict to the owner with
+If `persona.conflicts.length > 0`, show each conflict to the owner with
 🔴 and DO NOT auto-resolve:
 
 > 🔴 `<rule>` is asserted as both Do (from `<role-a>`) and Don't (from
 > `<role-b>`). Owner picks: keep DO / keep DON'T / drop both / edit the
 > role template.
 
-### 5. Write the persona
+### 5. Materialize
 
-Call `writeRoleComposition(memoryFilePath, composed)`. The function:
-- Writes the managed `## Role-Composition` block above the
-  `<!-- owner-edits below -->` sentinel.
-- Preserves everything below the sentinel verbatim (idempotent re-run).
-- Throws if a hand-authored `## Role-Composition` heading exists without
-  the managed sentinel — surface that to the owner; do not force.
+On owner confirm, call `create_agent_with_role`:
 
-`memoryFilePath` is the new agent's per-CLI memory file (CLAUDE.md /
-AGENTS.md / GEMINI.md / QWEN.md per the binary matrix in
-`cli-memory-scaffold.ts`).
+- `role_id` — the nominal role id
+- `name` — display name for the new staff
+- `compose_with` — pass when the owner overrode the chain in step 2
+- `binary` — usually OMIT; the server defaults to the first INSTALLED
+  CLI in priority order **claude → codex → gemini → qwen** (per the
+  desk's CLI-priority policy). Override only when the owner explicitly
+  names a CLI ("create a codex worker", "use gemini").
+- `cwd` — usually OMIT; the staff-management service picks the cwd.
 
-### 6. Hand off
-
-Trigger the normal agent-creation flow (`create_agent` MCP tool).
-Role-Composition is now the persona seed.
+The tool creates the staff (long lifecycle so the memory file is
+scaffolded), writes the composed persona into the per-binary memory file
+(`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `QWEN.md`), and launches the
+CLI session.
 
 ## What this skill does NOT do
 
