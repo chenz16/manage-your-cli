@@ -10,6 +10,7 @@
     "./hr-path-a": "./src/hr-path-a.ts",
     "./hr-paths": "./src/hr-paths.ts",
     "./hr-promotion": "./src/hr-promotion.ts",
+    "./memory-consolidator": "./src/memory-consolidator.ts",
     "./transcript-reader": "./src/transcript-reader.ts"
   },
   "scripts": {
