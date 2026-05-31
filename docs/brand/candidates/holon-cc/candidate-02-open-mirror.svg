@@ -1,0 +1,13 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <title>Holon — Open Mirror C's</title>
+  <desc>Two gold C's facing outward, joined at the back. Architectural: two desks each open to its own world, spine connected.</desc>
+  <rect width="1024" height="1024" fill="#F8F6EF"/>
+  <g fill="none" stroke="#C69A35" stroke-width="72" stroke-linecap="round">
+    <!-- Left C opens left -->
+    <path d="M 460 296 A 220 220 0 1 1 460 728"/>
+    <!-- Right C opens right (mirror) -->
+    <path d="M 564 296 A 220 220 0 1 0 564 728"/>
+  </g>
+  <!-- Thin ink spine indicates joined backs -->
+  <line x1="512" y1="372" x2="512" y2="652" stroke="#1A1A18" stroke-width="14" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,15 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <title>Holon — Figure-Eight Braid C's</title>
+  <desc>Two C's interweaving like an infinity / Mobius braid. Dynamic, endless interconnect.</desc>
+  <rect width="1024" height="1024" fill="#F8F6EF"/>
+  <g fill="none" stroke="#C69A35" stroke-width="68" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Upper C arc (opens down), left lobe -->
+    <path d="M 280 632 A 200 200 0 1 1 472 632"/>
+    <!-- Lower C arc (opens up), right lobe, braided through -->
+    <path d="M 552 392 A 200 200 0 1 0 744 392"/>
+    <!-- Crossing bridges that imply braid -->
+    <path d="M 472 632 Q 512 512 552 392"/>
+    <path d="M 280 632 Q 320 760 380 760"/>
+    <path d="M 744 392 Q 704 264 644 264"/>
+  </g>
+</svg>

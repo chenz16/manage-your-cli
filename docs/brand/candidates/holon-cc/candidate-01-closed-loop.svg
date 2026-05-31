@@ -1,0 +1,11 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <title>Holon — Closed Loop C's</title>
+  <desc>Two gold C's as interlocking chain links, openings facing each other. Reads as a permanent bond between two teams.</desc>
+  <rect width="1024" height="1024" fill="#F8F6EF"/>
+  <g fill="none" stroke="#C69A35" stroke-width="80" stroke-linecap="round">
+    <!-- Left C opens right -->
+    <path d="M 420 320 A 200 200 0 1 0 420 704"/>
+    <!-- Right C opens left, interlocked -->
+    <path d="M 604 320 A 200 200 0 1 1 604 704"/>
+  </g>
+</svg>
