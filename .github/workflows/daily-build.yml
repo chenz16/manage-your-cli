@@ -1,0 +1,413 @@
+name: daily-build
+
+# Nightly auto-build pipeline for desk (Windows .exe) + Android (.apk) + iOS (.ipa).
+#
+# One rolling GitHub Release tagged `nightly` holds the LATEST artifacts;
+# every successful job overwrites the prior file via `gh release upload --clobber`,
+# so disk usage stays flat (no growing per-day artifact pile).
+#
+# Triggers:
+#   - cron: 06:00 UTC daily (quiet hour; ~02:00 EDT / 14:00 CST)
+#   - workflow_dispatch (manual override)
+#
+# Jobs (run in parallel; one job failing does NOT block the others):
+#   1. windows-tauri  — Holon_*_x64-setup.exe   (continue-on-error: Tauri is flaky)
+#   2. linux-android  — holon-mobile-v*.apk      (debug-signed, sideload-ready)
+#   3. macos-ios      — holon-mobile-v*.ipa      (DISABLED via `if: false`;
+#                                                 see docs/ci/ios-daily-setup.md
+#                                                 for the secrets owner needs)
+#
+# Coexistence with desk-installer.yml + android-apk.yml:
+#   - Those keep their existing triggers (release.published / tag-push).
+#   - daily-build.yml is additive; it doesn't replace or modify them.
+
+on:
+  schedule:
+    # 06:00 UTC = 14:00 CST = 02:00 EDT — quietest hour for runner availability.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write    # required for gh release upload + tag push
+
+env:
+  NIGHTLY_TAG: nightly
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 0 — ensure the `nightly` rolling release exists, and bump its tag to
+  # current main so the release "code" matches what the artifacts were built
+  # from. Subsequent jobs upload into this release with --clobber.
+  # ---------------------------------------------------------------------------
+  prepare-release:
+    name: Prepare nightly rolling release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Refresh nightly tag → current main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git tag -f nightly
+          git push origin nightly --force
+
+      - name: Ensure nightly release exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! gh release view nightly --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create nightly \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --title "Nightly build" \
+              --notes "Latest auto-built artifacts. Updated daily at 06:00 UTC. Each run replaces the previous file via --clobber so this release stays disk-flat."
+          else
+            echo "nightly release already exists — will be reused"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Job 1 — Windows Tauri desk installer
+  # Mirrors desk-installer.yml's build steps (long-paths, isolated profile,
+  # pnpm flatten for NSIS MAX_PATH). continue-on-error so Tauri flakes don't
+  # block Android/iOS artifacts from shipping.
+  # ---------------------------------------------------------------------------
+  windows-tauri:
+    name: Build Windows desk installer (Tauri NSIS)
+    needs: prepare-release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      NODE_VERSION: '22.14.0'
+    steps:
+      - name: Enable Windows long paths (MAX_PATH > 260)
+        shell: powershell
+        run: |
+          New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1 -PropertyType DWORD -Force
+          git config --system core.longpaths true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.10.0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Rust (stable, MSVC host)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache cargo build (src-tauri/target)
+        uses: actions/cache@v4
+        with:
+          path: apps/web/src-tauri/target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('apps/web/src-tauri/Cargo.lock', 'apps/web/src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
+      - name: Install JS deps (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch Node sidecar (x86_64-pc-windows-msvc)
+        shell: bash
+        env:
+          NODE_VERSION: ${{ env.NODE_VERSION }}
+        run: bash scripts/fetch-node-sidecar.sh x86_64-pc-windows-msvc
+
+      - name: Prep clean profile dir for Next build
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/clean-profile/AppData/Roaming"
+          mkdir -p "$RUNNER_TEMP/clean-profile/AppData/Local"
+
+      - name: Build Next.js standalone
+        env:
+          USERPROFILE: ${{ runner.temp }}\clean-profile
+          HOME: ${{ runner.temp }}/clean-profile
+          APPDATA: ${{ runner.temp }}\clean-profile\AppData\Roaming
+          LOCALAPPDATA: ${{ runner.temp }}\clean-profile\AppData\Local
+        run: pnpm -F web build
+
+      - name: Copy Next standalone into Tauri resources
+        run: node scripts/copy-standalone-for-tauri.mjs
+
+      - name: Flatten pnpm bundle for NSIS path limits
+        shell: bash
+        run: |
+          set -e
+          RES_NM="apps/web/src-tauri/resources/n/node_modules"
+          PNPM_DIR="$RES_NM/.pnpm"
+          if [ ! -d "$PNPM_DIR" ]; then
+            echo "no .pnpm dir at $PNPM_DIR — skipping"
+            exit 0
+          fi
+          for link in "$RES_NM"/*; do
+            [ -L "$link" ] || continue
+            real="$(readlink -f "$link")"
+            [ -d "$real" ] || continue
+            name="$(basename "$link")"
+            echo "flattening: $name"
+            rm "$link"
+            cp -rL "$real" "$RES_NM/$name"
+          done
+          for scope in "$RES_NM"/@*; do
+            [ -d "$scope" ] || continue
+            for link in "$scope"/*; do
+              [ -L "$link" ] || continue
+              real="$(readlink -f "$link")"
+              [ -d "$real" ] || continue
+              name="$(basename "$link")"
+              echo "flattening: $(basename "$scope")/$name"
+              rm "$link"
+              cp -rL "$real" "$scope/$name"
+            done
+          done
+          rm -rf "$PNPM_DIR"
+
+      - name: Tauri build (release)
+        working-directory: apps/web
+        run: pnpm tauri build --verbose
+
+      - name: Stage installer artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="dist-windows"
+          mkdir -p "$STAGE"
+          BUNDLE_DIR="apps/web/src-tauri/target/release/bundle"
+          if [ -d "$BUNDLE_DIR/nsis" ]; then
+            cp "$BUNDLE_DIR/nsis"/*.exe "$STAGE"/ || true
+          fi
+          ls -la "$STAGE"
+          if [ -z "$(ls -A "$STAGE")" ]; then
+            echo "[daily-build:err:no_exe] bundle dir contained no .exe" >&2
+            find "$BUNDLE_DIR" -type f | head -50 >&2 || true
+            exit 1
+          fi
+
+      - name: Upload .exe to nightly release (clobber prior)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload nightly dist-windows/*.exe \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+  # ---------------------------------------------------------------------------
+  # Job 2 — Linux Android APK (debug-signed; sideload-ready)
+  # Reuses scripts/build-android-apk.sh which already accepts JDK_PATH +
+  # ANDROID_SDK_PATH env overrides for the Linux-CI path.
+  # ---------------------------------------------------------------------------
+  linux-android:
+    name: Build Android APK (debug-signed)
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JAVA_VERSION: '17'
+      JAVA_DISTRIBUTION: 'zulu'
+      NODE_VERSION: '22'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup JDK ${{ env.JAVA_VERSION }} (${{ env.JAVA_DISTRIBUTION }})
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build APK via scripts/build-android-apk.sh
+        env:
+          # Override the WSL-default JDK/SDK paths with the GHA runner's.
+          # actions/setup-java exports JAVA_HOME; android-actions/setup-android
+          # exports ANDROID_SDK_ROOT.
+          JDK_PATH: ${{ env.JAVA_HOME }}
+          ANDROID_SDK_PATH: ${{ env.ANDROID_SDK_ROOT }}
+        run: bash scripts/build-android-apk.sh
+
+      - name: Upload .apk to nightly release (clobber prior)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # build-android-apk.sh emits dist/holon-mobile-v{ver}-{sha}.apk;
+          # rename to a stable filename so --clobber overwrites cleanly.
+          APK=$(ls dist/holon-mobile-*.apk | head -1)
+          if [ -z "$APK" ]; then
+            echo "[daily-build:err:no_apk] dist/ contained no .apk" >&2
+            ls -la dist/ >&2 || true
+            exit 1
+          fi
+          STABLE="dist/holon-mobile-nightly.apk"
+          cp "$APK" "$STABLE"
+          gh release upload nightly "$STABLE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+  # ---------------------------------------------------------------------------
+  # Job 3 — macOS iOS IPA (SCAFFOLD ONLY — disabled)
+  #
+  # To enable: see docs/ci/ios-daily-setup.md.
+  # Requires repo secrets owner has NOT yet wired:
+  #   - APPLE_DEV_CERT_P12          base64(.p12 export of Apple Developer cert)
+  #   - APPLE_DEV_CERT_PWD          password used when exporting the .p12
+  #   - PROVISIONING_PROFILE_BASE64 base64(.mobileprovision)
+  #   - APPLE_TEAM_ID               R78Y6F9R6K (known)
+  # Once all four are present, flip `if: false` → `if: true` below.
+  # ---------------------------------------------------------------------------
+  macos-ios:
+    name: Build iOS IPA (DISABLED — needs Apple secrets)
+    needs: prepare-release
+    if: false   # DISABLED — see docs/ci/ios-daily-setup.md to enable
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      NODE_VERSION: '22'
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build mobile static export (next build)
+        working-directory: apps/mobile
+        env:
+          NEXT_PUBLIC_CAPACITOR: '1'
+        run: pnpm exec next build
+
+      - name: Capacitor sync ios
+        working-directory: apps/mobile
+        run: npx cap sync ios
+
+      - name: Import signing certificate into temp keychain
+        env:
+          P12: ${{ secrets.APPLE_DEV_CERT_P12 }}
+          PWD: ${{ secrets.APPLE_DEV_CERT_PWD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/dev-cert.p12"
+          KEYCHAIN="$RUNNER_TEMP/holon-build.keychain-db"
+          KP="holon-build-$RANDOM"
+          echo "$P12" | base64 -d > "$CERT_PATH"
+          security create-keychain -p "$KP" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KP" "$KEYCHAIN"
+          security import "$CERT_PATH" -P "$PWD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KP" "$KEYCHAIN"
+
+      - name: Install provisioning profile
+        env:
+          PROFILE: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          echo "$PROFILE" | base64 -d > "$PROFILE_DIR/holon-nightly.mobileprovision"
+
+      - name: xcodebuild archive + export IPA
+        working-directory: apps/mobile/ios/App
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ios-out"
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/ios-out/App.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            archive
+          cat > "$RUNNER_TEMP/ios-out/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>development</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/ios-out/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ios-out/ipa" \
+            -exportOptionsPlist "$RUNNER_TEMP/ios-out/ExportOptions.plist"
+
+      - name: Stage IPA to dist/
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          IPA=$(ls "$RUNNER_TEMP/ios-out/ipa"/*.ipa | head -1)
+          cp "$IPA" dist/holon-mobile-nightly.ipa
+
+      - name: Upload .ipa to nightly release (clobber prior)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload nightly dist/holon-mobile-nightly.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
