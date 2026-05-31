@@ -32,11 +32,12 @@
  * Persistent state (per-(target × ruleHash) counter): `~/.holon/hr-state.json`,
  * overridable via HOLON_HR_STATE (set by tests).
  *
- * Log scanning: NOT WIRED — warm-agent currently keeps no persisted per-key
- * stream-json log (it's in-process). We score off the dispatch result alone
- * for now; the rubric items that need transcript context are flagged in the
- * heuristic notes above and will tighten when a log channel exists.
- * TODO(hr-log): add warm-agent persistent log → tighten scoring.
+ * Log scanning: wired. warm-agent persists stream-json events per warm key
+ * via `appendTranscriptEvent` (apps/web/lib/warm-agent.ts) → JSONL on disk.
+ * We read the last 2-3 turns via `@holon/core/transcript-reader` and use
+ * the events to TIGHTEN three rubric items (dispatched-not-DIY,
+ * read-INDEX-before-act, role-fidelity) against actual tool_use blocks
+ * rather than just a string-match on the final result.
  */
 // eval('require') keeps Node's CommonJS require in scope; bare module names
 // (no node: prefix) keep webpack's loader happy. Same pattern as heartbeat.ts.
@@ -47,6 +48,7 @@ const { dirname } = nodeRequire('path') as typeof import('path');
 import { stableRuleHash } from '@holon/core/hr-path-a';
 import { hrStateFilePath } from '@holon/core/hr-paths';
 import { maybePromoteToA, type HrCounter } from '@holon/core/hr-promotion';
+import { readRecentTurns, type TranscriptEvent } from '@holon/core/transcript-reader';
 import type { SyntheticMessage, SyntheticProducer } from './synthetic-producers';
 import type { ProcessEntry } from './process-registry';
 
@@ -98,6 +100,129 @@ export const HR_NUDGES: Record<RubricItem['id'], string> =
 interface RubricResult {
   /** True = passed, false = drift signal (will be nudged). */
   checks: Record<RubricItem['id'], boolean>;
+}
+
+// ---- Transcript-aware rubric refinements ------------------------------------
+// Three of the five rubric items now have a CONFIRMING signal from the actual
+// stream-json events in `~/.holon/transcripts/<warmKey>.jsonl`. The string-
+// match heuristic on `result` text is still the base detector; the transcript
+// pass either tightens (forces unchecked when string-match was lenient) or
+// corroborates (forces unchecked when both signals agree).
+
+const DISPATCH_TOOL_NAMES = /^(Task|mcp__holon__|mcp__holon-mcp__)/;
+const FILE_EDIT_TOOL_NAMES = /^(Edit|Write|MultiEdit|NotebookEdit)$/;
+
+interface ToolUseContent { id?: string; name?: string; input?: Record<string, unknown> }
+
+function flattenToolUses(turns: TranscriptEvent[][]): Array<{ name: string; input: Record<string, unknown> }> {
+  const out: Array<{ name: string; input: Record<string, unknown> }> = [];
+  for (const turn of turns) {
+    for (const ev of turn) {
+      if (ev.ev_type !== 'tool_use') continue;
+      const c = ev.content as ToolUseContent | null;
+      if (!c || typeof c.name !== 'string') continue;
+      out.push({ name: c.name, input: (c.input ?? {}) as Record<string, unknown> });
+    }
+  }
+  return out;
+}
+
+function flattenAssistantTexts(turns: TranscriptEvent[][]): string {
+  const parts: string[] = [];
+  for (const turn of turns) {
+    for (const ev of turn) {
+      if (ev.ev_type === 'assistant' && typeof ev.content === 'string') {
+        parts.push(ev.content);
+      }
+    }
+  }
+  return parts.join('\n');
+}
+
+interface TranscriptSignals {
+  hasDispatchToolUse: boolean;
+  hasFileEditToolUse: boolean;
+  hasIndexReadBeforeMemoryWrite: boolean;
+  /** Memory write was attempted at all (Write into anything that looks like
+   *  boss memory or CLAUDE.md). Used to gate the read-INDEX-before-act
+   *  refinement: no memory write → rule isn't applicable. */
+  hasMemoryWrite: boolean;
+  assistantFirstPersonDIY: boolean;
+}
+
+/** Walk the events in order and derive boolean signals used to refine 3 of 5
+ *  rubric items. Exported for unit testing. */
+export function deriveTranscriptSignals(turns: TranscriptEvent[][]): TranscriptSignals {
+  const tools = flattenToolUses(turns);
+  const hasDispatchToolUse = tools.some((t) => DISPATCH_TOOL_NAMES.test(t.name));
+  const hasFileEditToolUse = tools.some((t) => FILE_EDIT_TOOL_NAMES.test(t.name));
+
+  // For read-INDEX-before-act we walk events in chronological order across
+  // all supplied turns and track whether a Read of an INDEX.md preceded any
+  // file-modifying write (Write/Edit) targeting boss memory or CLAUDE.md.
+  let sawIndexRead = false;
+  let hasMemoryWrite = false;
+  let hasIndexReadBeforeMemoryWrite = true; // vacuously true until we see a write
+  for (const turn of turns) {
+    for (const ev of turn) {
+      if (ev.ev_type !== 'tool_use') continue;
+      const c = ev.content as ToolUseContent | null;
+      if (!c || typeof c.name !== 'string') continue;
+      const path = typeof c.input?.['file_path'] === 'string'
+        ? (c.input['file_path'] as string)
+        : (typeof c.input?.['path'] === 'string' ? (c.input['path'] as string) : '');
+      if (c.name === 'Read' && /INDEX\.md$/i.test(path)) {
+        sawIndexRead = true;
+      }
+      const looksLikeBossMemory = /(INDEX\.md|MEMORY\/|CLAUDE\.md|AGENTS\.md|boss-memory)/i.test(path);
+      if (FILE_EDIT_TOOL_NAMES.test(c.name) && looksLikeBossMemory) {
+        hasMemoryWrite = true;
+        if (!sawIndexRead) hasIndexReadBeforeMemoryWrite = false;
+      }
+    }
+  }
+
+  // Role-fidelity corroborator: same first-person DIY phrases the result-text
+  // scorer looks for, but applied to assistant text across recent turns.
+  const assistantText = flattenAssistantTexts(turns).toLowerCase();
+  const assistantFirstPersonDIY =
+    /(i'll write|i will write|let me implement|i'll implement|i'll code|let me code|i'll fix it|let me fix it)/.test(assistantText);
+
+  return {
+    hasDispatchToolUse,
+    hasFileEditToolUse,
+    hasIndexReadBeforeMemoryWrite,
+    hasMemoryWrite,
+    assistantFirstPersonDIY,
+  };
+}
+
+/** Apply transcript-derived signals on top of the base string-match rubric.
+ *  TIGHTENS three items per spec; the other two are pass-through. */
+export function refineRubricWithTranscript(base: RubricResult, signals: TranscriptSignals): RubricResult {
+  const checks = { ...base.checks };
+
+  // dispatched-not-DIY: if no dispatch tool_use across recent turns AND file-
+  // edit tool_use is present, the secretary did the work itself → unchecked.
+  if (!signals.hasDispatchToolUse && signals.hasFileEditToolUse) {
+    checks['dispatched-not-DIY'] = false;
+  }
+
+  // read-INDEX-before-act: if we observed a memory-write tool_use without a
+  // prior INDEX.md Read, the rule fails (overrides whatever the string-match
+  // thought).
+  if (signals.hasMemoryWrite && !signals.hasIndexReadBeforeMemoryWrite) {
+    checks['read-INDEX-before-act'] = false;
+  }
+
+  // role-fidelity: corroborator. If the assistant text in recent turns
+  // contains a first-person DIY phrase, fail even if the dispatch-result
+  // string was clean. (Acts as a confirmer; never up-grades a base fail.)
+  if (signals.assistantFirstPersonDIY) {
+    checks['role-fidelity'] = false;
+  }
+
+  return { checks };
 }
 
 /** Heuristic rubric scorer. Lossy by design — first-pass string-match. */
@@ -196,11 +321,26 @@ function resultToText(result: unknown): string {
 export function scoreAndEmitNudges(
   entry: ProcessEntry,
   result: unknown,
-  opts: { now?: Date } = {},
+  opts: { now?: Date; transcriptRoot?: string } = {},
 ): SyntheticMessage[] {
   if (!isScorable(entry)) return [];
   const text = resultToText(result);
-  const rubric = scoreRubric(text);
+  const baseRubric = scoreRubric(text);
+  // Tighten 3 of 5 rubric items against the actual stream-json transcript
+  // (warm key matches the registry key sans the `warm:` prefix that
+  // process-registry prepends — see warm-agent.ts spawnWarm `key:` field).
+  let rubric = baseRubric;
+  try {
+    const warmKeyForTranscript = entry.key.replace(/^warm:/, '');
+    const recentTurns = readRecentTurns(warmKeyForTranscript, 3, opts.transcriptRoot);
+    if (recentTurns.length > 0) {
+      const signals = deriveTranscriptSignals(recentTurns);
+      rubric = refineRubricWithTranscript(baseRubric, signals);
+    }
+  } catch {
+    // Transcript read failure must NEVER block scoring — fall back to the
+    // string-match base rubric and continue.
+  }
   const now = opts.now ?? new Date();
   const nowMs = now.getTime();
   const messages: SyntheticMessage[] = [];
