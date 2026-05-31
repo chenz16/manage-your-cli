@@ -123,6 +123,52 @@ jobs:
       - name: Copy Next standalone into Tauri resources
         run: node scripts/copy-standalone-for-tauri.mjs
 
+      # Flatten the .pnpm symlink tree inside the bundled node_modules so NSIS
+      # doesn't choke on Windows MAX_PATH (>260) at packaging time. The
+      # postcss-import-parser.js inside next@<long-pnpm-name>/node_modules/next/
+      # is the canonical victim. We replace each .pnpm symlink with a direct
+      # copy at the flat top-level node_modules/<pkg>/ path, then drop the
+      # .pnpm dir entirely. Behavior-equivalent for runtime require() because
+      # Node walks node_modules/<pkg>/ first.
+      - name: Flatten pnpm bundle for NSIS path limits
+        shell: bash
+        run: |
+          set -e
+          RES_NM="apps/web/src-tauri/resources/n/node_modules"
+          PNPM_DIR="$RES_NM/.pnpm"
+          if [ ! -d "$PNPM_DIR" ]; then
+            echo "no .pnpm dir at $PNPM_DIR — skipping"
+            exit 0
+          fi
+          # For every package referenced from the .pnpm store, copy it to a flat
+          # node_modules/<pkg>/ at the bundle root (resolves symlinks).
+          for link in "$RES_NM"/*; do
+            [ -L "$link" ] || continue
+            real="$(readlink -f "$link")"
+            [ -d "$real" ] || continue
+            name="$(basename "$link")"
+            echo "flattening: $name"
+            rm "$link"
+            cp -rL "$real" "$RES_NM/$name"
+          done
+          # Same for @scoped/ packages (one level deeper)
+          for scope in "$RES_NM"/@*; do
+            [ -d "$scope" ] || continue
+            for link in "$scope"/*; do
+              [ -L "$link" ] || continue
+              real="$(readlink -f "$link")"
+              [ -d "$real" ] || continue
+              name="$(basename "$link")"
+              echo "flattening: $(basename "$scope")/$name"
+              rm "$link"
+              cp -rL "$real" "$scope/$name"
+            done
+          done
+          echo "removing .pnpm dir"
+          rm -rf "$PNPM_DIR"
+          echo "flatten done. Deepest path now:"
+          find "$RES_NM" -type f | awk '{print length, $0}' | sort -n | tail -1
+
       # ----------------------------------------------------------------
       # Tauri build — emits .exe (NSIS) into
       # apps/web/src-tauri/target/release/bundle/nsis/
