@@ -764,11 +764,11 @@ the canonical data model even though it is not in SQL.
 │   ├── INDEX.md
 │   ├── MEMORY/                         # detail files; recall reads INDEX first
 │   │   └── *.md
+│   ├── hr-promotion-vetoes.json        # owner-rejected B→A promotions; owner System 2 (survives HR re-scaffold; ADR §4.9)
 │   └── hr/                             # owner-HR (per ADR hr-evaluator)
 │       ├── persona.md                  # owner-HR's role + rubric
-│       ├── evaluations/<sproj_id>/
-│       │   └── YYYY-MM-DD.md           # markdown checklist rubric, one row per scored turn
-│       └── promotion-vetoes.json       # owner-rejected B→A promotions (rule-hash keyed)
+│       └── evaluations/<sproj_id>/
+│           └── YYYY-MM-DD.md           # markdown checklist rubric, one row per scored turn
 ├── projects/
 │   └── <sproj_id>/                     # System 1 — per project
 │       ├── INDEX.md
@@ -821,8 +821,9 @@ Properties:
 
 ### 4.99.3 Promotion-veto JSON
 
-`~/holon-agents/boss/owner/hr/promotion-vetoes.json` records owner-rejected
-B→A auto-promotions per ADR § 4.4. Shape:
+`~/holon-agents/boss/owner/hr-promotion-vetoes.json` records owner-rejected
+B→A auto-promotions per ADR § 4.4. Lives at the owner System 2 root (NOT
+inside `hr/`) so vetoes survive HR re-scaffold (ADR § 4.9). Shape:
 
 ```json
 {

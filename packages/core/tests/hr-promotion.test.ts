@@ -15,18 +15,24 @@ import { hrVetoPath, hrPromotionLogPath } from '../src/hr-paths.js';
 
 let tmpRoot: string;
 let memPath: string;
-let prevEnv: string | undefined;
+let prevHrEnv: string | undefined;
+let prevAgentsEnv: string | undefined;
 
 beforeEach(() => {
   tmpRoot = mkdtempSync(join(tmpdir(), 'hr-promo-'));
   memPath = join(tmpRoot, 'target.md');
-  prevEnv = process.env.HOLON_HR_ROOT;
+  prevHrEnv = process.env.HOLON_HR_ROOT;
+  prevAgentsEnv = process.env.HOLON_AGENTS_HOME;
   process.env.HOLON_HR_ROOT = join(tmpRoot, 'hr-root');
+  // ADR §4.9: veto file now lives under owner System 2 root, not HR root.
+  process.env.HOLON_AGENTS_HOME = join(tmpRoot, 'agents-home');
 });
 
 afterEach(() => {
-  if (prevEnv === undefined) delete process.env.HOLON_HR_ROOT;
-  else process.env.HOLON_HR_ROOT = prevEnv;
+  if (prevHrEnv === undefined) delete process.env.HOLON_HR_ROOT;
+  else process.env.HOLON_HR_ROOT = prevHrEnv;
+  if (prevAgentsEnv === undefined) delete process.env.HOLON_AGENTS_HOME;
+  else process.env.HOLON_AGENTS_HOME = prevAgentsEnv;
   try { rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* noop */ }
 });
 

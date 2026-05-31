@@ -249,10 +249,17 @@ path `~/holon-agents/boss/owner/hr/promotion-vetoes.json` exists, move it
 the file already at the new location is a no-op. No deduplication needed
 since only one file can pre-exist.
 
-**Scope of this ADR amendment.** Spec-only. Implementation lives in a
-future code slice (see Related → Task #19); this PR documents the
-resolution so future scaffold changes don't silently drop the file and so
-the implementation slice has a target spec.
+**Scope of this ADR amendment.** Resolved 2026-05-30; implementation
+landed on branch `feat/hr-veto-persistence-impl`. Code points:
+
+- `packages/core/src/hr-paths.ts` — `hrVetoPath()` now under owner System 2
+  root; `legacyHrVetoPath()` exported for migration only.
+- `packages/core/src/hr-promotion.ts` — `migrateLegacyVetoesIfNeeded()`
+  one-shot atomic rename, lazy-invoked on first veto read; emits
+  `hr.veto.migrated` audit line on success, `hr.veto.migrate.failed` on
+  error (HR never fails on migration error).
+- `packages/core/tests/hr-veto-migration.test.ts` — covers
+  migrated / noop / skipped_new_exists / idempotent.
 
 ## Alternatives considered
 
@@ -284,5 +291,6 @@ the implementation slice has a target spec.
 - Task #15 — harvest-on-retire hook (HR trigger)
 - Task #19 — implement §4.9 veto-path migration (move
   `promotion-vetoes.json` from `ownerHrRoot()` to owner System 2 root +
-  one-shot legacy migration). Spec-only here; code in a later slice.
+  one-shot legacy migration). **Landed** on
+  `feat/hr-veto-persistence-impl`.
 - Task #20 — settle-watch → synthetic-message pipeline (Path B transport)
