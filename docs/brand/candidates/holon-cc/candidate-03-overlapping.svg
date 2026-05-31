@@ -1,0 +1,11 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <title>Holon — Overlapping C's</title>
+  <desc>Two C's overlapping with a shared center, foreground gold and background duotone with a green jewel. Modern and layered.</desc>
+  <rect width="1024" height="1024" fill="#F8F6EF"/>
+  <g fill="none" stroke-width="78" stroke-linecap="round">
+    <!-- Background C (jewel green), opens right -->
+    <path d="M 440 308 A 216 216 0 1 0 440 716" stroke="#2E7D52" opacity="0.85"/>
+    <!-- Foreground C (gold), opens left, shifted right; overlaps in center -->
+    <path d="M 584 308 A 216 216 0 1 1 584 716" stroke="#C69A35"/>
+  </g>
+</svg>

@@ -1,0 +1,14 @@
+<svg viewBox="0 0 960 320" xmlns="http://www.w3.org/2000/svg">
+  <title>Holon — Wordmark Header</title>
+  <desc>Header lockup: closed-loop two-C mark plus Holon wordmark and tagline. For README / landing page.</desc>
+  <rect width="960" height="320" fill="#F8F6EF"/>
+  <!-- Mark: two interlocked C's, scaled to fit 240x240 box on the left -->
+  <g fill="none" stroke="#C69A35" stroke-width="26" stroke-linecap="round" transform="translate(40 40)">
+    <path d="M 130 40 A 70 70 0 1 0 130 180"/>
+    <path d="M 192 40 A 70 70 0 1 1 192 180"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="320" y="172" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="720" font-size="108" fill="#1A1A18" letter-spacing="-2">Holon</text>
+  <!-- Tagline -->
+  <text x="322" y="220" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="400" font-size="26" fill="#1A1A18" opacity="0.72">Local teams. Connected workforce.</text>
+</svg>
