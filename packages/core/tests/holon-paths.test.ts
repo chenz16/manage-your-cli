@@ -18,16 +18,16 @@ import {
   holonAgentsHome,
   holonStateRoot,
   holonDefaultDbPath,
-} from '../src/holon-paths.ts';
-import { ownerHrRoot, hrStateFilePath } from '../src/hr-paths.ts';
+} from '../src/holon-paths.js';
+import { ownerHrRoot, hrStateFilePath } from '../src/hr-paths.js';
 
 interface Snapshot {
-  agentsHome?: string;
-  stateRoot?: string;
-  xdg?: string;
-  hrRoot?: string;
-  hrState?: string;
-  dbPath?: string;
+  agentsHome?: string | undefined;
+  stateRoot?: string | undefined;
+  xdg?: string | undefined;
+  hrRoot?: string | undefined;
+  hrState?: string | undefined;
+  dbPath?: string | undefined;
 }
 let prev: Snapshot;
 
@@ -134,7 +134,7 @@ describe('integration: tmp envs keep real $HOME state untouched', () => {
     const beforeState = existsSync(realState) ? readdirSync(realState).sort() : [];
 
     // 1. Boss-memory write → must land under HOLON_AGENTS_HOME/boss/.
-    const { writeBossMemory } = await import('../src/boss-memory-service.ts');
+    const { writeBossMemory } = await import('../src/boss-memory-service.js');
     const wrote = writeBossMemory('isolation-smoke', '# isolation smoke\n\ntest body.\n');
     expect(wrote.ok).toBe(true);
     if (wrote.ok) {
@@ -142,7 +142,7 @@ describe('integration: tmp envs keep real $HOME state untouched', () => {
     }
 
     // 2. HR scaffold → must land under HOLON_AGENTS_HOME/boss/owner/hr/.
-    const { ensureOwnerHrScaffold } = await import('../src/hr-paths.ts');
+    const { ensureOwnerHrScaffold } = await import('../src/hr-paths.js');
     const hr = ensureOwnerHrScaffold();
     expect(hr.root.startsWith(tmpRoot)).toBe(true);
     expect(existsSync(hr.root)).toBe(true);
