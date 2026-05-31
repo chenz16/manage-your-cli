@@ -12,7 +12,10 @@
     "test": "vitest run",
     "lint": "next lint",
     "sync:vanilla": "node scripts/sync-vanilla.mjs",
-    "reset": "node scripts/reset.mjs"
+    "reset": "node scripts/reset.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@assistant-ui/react": "0.14.5",
@@ -37,6 +40,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "20.16.5",
     "@types/react": "19.2.0",
